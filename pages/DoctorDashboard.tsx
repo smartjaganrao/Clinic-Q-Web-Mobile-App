@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Doctor, Patient, PatientStatus, DoctorStatus } from '../types';
+import { Doctor, Patient, PatientStatus, DoctorStatus, PainPoint } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { generatePatientSummary } from '../services/geminiService';
-import { Check, Clock, FileText, Sparkles, User, SkipForward, CalendarClock, AlertCircle, Coffee, Clock12, PlayCircle, Zap } from 'lucide-react';
+import { Check, Clock, FileText, Sparkles, User, SkipForward, CalendarClock, AlertCircle, Coffee, Clock12, PlayCircle, Zap, Activity, Thermometer, Weight, Heart, Plus, Calendar } from 'lucide-react';
 
 interface DoctorProps {
   doctor: Doctor;
@@ -11,11 +11,20 @@ interface DoctorProps {
   onNextPatient: () => void;
   onCompletePatient: (id: string, notes: string) => void;
   onUpdateStatus: (id: string, status: DoctorStatus, delay: number) => void;
+  onUpdatePatientDetails: (id: string, updates: Partial<Patient>) => void;
 }
 
-export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPatient, onCompletePatient, onUpdateStatus }) => {
+const COMMON_DIAGNOSES = [
+    "Viral Fever", "Common Cold", "Migraine", "Hypertension", "Diabetes T2", "Gastritis", "Allergy", "Back Pain"
+];
+
+export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPatient, onCompletePatient, onUpdateStatus, onUpdatePatientDetails }) => {
   const [notes, setNotes] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
+  
+  // Vitals State (Local to current patient session)
+  const [vitals, setVitals] = useState({ bp: '', temp: '', weight: '', pulse: '' });
+  const [painPoints, setPainPoints] = useState<PainPoint[]>([]);
 
   // ------------------------------------------------------------
   // SMART HYBRID QUEUE LOGIC
@@ -36,12 +45,6 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
         const [h, m] = t.split(':').map(Number);
         return h * 60 + m;
     };
-
-    // HYBRID QUEUE ALGORITHM:
-    // Priority 1: Emergency (Always top)
-    // Priority 2: On-Time Appointments (Within 15 mins window)
-    // Priority 3: Walk-ins AND Late Appointments (>15 mins late) treated as FIFO based on Arrival Time (Token)
-    // Priority 4: Future Appointments (Not due yet)
 
     const LATE_THRESHOLD_MINS = 15;
 
@@ -80,8 +83,8 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
              return timeToMins(a.appointmentTime) - timeToMins(b.appointmentTime);
         }
 
-        // Default: FIFO based on Token Number (Arrival order)
-        return a.tokenNumber - b.tokenNumber;
+        // Default: FIFO based on Token Number (Arrival order - handles manual reorder timestamps)
+        return a.timeAdded - b.timeAdded;
     });
 
     // Identify strict "Due" appointments for the UI Badge
@@ -98,6 +101,24 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
     };
   }, [queue]); // Re-run every time queue changes
 
+  // Reset local state when patient changes
+  React.useEffect(() => {
+      if (currentPatient) {
+          setNotes(currentPatient.notes || '');
+          setVitals({
+              bp: currentPatient.vitals?.bp || '',
+              temp: currentPatient.vitals?.temp || '',
+              weight: currentPatient.vitals?.weight || '',
+              pulse: currentPatient.vitals?.pulse || ''
+          });
+          setPainPoints(currentPatient.painPoints || []);
+      } else {
+          setNotes('');
+          setVitals({ bp: '', temp: '', weight: '', pulse: '' });
+          setPainPoints([]);
+      }
+  }, [currentPatient?.id]);
+
   const handleAiAssist = async () => {
     if (!currentPatient || !notes) return;
     setIsAiLoading(true);
@@ -108,6 +129,8 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
 
   const handleComplete = () => {
     if (currentPatient) {
+      // Save vitals/pain points one last time before completing
+      onUpdatePatientDetails(currentPatient.id, { vitals, painPoints });
       onCompletePatient(currentPatient.id, notes);
       setNotes('');
     }
@@ -122,6 +145,24 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
       // Toggle between 0 and 15 mins delay for MVP simplicity
       const newDelay = doctor.delayMinutes === 0 ? 15 : 0;
       onUpdateStatus(doctor.id, doctor.status, newDelay);
+  };
+
+  const addTemplateNote = (text: string) => {
+      setNotes(prev => prev ? `${prev}\n- Diagnosis: ${text}` : `- Diagnosis: ${text}`);
+  };
+
+  const handleBodyClick = (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!currentPatient) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      setPainPoints([...painPoints, { x, y }]);
+  };
+
+  const addFollowUp = (days: number) => {
+      const date = new Date();
+      date.setDate(date.getDate() + days);
+      setNotes(prev => prev ? `${prev}\n[System]: Follow up in ${days} days (${date.toLocaleDateString()})` : `[System]: Follow up in ${days} days (${date.toLocaleDateString()})`);
   };
 
   return (
@@ -204,35 +245,136 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
                 </div>
               </div>
               
-              <div className="p-6 flex-1 flex flex-col">
-                <div className="mb-6">
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
-                    <FileText className="h-4 w-4" />
-                    Consultation Notes
-                  </label>
-                  <textarea 
-                    className="w-full h-48 lg:h-64 p-4 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none font-mono text-sm leading-relaxed"
-                    placeholder="Type raw notes here (e.g., 'fever 3 days, cough, lungs clear')..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                  />
-                  <div className="mt-2 flex justify-between items-center">
-                    <p className="text-xs text-slate-400">Pro tip: Use AI to format your notes.</p>
-                    <Button size="sm" variant="secondary" onClick={handleAiAssist} disabled={!notes || isAiLoading}>
-                      <Sparkles className="h-4 w-4 mr-1 text-purple-600" />
-                      {isAiLoading ? 'Improving...' : 'AI Format'}
-                    </Button>
-                  </div>
+              <div className="p-6 flex-1 flex flex-col overflow-y-auto">
+                {/* Vitals Input Section */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1 mb-1">
+                            <Activity className="h-3 w-3" /> BP
+                        </label>
+                        <input 
+                            className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" 
+                            placeholder="120/80" 
+                            value={vitals.bp}
+                            onChange={(e) => setVitals({...vitals, bp: e.target.value})}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1 mb-1">
+                            <Thermometer className="h-3 w-3" /> Temp (F)
+                        </label>
+                        <input 
+                            className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" 
+                            placeholder="98.6"
+                            value={vitals.temp}
+                            onChange={(e) => setVitals({...vitals, temp: e.target.value})}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1 mb-1">
+                            <Weight className="h-3 w-3" /> Weight (kg)
+                        </label>
+                        <input 
+                            className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" 
+                            placeholder="70"
+                            value={vitals.weight}
+                            onChange={(e) => setVitals({...vitals, weight: e.target.value})}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1 mb-1">
+                            <Heart className="h-3 w-3" /> Pulse
+                        </label>
+                        <input 
+                            className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" 
+                            placeholder="72"
+                            value={vitals.pulse}
+                            onChange={(e) => setVitals({...vitals, pulse: e.target.value})}
+                        />
+                    </div>
                 </div>
 
-                <div className="mt-auto grid grid-cols-2 gap-4">
-                  <Button variant="secondary" onClick={() => {/* Skip logic */}}>
-                    Wait / Hold
-                  </Button>
-                  <Button variant="primary" onClick={handleComplete}>
-                    <Check className="h-4 w-4 mr-2" />
-                    Complete Consultation
-                  </Button>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 flex-1">
+                    {/* Notes Section */}
+                    <div className="md:col-span-2 flex flex-col">
+                        <div className="flex justify-between items-center mb-2">
+                             <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                                <FileText className="h-4 w-4" />
+                                Consultation Notes
+                             </label>
+                             <Button size="sm" variant="ghost" onClick={handleAiAssist} disabled={!notes || isAiLoading} className="text-purple-600 h-6 text-xs">
+                                <Sparkles className="h-3 w-3 mr-1" />
+                                {isAiLoading ? 'Thinking...' : 'AI Summary'}
+                             </Button>
+                        </div>
+                        <textarea 
+                            className="flex-1 w-full p-4 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none font-mono text-sm leading-relaxed mb-3"
+                            placeholder="Type raw notes here (e.g., 'fever 3 days, cough, lungs clear')..."
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                        />
+                        
+                        {/* Quick Templates */}
+                        <div className="flex flex-wrap gap-2">
+                            {COMMON_DIAGNOSES.map(d => (
+                                <button 
+                                    key={d}
+                                    onClick={() => addTemplateNote(d)}
+                                    className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded border border-slate-200 transition-colors"
+                                >
+                                    + {d}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Body Map Canvas */}
+                    <div className="border border-slate-200 rounded-lg p-2 bg-slate-50 flex flex-col items-center justify-center relative select-none">
+                        <span className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Pain Points</span>
+                        <div 
+                            className="relative h-64 w-32 cursor-crosshair"
+                            onClick={handleBodyClick}
+                        >
+                            {/* Simple Body SVG Silhouette */}
+                            <svg viewBox="0 0 100 200" className="h-full w-full opacity-20 hover:opacity-40 transition-opacity">
+                                <path d="M50,10 C60,10 65,15 65,25 C65,35 60,40 50,40 C40,40 35,35 35,25 C35,15 40,10 50,10 Z M50,40 C70,45 80,50 85,80 L80,110 L70,105 L75,80 C70,60 65,60 65,100 L70,180 L55,180 L50,130 L45,180 L30,180 L35,100 C35,60 30,60 25,80 L20,105 L10,110 L15,80 C20,50 30,45 50,40 Z" fill="currentColor" />
+                            </svg>
+                            {/* Render Points */}
+                            {painPoints.map((p, i) => (
+                                <div 
+                                    key={i} 
+                                    className="absolute w-3 h-3 bg-red-500 rounded-full border border-white shadow-sm transform -translate-x-1/2 -translate-y-1/2"
+                                    style={{ left: `${p.x}%`, top: `${p.y}%` }}
+                                ></div>
+                            ))}
+                        </div>
+                        <button 
+                            className="mt-2 text-xs text-slate-400 hover:text-red-500 underline"
+                            onClick={() => setPainPoints([])}
+                        >
+                            Clear Map
+                        </button>
+                    </div>
+                </div>
+
+                <div className="mt-auto border-t border-slate-100 pt-4 grid grid-cols-2 gap-4 items-center">
+                  <div className="flex gap-2">
+                       <Button size="sm" variant="secondary" onClick={() => addFollowUp(3)} className="text-xs">
+                           <Calendar className="h-3 w-3 mr-1" /> +3 Days
+                       </Button>
+                       <Button size="sm" variant="secondary" onClick={() => addFollowUp(7)} className="text-xs">
+                           <Calendar className="h-3 w-3 mr-1" /> +1 Week
+                       </Button>
+                  </div>
+                  <div className="flex justify-end gap-3">
+                      <Button variant="secondary" onClick={() => {/* Skip logic */}}>
+                        Wait / Hold
+                      </Button>
+                      <Button variant="primary" onClick={handleComplete}>
+                        <Check className="h-4 w-4 mr-2" />
+                        Complete Consultation
+                      </Button>
+                  </div>
                 </div>
               </div>
             </Card>

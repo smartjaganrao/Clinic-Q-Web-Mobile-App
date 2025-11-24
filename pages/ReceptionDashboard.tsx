@@ -9,7 +9,7 @@ import {
   UserPlus, Clock, X, Settings, MessageCircle, 
   Save, Stethoscope, Plus, CalendarClock, User, Play, 
   CheckSquare, Activity, BarChart3, PieChart, Calendar as CalendarIcon, 
-  Download, History, UserCheck, Users, Search, FileText, ChevronRight, Edit2, Trash2, List, Copy, Zap, ChevronLeft, CalendarDays, AlertTriangle, TrendingUp, IndianRupee, ArrowUpRight
+  Download, History, UserCheck, Users, Search, FileText, ChevronRight, Edit2, Trash2, List, Copy, Zap, ChevronLeft, CalendarDays, AlertTriangle, TrendingUp, IndianRupee, ArrowUpRight, ArrowUp, ArrowDown, UserMinus, RotateCcw
 } from 'lucide-react';
 
 interface ReceptionProps {
@@ -26,6 +26,7 @@ interface ReceptionProps {
   onCancelPatient: (patientId: string) => void;
   onUpdateClinicName: (name: string) => void;
   onToggleEmergency: (patientId: string) => void;
+  onManualReorder: (patientId: string, direction: 'UP' | 'DOWN') => void;
   addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
@@ -53,6 +54,7 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
   onCancelPatient,
   onUpdateClinicName,
   onToggleEmergency,
+  onManualReorder,
   addToast
 }) => {
   // Navigation State
@@ -486,11 +488,19 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
       addToast(`WhatsApp Sent to ${patient.name}: "It is your turn soon!"`, 'success');
   };
 
-  const filteredPatients = patients.filter(p => 
-    p.status !== PatientStatus.COMPLETED && 
-    p.status !== PatientStatus.CANCELLED &&
-    (filterDoc === 'all' || p.doctorId === filterDoc)
-  );
+  const filteredPatients = patients
+    .filter(p => 
+        p.status !== PatientStatus.COMPLETED && 
+        p.status !== PatientStatus.CANCELLED &&
+        (filterDoc === 'all' || p.doctorId === filterDoc)
+    )
+    .sort((a, b) => {
+        // Simple sort for display: With Doctor First, then by timeAdded (if not reordered manually logic is in App.tsx)
+        // Actually, we should rely on App.tsx order which handles manual reorder timestamps
+        if (a.status === PatientStatus.WITH_DOCTOR) return -1;
+        if (b.status === PatientStatus.WITH_DOCTOR) return 1;
+        return a.timeAdded - b.timeAdded;
+    });
 
   // ------------------------------------------------------------
   // REPORTING LOGIC
@@ -688,6 +698,7 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
                 <table className="w-full text-left text-sm">
                     <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
+                        <th className="px-6 py-4 font-semibold text-slate-700 w-16">Ord</th>
                         <th className="px-6 py-4 font-semibold text-slate-700">Token</th>
                         <th className="px-6 py-4 font-semibold text-slate-700">Patient Name</th>
                         <th className="px-6 py-4 font-semibold text-slate-700">Doctor</th>
@@ -699,7 +710,7 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
                     <tbody className="divide-y divide-slate-100">
                     {filteredPatients.length === 0 ? (
                         <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
                             No patients in the waiting queue.
                         </td>
                         </tr>
@@ -707,9 +718,18 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
                         filteredPatients.map((patient) => {
                             const isLate = isLateAppointment(patient);
                             const isDue = isDueAppointment(patient);
+                            const isSkipped = patient.status === PatientStatus.SKIPPED;
                             
                             return (
-                        <tr key={patient.id} className="hover:bg-slate-50 transition-colors group">
+                        <tr key={patient.id} className={`hover:bg-slate-50 transition-colors group ${isSkipped ? 'bg-slate-50 opacity-60' : ''}`}>
+                             <td className="px-6 py-4">
+                                {patient.status === PatientStatus.WAITING && (
+                                    <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => onManualReorder(patient.id, 'UP')} className="p-1 hover:bg-slate-200 rounded"><ArrowUp className="h-3 w-3" /></button>
+                                        <button onClick={() => onManualReorder(patient.id, 'DOWN')} className="p-1 hover:bg-slate-200 rounded"><ArrowDown className="h-3 w-3" /></button>
+                                    </div>
+                                )}
+                             </td>
                             <td className="px-6 py-4 font-bold text-primary-700">
                                 #{patient.tokenNumber}
                                 {patient.isEmergency && <Zap className="h-4 w-4 text-orange-500 inline ml-1 fill-current" />}
@@ -742,71 +762,100 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
                             )}
                             </td>
                             <td className="px-6 py-4">
-                            <Badge status={patient.status} />
+                                {isSkipped ? (
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-200 text-slate-600">
+                                        Absent (Skipped)
+                                    </span>
+                                ) : (
+                                    <Badge status={patient.status} />
+                                )}
                             </td>
                             <td className="px-6 py-4 text-right">
                             <div className="flex justify-end gap-2">
-                                <button 
-                                    onClick={() => onToggleEmergency(patient.id)}
-                                    className={`p-2 rounded-lg transition-colors ${patient.isEmergency ? 'text-orange-600 bg-orange-100' : 'text-slate-400 hover:bg-slate-100'}`}
-                                    title={patient.isEmergency ? "Remove Emergency Status" : "Mark as Emergency (Fast Track)"}
-                                >
-                                    <Zap className={`h-5 w-5 ${patient.isEmergency ? 'fill-current' : ''}`} />
-                                </button>
-
-                                <button 
-                                    onClick={() => setEditingPatient(patient)}
-                                    className="p-2 text-slate-400 hover:text-primary-600 hover:bg-slate-100 rounded-lg"
-                                    title="Edit Details"
-                                >
-                                    <Edit2 className="h-4 w-4" />
-                                </button>
-
-                                <button 
-                                    onClick={() => sendWhatsApp(patient)}
-                                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
-                                    title="Send WhatsApp Reminder"
-                                >
-                                    <MessageCircle className="h-5 w-5" />
-                                </button>
                                 
-                                {/* Start Visit - Shows when Waiting */}
-                                {patient.status === PatientStatus.WAITING && (
-                                    <button 
-                                        onClick={() => handleStartVisit(patient)}
+                                {isSkipped ? (
+                                    <button
+                                        onClick={() => onUpdateStatus(patient.id, PatientStatus.WAITING)}
                                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                                        title="Send Patient In (Start Visit)"
+                                        title="Re-queue (Add to bottom)"
                                     >
-                                        <Play className="h-5 w-5" />
+                                        <RotateCcw className="h-5 w-5" />
                                     </button>
+                                ) : (
+                                    <>
+                                        <button 
+                                            onClick={() => onToggleEmergency(patient.id)}
+                                            className={`p-2 rounded-lg transition-colors ${patient.isEmergency ? 'text-orange-600 bg-orange-100' : 'text-slate-400 hover:bg-slate-100'}`}
+                                            title={patient.isEmergency ? "Remove Emergency Status" : "Mark as Emergency (Fast Track)"}
+                                        >
+                                            <Zap className={`h-5 w-5 ${patient.isEmergency ? 'fill-current' : ''}`} />
+                                        </button>
+
+                                        <button 
+                                            onClick={() => setEditingPatient(patient)}
+                                            className="p-2 text-slate-400 hover:text-primary-600 hover:bg-slate-100 rounded-lg"
+                                            title="Edit Details"
+                                        >
+                                            <Edit2 className="h-4 w-4" />
+                                        </button>
+
+                                        <button 
+                                            onClick={() => sendWhatsApp(patient)}
+                                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
+                                            title="Send WhatsApp Reminder"
+                                        >
+                                            <MessageCircle className="h-5 w-5" />
+                                        </button>
+                                        
+                                        {/* Start Visit - Shows when Waiting */}
+                                        {patient.status === PatientStatus.WAITING && (
+                                            <>
+                                                <button 
+                                                    onClick={() => handleStartVisit(patient)}
+                                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                                                    title="Send Patient In (Start Visit)"
+                                                >
+                                                    <Play className="h-5 w-5" />
+                                                </button>
+                                                
+                                                <button
+                                                    onClick={() => onUpdateStatus(patient.id, PatientStatus.SKIPPED)}
+                                                    className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-lg"
+                                                    title="Mark Absent (Skip)"
+                                                >
+                                                    <UserMinus className="h-5 w-5" />
+                                                </button>
+                                            </>
+                                        )}
+
+                                        {/* Complete Visit - Shows when With Doctor (Reception can complete if doc is busy) */}
+                                        {patient.status === PatientStatus.WITH_DOCTOR && (
+                                            <button 
+                                                onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)}
+                                                className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg"
+                                                title="Mark Completed"
+                                            >
+                                                <CheckSquare className="h-5 w-5" />
+                                            </button>
+                                        )}
+
+                                        <button 
+                                            onClick={() => onCancelPatient(patient.id)}
+                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                                            title="Cancel"
+                                        >
+                                            <X className="h-5 w-5" />
+                                        </button>
+
+                                        <button 
+                                            onClick={() => handleDeletePatientClick(patient)}
+                                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                                            title="Delete Record"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    </>
                                 )}
-
-                                {/* Complete Visit - Shows when With Doctor (Reception can complete if doc is busy) */}
-                                {patient.status === PatientStatus.WITH_DOCTOR && (
-                                    <button 
-                                        onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)}
-                                        className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg"
-                                        title="Mark Completed"
-                                    >
-                                        <CheckSquare className="h-5 w-5" />
-                                    </button>
-                                )}
-
-                                <button 
-                                    onClick={() => onCancelPatient(patient.id)}
-                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                                    title="Cancel"
-                                >
-                                    <X className="h-5 w-5" />
-                                </button>
-
-                                <button 
-                                    onClick={() => handleDeletePatientClick(patient)}
-                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Delete Record"
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </button>
                             </div>
                             </td>
                         </tr>

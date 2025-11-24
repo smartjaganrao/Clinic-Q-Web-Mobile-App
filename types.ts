@@ -12,7 +12,8 @@ export enum PatientStatus {
   WAITING = 'WAITING',
   WITH_DOCTOR = 'WITH_DOCTOR',
   COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED'
+  CANCELLED = 'CANCELLED',
+  SKIPPED = 'SKIPPED' // For No-Shows / Absent
 }
 
 export enum DoctorStatus {
@@ -46,6 +47,19 @@ export interface Doctor {
   weeklySchedule: DaySchedule[]; // New: 7-day specific schedule
 }
 
+export interface PainPoint {
+  x: number;
+  y: number;
+  label?: string;
+}
+
+export interface Vitals {
+  bp?: string;
+  temp?: string;
+  weight?: string;
+  pulse?: string;
+}
+
 export interface Patient {
   id: string;
   tokenNumber: number;
@@ -56,10 +70,15 @@ export interface Patient {
   timeAdded: number; // Timestamp
   timeCompleted?: number;
   notes?: string;
+  diagnosis?: string; // New: Short diagnosis
   visitType: 'WALK_IN' | 'APPOINTMENT';
   appointmentDate?: string; // YYYY-MM-DD
   appointmentTime?: string; // e.g. "10:20"
   isEmergency?: boolean; // New: Priority flag
+  vitals?: Vitals; // New: Vitals
+  painPoints?: PainPoint[]; // New: Body map coordinates
+  rating?: number; // New: 1-5 stars
+  feedback?: string; // New: Patient feedback
 }
 
 export interface ClinicStats {

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, Notification } from './types';
 import { INITIAL_CLINICS } from './constants';
@@ -125,7 +126,9 @@ export default function App() {
       visitType: appointmentTime ? 'APPOINTMENT' : 'WALK_IN',
       appointmentTime,
       appointmentDate: appointmentDate || new Date().toISOString().split('T')[0],
-      isEmergency: false
+      isEmergency: false,
+      vitals: { bp: '', temp: '', weight: '', pulse: '' },
+      painPoints: []
     };
   };
 
@@ -154,6 +157,19 @@ export default function App() {
         return c;
     }));
     addToast('Patient details updated', 'success');
+  };
+
+  const handleUpdatePatientDetails = (id: string, updates: Partial<Patient>) => {
+      if (!currentClinic) return;
+      setClinics(prevClinics => prevClinics.map(c => {
+          if (c.id === currentClinicId) {
+              return {
+                  ...c,
+                  patients: c.patients.map(p => p.id === id ? { ...p, ...updates } : p)
+              };
+          }
+          return c;
+      }));
   };
 
   const handleDeletePatient = (id: string) => {
@@ -254,22 +270,58 @@ export default function App() {
     if (!currentClinic) return;
     setClinics(prevClinics => prevClinics.map(c => {
         if (c.id === currentClinicId) {
-            return { 
-                ...c, 
-                patients: c.patients.map(p => {
-                    if (p.id === patientId) {
-                        const updates: Partial<Patient> = { status };
-                        if (status === PatientStatus.COMPLETED) {
-                            updates.timeCompleted = Date.now();
-                        }
-                        return { ...p, ...updates };
+            let updatedPatients = c.patients.map(p => {
+                if (p.id === patientId) {
+                    const updates: Partial<Patient> = { status };
+                    if (status === PatientStatus.COMPLETED) {
+                        updates.timeCompleted = Date.now();
                     }
-                    return p;
-                }) 
-            };
+                    if (status === PatientStatus.WAITING) {
+                        // If re-queued (e.g. from Skipped), update timestamp to move to bottom
+                         updates.timeAdded = Date.now();
+                    }
+                    return { ...p, ...updates };
+                }
+                return p;
+            });
+            return { ...c, patients: updatedPatients };
         }
         return c;
     }));
+  };
+
+  const handleManualReorder = (patientId: string, direction: 'UP' | 'DOWN') => {
+      if (!currentClinic) return;
+      
+      setClinics(prevClinics => prevClinics.map(c => {
+          if (c.id !== currentClinicId) return c;
+          
+          const patient = c.patients.find(p => p.id === patientId);
+          if (!patient) return c;
+
+          // We only reorder WAITING patients for specific doctor
+          const queue = c.patients.filter(p => p.doctorId === patient.doctorId && p.status === PatientStatus.WAITING).sort((a,b) => a.timeAdded - b.timeAdded);
+          const currentIndex = queue.findIndex(p => p.id === patientId);
+          
+          if (currentIndex === -1) return c;
+          if (direction === 'UP' && currentIndex === 0) return c;
+          if (direction === 'DOWN' && currentIndex === queue.length - 1) return c;
+
+          const swapIndex = direction === 'UP' ? currentIndex - 1 : currentIndex + 1;
+          const otherPatient = queue[swapIndex];
+
+          // Swap timestamps to persist order logic
+          const tempTime = patient.timeAdded;
+          const otherTime = otherPatient.timeAdded;
+
+          const updatedPatients = c.patients.map(p => {
+              if (p.id === patientId) return { ...p, timeAdded: otherTime };
+              if (p.id === otherPatient.id) return { ...p, timeAdded: tempTime };
+              return p;
+          });
+
+          return { ...c, patients: updatedPatients };
+      }));
   };
 
   const handleUpdateDoctorStatus = (doctorId: string, status: DoctorStatus, delayMinutes: number) => {
@@ -305,9 +357,27 @@ export default function App() {
             nextPatients[currentIdx].timeCompleted = Date.now();
         }
 
-        const nextPatientIdx = nextPatients.findIndex(p => p.doctorId === doctorId && p.status === PatientStatus.WAITING);
-        if (nextPatientIdx !== -1) {
-            nextPatients[nextPatientIdx].status = PatientStatus.WITH_DOCTOR;
+        // Improved Selection Logic for NEXT
+        // (Replicating Smart Queue Logic here for consistency)
+        const waiting = nextPatients.filter(p => p.doctorId === doctorId && p.status === PatientStatus.WAITING);
+        // Simplified sorting by priority then time (assuming DoctorDashboard handles complex sort visually)
+        // Here we just pick highest priority based on same logic or rely on Doctor clicking specific patient
+        // For "Auto Next", let's just pick the first based on current sort order (timeAdded modified by reorder)
+        
+        // Actually, DoctorDashboard passes the ID usually? No, the prop is void.
+        // Let's implement a basic sort here to pick the right "Next"
+        waiting.sort((a, b) => {
+             if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
+             return a.timeAdded - b.timeAdded;
+        });
+
+        if (waiting.length > 0) {
+            // Find the index in the original array
+            const nextP = waiting[0];
+            const originalIdx = nextPatients.findIndex(p => p.id === nextP.id);
+            if (originalIdx !== -1) {
+                 nextPatients[originalIdx].status = PatientStatus.WITH_DOCTOR;
+            }
         }
 
         return { ...c, patients: nextPatients };
@@ -430,6 +500,11 @@ export default function App() {
                             onBack={goHome} 
                             onGetToken={handlePatientSelfRegister}
                             addToast={addToast}
+                            onUpdateDetails={handleUpdatePatientDetails}
+                            onCancelVisit={(clinicId, patientId) => {
+                                setCurrentClinicId(clinicId); // Temp set context to clinic
+                                handleUpdateStatus(patientId, PatientStatus.CANCELLED);
+                            }}
                         />
                     );
 
@@ -474,6 +549,7 @@ export default function App() {
                                     onCancelPatient={(id) => handleUpdateStatus(id, PatientStatus.CANCELLED)}
                                     onUpdateClinicName={handleUpdateClinicName}
                                     onToggleEmergency={handleToggleEmergency}
+                                    onManualReorder={handleManualReorder}
                                     addToast={addToast}
                                 />
                             </main>
@@ -495,6 +571,7 @@ export default function App() {
                                     onNextPatient={() => handleNextPatient(activeDoctor.id)}
                                     onCompletePatient={handleCompleteConsultation}
                                     onUpdateStatus={handleUpdateDoctorStatus}
+                                    onUpdatePatientDetails={handleUpdatePatientDetails}
                                 />
                             </main>
                         </div>

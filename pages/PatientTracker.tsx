@@ -5,7 +5,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Badge } from '../components/Badge';
-import { ArrowLeft, MapPin, Search, Building, Ticket, CalendarCheck, User, Users, Plus, Trash2, Save, History, Clock, ChevronRight, Activity, ChevronLeft, AlertTriangle, QrCode, Map, List, ScanLine, LogOut, Zap, AlertCircle, LocateFixed, Navigation, Heart, Smile, Baby, Stethoscope, Microscope, Brain, Filter, FileText, RefreshCcw, Bell, BellRing, BellOff, Calendar } from 'lucide-react';
+import { ArrowLeft, MapPin, Search, Building, Ticket, CalendarCheck, User, Users, Plus, Trash2, Save, History, Clock, ChevronRight, Activity, ChevronLeft, AlertTriangle, QrCode, Map, List, ScanLine, LogOut, Zap, AlertCircle, LocateFixed, Navigation, Heart, Smile, Baby, Stethoscope, Microscope, Brain, Filter, FileText, RefreshCcw, Bell, BellRing, BellOff, Calendar, Star, XCircle, Map as MapIcon } from 'lucide-react';
 
 interface PatientTrackerProps {
   clinics: Clinic[];
@@ -14,6 +14,8 @@ interface PatientTrackerProps {
   onBack: () => void;
   onGetToken: (name: string, phone: string, doctorId: string, clinicId: string, appointmentTime?: string, appointmentDate?: string) => void;
   addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
+  onUpdateDetails: (id: string, updates: Partial<Patient>) => void; // New: For ratings
+  onCancelVisit: (clinicId: string, patientId: string) => void; // New: For cancellation
 }
 
 interface FamilyMember {
@@ -75,7 +77,7 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
     return R * c; // Distance in km
 };
 
-export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPhone, userName, onBack, onGetToken, addToast }) => {
+export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPhone, userName, onBack, onGetToken, addToast, onUpdateDetails, onCancelVisit }) => {
   const [selectedClinicId, setSelectedClinicId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'NEW' | 'ACTIVE' | 'HISTORY' | 'PROFILE'>('NEW');
   
@@ -232,6 +234,23 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
     );
   };
 
+  const handleGetDirections = (clinic: Clinic) => {
+      const { lat, lng } = clinic.geoLocation || { lat: 0, lng: 0 };
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+  };
+
+  const handleRateVisit = (visitId: string, rating: number) => {
+      onUpdateDetails(visitId, { rating });
+      addToast("Thank you for your feedback!", "success");
+  };
+
+  const handleCancel = (clinicId: string, visitId: string) => {
+      if (window.confirm("Are you sure you want to cancel this appointment?")) {
+          onCancelVisit(clinicId, visitId);
+          addToast("Appointment cancelled.", "info");
+      }
+  };
+
   // -- VISITS DATA DERIVATION --
   const allUserVisits = useMemo(() => {
       if (!userPhone) return [];
@@ -245,6 +264,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
                       ...p,
                       clinicId: c.id,
                       clinicName: c.name,
+                      clinicGeo: c.geoLocation,
                       doctorName: doc?.name || 'Unknown',
                       doctorRoom: doc?.roomNumber || '-',
                       doctorDelay: doc?.delayMinutes || 0
@@ -255,8 +275,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
       return visits.sort((a, b) => b.timeAdded - a.timeAdded);
   }, [clinics, userPhone]);
 
-  const activeVisits = allUserVisits.filter(v => v.status !== PatientStatus.COMPLETED && v.status !== PatientStatus.CANCELLED);
-  const historyVisits = allUserVisits.filter(v => v.status === PatientStatus.COMPLETED || v.status === PatientStatus.CANCELLED);
+  const activeVisits = allUserVisits.filter(v => v.status !== PatientStatus.COMPLETED && v.status !== PatientStatus.CANCELLED && v.status !== PatientStatus.SKIPPED);
+  const historyVisits = allUserVisits.filter(v => v.status === PatientStatus.COMPLETED || v.status === PatientStatus.CANCELLED || v.status === PatientStatus.SKIPPED);
 
   // -- MANUAL TRACKER STATE (Fallback) --
   const [tokenInput, setTokenInput] = useState('');
@@ -500,7 +520,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
         if (a.visitType === 'APPOINTMENT' && b.visitType === 'APPOINTMENT' && a.appointmentTime && b.appointmentTime) {
              return timeToMins(a.appointmentTime) - timeToMins(b.appointmentTime);
         }
-        return a.tokenNumber - b.tokenNumber;
+        return a.timeAdded - b.timeAdded;
     });
 
     const position = sortedQueue.findIndex(p => p.id === visit.id);
@@ -1242,6 +1262,22 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
                                             </div>
                                             </>
                                         )}
+
+                                        {/* Action Buttons */}
+                                        <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
+                                            <button 
+                                                onClick={() => handleGetDirections(visit as Clinic)} // Casting works because we flattened props
+                                                className="flex items-center justify-center gap-2 py-2 text-sm font-medium text-slate-600 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+                                            >
+                                                <MapIcon className="h-4 w-4" /> Get Directions
+                                            </button>
+                                            <button 
+                                                onClick={() => handleCancel(visit.clinicId, visit.id)}
+                                                className="flex items-center justify-center gap-2 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                                            >
+                                                <XCircle className="h-4 w-4" /> Cancel
+                                            </button>
+                                        </div>
                                     </div>
                                 </Card>
                             );
@@ -1346,10 +1382,37 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
                                      {visit.notes && (
                                          <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-3 mb-4">
                                              <div className="flex items-center gap-1 text-[10px] font-bold text-yellow-700 uppercase mb-1">
-                                                 <FileText className="h-3 w-3" /> Doctor's Note
+                                                 <FileText className="h-3 w-3" /> Consultation Notes
                                              </div>
                                              <p className="text-xs text-slate-700 leading-relaxed italic">"{visit.notes}"</p>
                                          </div>
+                                     )}
+
+                                     {/* FEEDBACK & RATING */}
+                                     {visit.status === PatientStatus.COMPLETED && (
+                                        <div className="mb-4">
+                                            {!visit.rating ? (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-bold text-slate-500">Rate Visit:</span>
+                                                    {[1,2,3,4,5].map(star => (
+                                                        <button 
+                                                            key={star}
+                                                            onClick={() => handleRateVisit(visit.id, star)}
+                                                            className="text-slate-300 hover:text-yellow-400 focus:outline-none"
+                                                        >
+                                                            <Star className="h-5 w-5 fill-current" />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-1 text-yellow-500">
+                                                    {[...Array(visit.rating)].map((_, i) => (
+                                                        <Star key={i} className="h-4 w-4 fill-current" />
+                                                    ))}
+                                                    <span className="text-xs text-slate-400 ml-2">Thanks!</span>
+                                                </div>
+                                            )}
+                                        </div>
                                      )}
 
                                      <Button 
