@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   DOCTOR = 'DOCTOR',
@@ -58,6 +59,7 @@ export interface Patient {
   visitType: 'WALK_IN' | 'APPOINTMENT';
   appointmentDate?: string; // YYYY-MM-DD
   appointmentTime?: string; // e.g. "10:20"
+  isEmergency?: boolean; // New: Priority flag
 }
 
 export interface ClinicStats {
@@ -80,9 +82,11 @@ export interface Clinic {
   doctors: Doctor[];
   patients: Patient[];
   // Location Data
+  city: string; // New: City for filtering
   address: string;
   pincode: string;
   coordinates?: { x: number, y: number }; // Mock coordinates for map viz (0-100%)
+  geoLocation?: { lat: number, lng: number }; // Real GPS coordinates for distance calc
 }
 
 // Pricing Types

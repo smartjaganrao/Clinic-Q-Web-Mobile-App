@@ -3,7 +3,7 @@ import { Doctor, Patient, PatientStatus, DoctorStatus } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { generatePatientSummary } from '../services/geminiService';
-import { Check, Clock, FileText, Sparkles, User, SkipForward, CalendarClock, AlertCircle, Coffee, Clock12, PlayCircle } from 'lucide-react';
+import { Check, Clock, FileText, Sparkles, User, SkipForward, CalendarClock, AlertCircle, Coffee, Clock12, PlayCircle, Zap } from 'lucide-react';
 
 interface DoctorProps {
   doctor: Doctor;
@@ -18,7 +18,7 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
   const [isAiLoading, setIsAiLoading] = useState(false);
 
   // ------------------------------------------------------------
-  // SMART QUEUE LOGIC (The "Zipper" Method)
+  // SMART HYBRID QUEUE LOGIC
   // ------------------------------------------------------------
   const { currentPatient, sortedQueue, dueAppointments } = useMemo(() => {
     const current = queue.find(p => p.status === PatientStatus.WITH_DOCTOR);
@@ -26,34 +26,70 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
     // Get all waiting patients
     const waiting = queue.filter(p => p.status === PatientStatus.WAITING);
 
-    // Get current time (In a real app, use Date.now())
+    // Get current time
     const now = new Date();
-    const currentTimeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-
-    // Helper to convert "09:20" to minutes for comparison
-    const timeToMins = (t: string) => {
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    
+    // Time helper
+    const timeToMins = (t?: string) => {
+        if (!t) return 0;
         const [h, m] = t.split(':').map(Number);
         return h * 60 + m;
     };
-    const currentMins = timeToMins(currentTimeStr);
 
-    // Sort Logic:
-    // 1. Appointments that are DUE (time <= now) go to top.
-    // 2. Then regular walk-ins sorted by token.
-    // 3. Future appointments sit at the bottom or are interleaved based on flow.
-    
+    // HYBRID QUEUE ALGORITHM:
+    // Priority 1: Emergency (Always top)
+    // Priority 2: On-Time Appointments (Within 15 mins window)
+    // Priority 3: Walk-ins AND Late Appointments (>15 mins late) treated as FIFO based on Arrival Time (Token)
+    // Priority 4: Future Appointments (Not due yet)
+
+    const LATE_THRESHOLD_MINS = 15;
+
+    const classifyPatient = (p: Patient) => {
+        if (p.isEmergency) return 1; // Highest Priority
+
+        if (p.visitType === 'APPOINTMENT' && p.appointmentTime) {
+            const apptMins = timeToMins(p.appointmentTime);
+            
+            // Check if Future
+            if (apptMins > currentMins) return 4; // Future
+
+            // Check if Late (>15 mins past appt time)
+            if (currentMins > apptMins + LATE_THRESHOLD_MINS) return 3; // Treat as Walk-in (Late)
+
+            // Must be On Time / Due
+            return 2;
+        }
+
+        // Walk-in
+        return 3;
+    };
+
     const sorted = waiting.sort((a, b) => {
-        const isADue = a.visitType === 'APPOINTMENT' && a.appointmentTime && timeToMins(a.appointmentTime) <= currentMins;
-        const isBDue = b.visitType === 'APPOINTMENT' && b.appointmentTime && timeToMins(b.appointmentTime) <= currentMins;
+        const priorityA = classifyPatient(a);
+        const priorityB = classifyPatient(b);
 
-        if (isADue && !isBDue) return -1; // A comes first
-        if (!isADue && isBDue) return 1;  // B comes first
+        if (priorityA !== priorityB) {
+            return priorityA - priorityB; // Lower number = higher priority
+        }
+
+        // Tie-breakers
         
-        // If both are due or both are not due, sort by Token ID (First Come First Serve)
+        // If both are Appointments in the same priority bracket (e.g. both Due), sort by Appt Time
+        if (a.visitType === 'APPOINTMENT' && b.visitType === 'APPOINTMENT' && a.appointmentTime && b.appointmentTime) {
+             return timeToMins(a.appointmentTime) - timeToMins(b.appointmentTime);
+        }
+
+        // Default: FIFO based on Token Number (Arrival order)
         return a.tokenNumber - b.tokenNumber;
     });
 
-    const due = waiting.filter(p => p.visitType === 'APPOINTMENT' && p.appointmentTime && timeToMins(p.appointmentTime) <= currentMins);
+    // Identify strict "Due" appointments for the UI Badge
+    const due = waiting.filter(p => {
+        if (p.visitType !== 'APPOINTMENT' || !p.appointmentTime) return false;
+        const t = timeToMins(p.appointmentTime);
+        return t <= currentMins && currentMins <= t + LATE_THRESHOLD_MINS;
+    });
 
     return { 
         currentPatient: current, 
@@ -125,7 +161,7 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
              </div>
 
              {dueAppointments.length > 0 && (
-                <div className="px-4 py-2 bg-red-100 text-red-700 rounded-lg border border-red-200 text-sm font-bold flex items-center animate-pulse">
+                <div className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg border border-purple-200 text-sm font-bold flex items-center animate-pulse">
                     <AlertCircle className="h-4 w-4 mr-2" />
                     {dueAppointments.length} Appt Due
                 </div>
@@ -150,9 +186,12 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
               </div>
           ) : currentPatient ? (
             <Card className="p-0 overflow-hidden h-full flex flex-col">
-              <div className={`px-6 py-4 flex justify-between items-center text-white ${currentPatient.visitType === 'APPOINTMENT' ? 'bg-purple-600' : 'bg-primary-600'}`}>
+              <div className={`px-6 py-4 flex justify-between items-center text-white ${currentPatient.isEmergency ? 'bg-orange-500' : currentPatient.visitType === 'APPOINTMENT' ? 'bg-purple-600' : 'bg-primary-600'}`}>
                 <div>
-                  <h2 className="text-xl font-bold">{currentPatient.name}</h2>
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                      {currentPatient.name}
+                      {currentPatient.isEmergency && <span className="text-xs bg-white text-orange-600 px-2 py-0.5 rounded font-bold uppercase">Emergency</span>}
+                  </h2>
                   <div className="flex items-center gap-2 text-white/90 text-sm mt-1">
                      <span>Token #{currentPatient.tokenNumber}</span>
                      <span>•</span>
@@ -201,14 +240,15 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
             <div className="h-full flex flex-col items-center justify-center bg-white rounded-xl border border-dashed border-slate-300 text-slate-400">
               <User className="h-16 w-16 mb-4 opacity-20" />
               <h3 className="text-xl font-medium text-slate-600">Ready for Next Patient</h3>
-              <p className="mb-6">The queue is optimized based on appointment times and walk-ins.</p>
+              <p className="mb-6">The queue is optimized based on priority, appointment times, and walk-ins.</p>
               {sortedQueue.length > 0 ? (
                 <div className="text-center">
                     <p className="text-sm text-slate-500 mb-3">
                         Up Next: <span className="font-bold text-slate-800">{sortedQueue[0].name}</span> 
-                        {sortedQueue[0].visitType === 'APPOINTMENT' && <span className="text-purple-600 font-bold ml-1">(Appt Due)</span>}
+                        {sortedQueue[0].isEmergency && <span className="text-orange-600 font-bold ml-1">(EMERGENCY)</span>}
+                        {!sortedQueue[0].isEmergency && sortedQueue[0].visitType === 'APPOINTMENT' && <span className="text-purple-600 font-bold ml-1">(Appt)</span>}
                     </p>
-                    <Button onClick={onNextPatient} size="lg" className="shadow-lg shadow-primary-100">
+                    <Button onClick={onNextPatient} size="lg" className={`shadow-lg ${sortedQueue[0].isEmergency ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-200' : 'shadow-primary-100'}`}>
                         <PlayCircle className="h-5 w-5 mr-2" />
                         Call Next Patient (#{sortedQueue[0].tokenNumber})
                     </Button>
@@ -234,24 +274,27 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
             ) : (
                 sortedQueue.map((p, idx) => {
                     const isAppt = p.visitType === 'APPOINTMENT';
-                    // Check if strictly due
+                    
+                    // Re-calc specific status for list item view
                     const now = new Date();
                     const currentMins = now.getHours() * 60 + now.getMinutes();
                     const apptMins = p.appointmentTime ? parseInt(p.appointmentTime.split(':')[0]) * 60 + parseInt(p.appointmentTime.split(':')[1]) : 0;
-                    const isDue = isAppt && apptMins <= currentMins;
+                    
+                    const isDue = isAppt && apptMins <= currentMins && currentMins <= apptMins + 15;
+                    const isLate = isAppt && currentMins > apptMins + 15;
 
                     return (
                         <div key={p.id} className={`p-3 rounded-lg border transition-colors flex justify-between items-center group ${idx === 0 ? 'bg-blue-50 border-blue-200' : 'border-slate-100 hover:bg-slate-50'}`}>
                             <div className="flex items-center gap-3">
-                                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${isAppt ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-600'}`}>
-                                    {p.tokenNumber}
+                                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${p.isEmergency ? 'bg-orange-100 text-orange-700' : isAppt ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-600'}`}>
+                                    {p.isEmergency ? <Zap className="h-4 w-4 fill-current"/> : p.tokenNumber}
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2">
                                         <p className="font-medium text-slate-900 text-sm">{p.name}</p>
-                                        {isDue && (
-                                            <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded">DUE</span>
-                                        )}
+                                        {p.isEmergency && <span className="text-[10px] bg-orange-500 text-white font-bold px-1 py-0.5 rounded">URGENT</span>}
+                                        {isDue && !p.isEmergency && <span className="bg-green-100 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded">DUE</span>}
+                                        {isLate && !p.isEmergency && <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded">LATE</span>}
                                     </div>
                                     <p className="text-xs text-slate-500 flex items-center gap-1">
                                         {isAppt ? (

@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { PatientStatus, Clinic } from '../types';
+import { PatientStatus, Clinic, Patient } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Badge } from '../components/Badge';
-import { ArrowLeft, MapPin, Search, Building, Ticket, CalendarCheck, User, Users, Plus, Trash2, Save, History, Clock, ChevronRight, Activity, ChevronLeft, AlertTriangle, QrCode, Map, List, ScanLine, LogOut } from 'lucide-react';
+import { ArrowLeft, MapPin, Search, Building, Ticket, CalendarCheck, User, Users, Plus, Trash2, Save, History, Clock, ChevronRight, Activity, ChevronLeft, AlertTriangle, QrCode, Map, List, ScanLine, LogOut, Zap, AlertCircle, LocateFixed, Navigation, Heart, Smile, Baby, Stethoscope, Microscope, Brain, Filter, FileText, RefreshCcw, Bell, BellRing, BellOff, Calendar } from 'lucide-react';
 
 interface PatientTrackerProps {
   clinics: Clinic[];
@@ -27,12 +28,51 @@ interface PatientDataStore {
     familyMembers: FamilyMember[];
 }
 
+interface Reminder {
+    id: string; // correlates to patient/visit ID
+    triggerTime: number; // timestamp
+    minutesBefore: number;
+    message: string;
+    sent: boolean;
+}
+
+// Categories for Filter
+const CATEGORIES = [
+    { id: 'General Physician', label: 'General', icon: Stethoscope, color: 'text-blue-600 bg-blue-50' },
+    { id: 'Dentist', label: 'Dentist', icon: Smile, color: 'text-yellow-600 bg-yellow-50' },
+    { id: 'Pediatrician', label: 'Kids', icon: Baby, color: 'text-pink-600 bg-pink-50' },
+    { id: 'Cardiologist', label: 'Heart', icon: Heart, color: 'text-red-600 bg-red-50' },
+    { id: 'Dermatologist', label: 'Skin', icon: User, color: 'text-purple-600 bg-purple-50' },
+    { id: 'Orthopedic', label: 'Bone', icon: Activity, color: 'text-indigo-600 bg-indigo-50' },
+    { id: 'Gynecologist', label: 'Women', icon: User, color: 'text-rose-600 bg-rose-50' },
+];
+
 // Helper for Local Date String (YYYY-MM-DD)
 const getLocalYYYYMMDD = (d: Date) => {
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+};
+
+// Helper to parse Appointment Date/Time strings to Timestamp
+const parseAppointmentDateTime = (dateStr: string, timeStr: string) => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const [hr, min] = timeStr.split(':').map(Number);
+    return new Date(y, m - 1, d, hr, min).getTime();
+};
+
+// Haversine Formula for distance (in km)
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Radius of the earth in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = 
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in km
 };
 
 export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPhone, userName, onBack, onGetToken, addToast }) => {
@@ -43,11 +83,22 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
   // Initialize from props
   const [userProfileName, setUserProfileName] = useState(userName);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
   
   // -- SEARCH & MAP STATE --
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchCity, setSearchCity] = useState<string>(''); // City Filter
+  const [searchQuery, setSearchQuery] = useState(''); // Name Filter
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'LIST' | 'MAP'>('LIST');
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+
+  // Extract unique cities from clinics
+  const availableCities = useMemo(() => {
+      const cities = new Set(clinics.map(c => c.city).filter(Boolean));
+      return Array.from(cities).sort();
+  }, [clinics]);
 
   // Load data specific to logged-in phone number
   useEffect(() => {
@@ -61,6 +112,12 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
           // First time setup for this number
           saveDataToStorage(userName, []);
       }
+
+      // Load Reminders
+      const savedReminders = localStorage.getItem(`clinicq_reminders_${userPhone}`);
+      if (savedReminders) {
+          setReminders(JSON.parse(savedReminders));
+      }
   }, [userPhone]);
 
   const saveDataToStorage = (name: string, members: FamilyMember[]) => {
@@ -71,6 +128,62 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
           familyMembers: members
       };
       localStorage.setItem(storageKey, JSON.stringify(data));
+  };
+
+  const saveReminders = (newReminders: Reminder[]) => {
+      setReminders(newReminders);
+      localStorage.setItem(`clinicq_reminders_${userPhone}`, JSON.stringify(newReminders));
+  };
+
+  // -- REMINDER SYSTEM CHECKER --
+  useEffect(() => {
+      const interval = setInterval(() => {
+          const now = Date.now();
+          reminders.forEach(r => {
+              // Trigger reminder if time passed and not yet sent
+              if (!r.sent && r.triggerTime <= now) {
+                  addToast(`🔔 Reminder: ${r.message}`, 'info');
+                  // Play a sound (optional/browser policy might block)
+                  
+                  // Mark as sent
+                  setReminders(prev => {
+                      const updated = prev.map(item => item.id === r.id ? { ...item, sent: true } : item);
+                      localStorage.setItem(`clinicq_reminders_${userPhone}`, JSON.stringify(updated));
+                      return updated;
+                  });
+              }
+          });
+      }, 10000); // Check every 10 seconds
+
+      return () => clearInterval(interval);
+  }, [reminders, userPhone, addToast]);
+
+  const handleSetReminder = (visitId: string, appointmentTimestamp: number, minutesBefore: number, doctorName: string) => {
+      const triggerTime = appointmentTimestamp - (minutesBefore * 60 * 1000);
+      
+      if (triggerTime <= Date.now()) {
+          addToast("This time has already passed. Cannot set reminder.", "warning");
+          return;
+      }
+
+      const newReminder: Reminder = {
+          id: visitId,
+          triggerTime,
+          minutesBefore,
+          message: `Your appointment with ${doctorName} is in ${minutesBefore} minutes!`,
+          sent: false
+      };
+
+      // Remove existing if any, replace with new
+      const updated = [...reminders.filter(r => r.id !== visitId), newReminder];
+      saveReminders(updated);
+      addToast(`Reminder set for ${minutesBefore} minutes before appointment.`, "success");
+  };
+
+  const handleRemoveReminder = (visitId: string) => {
+      const updated = reminders.filter(r => r.id !== visitId);
+      saveReminders(updated);
+      addToast("Reminder removed.", "info");
   };
 
   const handleUpdateProfile = (newName: string) => {
@@ -94,6 +207,31 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
       addToast("Family member removed", "info");
   };
 
+  // -- LOCATION HANDLER --
+  const handleUseLocation = () => {
+    if (!navigator.geolocation) {
+        addToast("Geolocation is not supported by your browser", "error");
+        return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            setUserLocation({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+            });
+            setIsLocating(false);
+            addToast("Location detected! Sorted by nearest.", "success");
+            // Auto-clear city filter if using GPS to show nearest regardless of city
+            setSearchCity(''); 
+        },
+        (error) => {
+            setIsLocating(false);
+            addToast("Unable to retrieve location. Please check permissions.", "error");
+        }
+    );
+  };
+
   // -- VISITS DATA DERIVATION --
   const allUserVisits = useMemo(() => {
       if (!userPhone) return [];
@@ -108,7 +246,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
                       clinicId: c.id,
                       clinicName: c.name,
                       doctorName: doc?.name || 'Unknown',
-                      doctorRoom: doc?.roomNumber || '-'
+                      doctorRoom: doc?.roomNumber || '-',
+                      doctorDelay: doc?.delayMinutes || 0
                   });
               }
           });
@@ -291,12 +430,98 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
       setNewName(''); setNewPhone(''); setSelectedDocId(''); setSelectedSlot(''); setIsAppointmentMode(false);
   };
 
+  // --------------------------------------------------------------------------------
+  // SMART QUEUE CALCULATOR
+  // --------------------------------------------------------------------------------
   const getQueueInfoForVisit = (visit: any) => {
     const clinic = clinics.find(c => c.id === visit.clinicId);
     if (!clinic || visit.status !== PatientStatus.WAITING) return null;
     
-    const ahead = clinic.patients.filter(p => p.doctorId === visit.doctorId && p.status === PatientStatus.WAITING && p.tokenNumber < visit.tokenNumber);
-    return { position: ahead.length + 1, estWait: (ahead.length + 1) * 10 };
+    const queue = clinic.patients.filter(p => p.doctorId === visit.doctorId && p.status === PatientStatus.WAITING);
+    
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const LATE_THRESHOLD_MINS = 15;
+    const AVG_CONSULT_TIME = 10; 
+
+    // --- SMART STATUS LOGIC START ---
+    // If appointment is in future days or hours, don't show "You are next"
+    if (visit.visitType === 'APPOINTMENT' && visit.appointmentDate && visit.appointmentTime) {
+        const todayStr = getLocalYYYYMMDD(now);
+        
+        // 1. Future Date
+        if (visit.appointmentDate > todayStr) {
+             return {
+                 position: '-',
+                 estWait: 0,
+                 doctorDelay: 0,
+                 statusMsg: `Scheduled for ${visit.appointmentDate}.`
+             };
+        }
+
+        // 2. Same Day but far in future (>45 mins away)
+        if (visit.appointmentDate === todayStr) {
+            const apptTime = parseAppointmentDateTime(visit.appointmentDate, visit.appointmentTime);
+            const diffMins = (apptTime - now.getTime()) / (1000 * 60);
+            
+            if (diffMins > 45) {
+                return {
+                    position: '-',
+                    estWait: Math.floor(diffMins),
+                    doctorDelay: 0,
+                    statusMsg: `Scheduled for ${visit.appointmentTime}. Please arrive 10 mins early.`
+                };
+            }
+        }
+    }
+    // --- SMART STATUS LOGIC END ---
+
+    const timeToMins = (t?: string) => {
+        if (!t) return 0;
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+    };
+
+    const classifyPatient = (p: Patient) => {
+        if (p.isEmergency) return 1;
+        if (p.visitType === 'APPOINTMENT' && p.appointmentTime) {
+            const apptMins = timeToMins(p.appointmentTime);
+            if (apptMins > currentMins) return 4; 
+            if (currentMins > apptMins + LATE_THRESHOLD_MINS) return 3; 
+            return 2;
+        }
+        return 3;
+    };
+
+    const sortedQueue = queue.sort((a, b) => {
+        const priorityA = classifyPatient(a);
+        const priorityB = classifyPatient(b);
+        if (priorityA !== priorityB) return priorityA - priorityB;
+        if (a.visitType === 'APPOINTMENT' && b.visitType === 'APPOINTMENT' && a.appointmentTime && b.appointmentTime) {
+             return timeToMins(a.appointmentTime) - timeToMins(b.appointmentTime);
+        }
+        return a.tokenNumber - b.tokenNumber;
+    });
+
+    const position = sortedQueue.findIndex(p => p.id === visit.id);
+    if (position === -1) return null;
+
+    const doctorDelay = visit.doctorDelay || 0;
+    const baseWait = (position + 1) * AVG_CONSULT_TIME;
+    const totalWait = baseWait + doctorDelay;
+
+    let statusMsg = "";
+    if (doctorDelay > 0) statusMsg = `Doctor is delayed by ${doctorDelay} mins.`;
+    else if (position === 0) statusMsg = "You are next! Please be ready.";
+    else if (position <= 2) statusMsg = "Almost your turn. Please arrive at clinic.";
+    else statusMsg = "Queue is moving smoothly.";
+
+    return { 
+        position: position + 1, 
+        estWait: totalWait,
+        doctorDelay: doctorDelay,
+        statusMsg: statusMsg
+    };
   };
 
   const selectPatient = (type: 'myself' | 'member' | 'new', memberId?: string) => {
@@ -318,7 +543,13 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
       }
   };
 
-  // Helper for Calendar Render
+  const handleBookAgain = (clinicId: string, doctorId: string) => {
+      setSelectedClinicId(clinicId);
+      setSelectedDocId(doctorId);
+      setActiveTab('NEW');
+      setIsAppointmentMode(false); // Default to Walk-in for speed, user can switch
+  };
+
   const renderCalendar = () => {
     const year = selectedDate.getFullYear();
     const month = selectedDate.getMonth();
@@ -326,7 +557,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
     const startDay = new Date(year, month, 1).getDay();
     const days = [];
     
-    // Empty slots
     for (let i = 0; i < startDay; i++) {
         days.push(<div key={`empty-${i}`} className="h-10"></div>);
     }
@@ -357,7 +587,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
     return days;
   };
   
-  // -- QR SCANNER VIEW --
   if (showQRScanner) {
       return (
           <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center text-white">
@@ -394,11 +623,45 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
 
   // -- VIEW: Clinic Selection --
   if (!selectedClinicId && activeTab === 'NEW') {
-    const filteredClinics = clinics.filter(c => 
-        c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        c.pincode.includes(searchQuery) ||
-        c.address.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // CLinic filtering logic with location sorting
+    const filteredClinics = clinics
+        .map(clinic => {
+            let distance = null;
+            if (userLocation && clinic.geoLocation) {
+                distance = calculateDistance(
+                    userLocation.lat, userLocation.lng, 
+                    clinic.geoLocation.lat, clinic.geoLocation.lng
+                );
+            }
+            return { ...clinic, distance };
+        })
+        .filter(c => {
+            // City Filter
+            const matchesCity = searchCity ? c.city === searchCity : true;
+
+            // Name / Doctor Search
+            const q = searchQuery.toLowerCase();
+            const matchesText = !q ? true : (
+                c.name.toLowerCase().includes(q) || 
+                c.address.toLowerCase().includes(q) ||
+                c.doctors.some(d => d.specialty.toLowerCase().includes(q)) ||
+                c.doctors.some(d => d.name.toLowerCase().includes(q))
+            );
+
+            // Category Search: Does clinic have a doctor with this specialty?
+            const matchesCategory = selectedCategory 
+                ? c.doctors.some(d => d.specialty === selectedCategory) 
+                : true;
+
+            return matchesCity && matchesText && matchesCategory;
+        })
+        .sort((a, b) => {
+            // If location is active, sort by distance
+            if (userLocation && a.distance !== null && b.distance !== null) {
+                return a.distance - b.distance;
+            }
+            return 0; // Default order
+        });
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -419,49 +682,105 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
             
             <main className="flex-1 p-4 max-w-md mx-auto w-full flex flex-col relative">
                 
-                {/* SEARCH BAR & TOOLS */}
-                <div className="mb-6 space-y-3">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                        <input 
-                            type="text" 
-                            placeholder="Search by Name, Pincode or City..."
-                            className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
+                {/* SEARCH & FILTERS */}
+                <div className="mb-4 space-y-3">
+                    <div className="flex gap-2">
+                        {/* City Dropdown */}
+                        <div className="relative w-1/3">
+                            <MapPin className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-primary-600 pointer-events-none" />
+                            <select 
+                                className="w-full pl-8 pr-2 py-3 rounded-xl border border-slate-200 shadow-sm bg-white text-sm font-medium appearance-none focus:ring-2 focus:ring-primary-500 focus:outline-none truncate"
+                                value={searchCity}
+                                onChange={(e) => setSearchCity(e.target.value)}
+                            >
+                                <option value="">All Cities</option>
+                                {availableCities.map(city => (
+                                    <option key={city} value={city}>{city}</option>
+                                ))}
+                            </select>
+                            <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400 rotate-90 pointer-events-none" />
+                        </div>
+
+                        {/* Name Search */}
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                            <input 
+                                type="text" 
+                                placeholder="Hospital or Doctor..."
+                                className="w-full pl-10 pr-8 py-3 rounded-xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                            {searchQuery && (
+                                <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            )}
+                        </div>
                     </div>
                     
+                    {/* Location & QR */}
                     <div className="flex gap-2">
+                        <button 
+                            onClick={handleUseLocation} 
+                            disabled={isLocating}
+                            className={`flex-1 p-2.5 rounded-lg transition-colors border text-sm font-medium flex items-center justify-center gap-2 ${isLocating ? 'bg-slate-50 border-slate-200 text-slate-400' : 'bg-white border-slate-200 text-primary-600 hover:bg-primary-50'}`}
+                        >
+                            <LocateFixed className={`h-4 w-4 ${isLocating ? 'animate-spin' : ''}`} />
+                            {isLocating ? 'Locating...' : 'Near Me'}
+                        </button>
+
                         <button 
                             onClick={() => setShowQRScanner(true)}
                             className="flex-1 bg-slate-900 text-white py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 shadow-md active:scale-95 transition-transform"
                         >
                             <QrCode className="h-4 w-4" /> Scan QR
                         </button>
-                        <div className="bg-slate-200 p-1 rounded-lg flex">
-                             <button 
-                                onClick={() => setViewMode('LIST')}
-                                className={`px-3 py-1 rounded-md transition-all ${viewMode === 'LIST' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}
-                             >
-                                 <List className="h-4 w-4" />
-                             </button>
-                             <button 
-                                onClick={() => setViewMode('MAP')}
-                                className={`px-3 py-1 rounded-md transition-all ${viewMode === 'MAP' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}
-                             >
-                                 <Map className="h-4 w-4" />
-                             </button>
-                        </div>
+                    </div>
+
+                    {/* Category Filter Chips */}
+                    <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar no-scrollbar pt-1">
+                        {CATEGORIES.map(cat => {
+                            const isSelected = selectedCategory === cat.id;
+                            const Icon = cat.icon;
+                            return (
+                                <button
+                                    key={cat.id}
+                                    onClick={() => setSelectedCategory(isSelected ? null : cat.id)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap flex-shrink-0 ${isSelected ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'}`}
+                                >
+                                    <Icon className={`h-3 w-3 ${isSelected ? 'text-white' : cat.color.split(' ')[0]}`} />
+                                    {cat.label}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 
                 {/* RESULTS */}
                 {viewMode === 'LIST' ? (
-                    <div className="space-y-3 pb-24">
-                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">
-                            {searchQuery ? `Results for "${searchQuery}"` : 'Nearby Clinics'}
-                        </h3>
+                    <div className="space-y-3 pb-24 animate-in fade-in slide-in-from-bottom-2">
+                        <div className="flex justify-between items-center mb-1 px-1">
+                             <div className="flex gap-2 items-center">
+                                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                    {searchCity ? `${searchCity} • ` : ''} 
+                                    {selectedCategory ? `${selectedCategory}s` : searchQuery ? 'Search Results' : 'Clinics'}
+                                </span>
+                             </div>
+                             <div className="flex items-center gap-2">
+                                {userLocation && (
+                                    <span className="text-[10px] text-primary-600 font-bold flex items-center bg-primary-50 px-2 py-0.5 rounded">
+                                        <Navigation className="h-3 w-3 mr-1" />
+                                        Nearest
+                                    </span>
+                                )}
+                                <div className="flex bg-slate-100 p-0.5 rounded-lg">
+                                    <button onClick={() => setViewMode('LIST')} className="p-1 rounded bg-white shadow"><List className="h-4 w-4 text-slate-600"/></button>
+                                    <button onClick={() => setViewMode('MAP')} className="p-1 rounded"><Map className="h-4 w-4 text-slate-600"/></button>
+                                </div>
+                             </div>
+                        </div>
+                        
                         {filteredClinics.length > 0 ? filteredClinics.map(clinic => (
                             <Card 
                                 key={clinic.id} 
@@ -469,15 +788,31 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
                                 onClick={() => setSelectedClinicId(clinic.id)}
                             >
                                 <div className="flex items-start gap-4">
-                                    <div className="h-10 w-10 mt-1 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-primary-50 group-hover:text-primary-600 transition-colors">
-                                        <Building className="h-5 w-5 text-slate-500 group-hover:text-primary-600" />
+                                    <div className="h-12 w-12 mt-1 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-primary-50 group-hover:text-primary-600 transition-colors flex-shrink-0">
+                                        <Building className="h-6 w-6 text-slate-500 group-hover:text-primary-600" />
                                     </div>
                                     <div>
-                                        <h3 className="font-bold text-slate-900">{clinic.name}</h3>
-                                        <p className="text-xs text-slate-500 mb-1">{clinic.doctors.length} Doctors Available</p>
-                                        <div className="flex items-center gap-1 text-xs text-slate-400">
-                                            <MapPin className="h-3 w-3" />
-                                            <span className="truncate max-w-[150px]">{clinic.address}, {clinic.pincode}</span>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="font-bold text-slate-900 leading-tight">{clinic.name}</h3>
+                                            {clinic.distance !== null && (
+                                                <span className="text-[10px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                                    {clinic.distance.toFixed(1)} km
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-wrap gap-1 mb-1.5 mt-1">
+                                             {Array.from(new Set(clinic.doctors.map(d => d.specialty))).slice(0, 2).map(spec => (
+                                                 <span key={spec} className="text-[10px] bg-slate-50 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
+                                                     {spec}
+                                                 </span>
+                                             ))}
+                                             {new Set(clinic.doctors.map(d => d.specialty)).size > 2 && (
+                                                 <span className="text-[10px] text-slate-400 py-0.5">+{new Set(clinic.doctors.map(d => d.specialty)).size - 2}</span>
+                                             )}
+                                        </div>
+                                        <div className="flex items-start gap-1 text-xs text-slate-400">
+                                            <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                                            <span className="line-clamp-1">{clinic.city}, {clinic.address}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -485,8 +820,11 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
                             </Card>
                         )) : (
                             <div className="text-center py-10 text-slate-400">
-                                <MapPin className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                <p>No clinics found matching your search.</p>
+                                <Filter className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                                <p>No clinics found.</p>
+                                <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(''); setSearchCity(''); setSelectedCategory(null); }} className="mt-2 text-primary-600">
+                                    Clear Filters
+                                </Button>
                             </div>
                         )}
                     </div>
@@ -521,14 +859,17 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
                         ))}
 
                         <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-2 rounded-lg text-xs text-slate-500 shadow-sm">
-                            Use map to explore nearby clinics. Click pin to book.
+                            Map Mode (Simulation)
                         </div>
+                         <div className="absolute top-4 right-4 bg-white/90 backdrop-blur p-1 rounded-lg shadow-sm">
+                             <button onClick={() => setViewMode('LIST')} className="p-2 hover:bg-slate-100 rounded"><List className="h-5 w-5 text-slate-600"/></button>
+                         </div>
                     </div>
                 )}
                 
                 {/* BOTTOM NAV */}
                 <div className="mt-auto fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 pt-2 pb-6 px-6 flex justify-around max-w-md mx-auto z-20">
-                    <button onClick={() => setActiveTab('NEW')} className="flex flex-col items-center text-primary-600">
+                    <button onClick={() => { setActiveTab('NEW'); setSelectedClinicId(''); }} className="flex flex-col items-center text-primary-600">
                         <Building className="h-6 w-6" />
                         <span className="text-xs font-medium mt-1">Book</span>
                     </button>
@@ -780,26 +1121,37 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
                         activeVisits.map((visit) => {
                             const queueInfo = getQueueInfoForVisit(visit);
                             const isAppt = visit.visitType === 'APPOINTMENT';
+                            const apptTime = isAppt && visit.appointmentDate && visit.appointmentTime ? parseAppointmentDateTime(visit.appointmentDate, visit.appointmentTime) : null;
+                            const existingReminder = reminders.find(r => r.id === visit.id && !r.sent);
+
                             return (
-                                <Card key={visit.id} className={`p-6 border-t-4 relative overflow-hidden mb-4 ${isAppt ? 'border-t-purple-500' : 'border-t-primary-500'}`}>
+                                <Card key={visit.id} className={`p-6 border-t-4 relative overflow-hidden mb-4 ${visit.isEmergency ? 'border-t-orange-500' : isAppt ? 'border-t-purple-500' : 'border-t-primary-500'}`}>
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
                                             <h3 className="font-bold text-lg text-slate-900">{visit.clinicName}</h3>
-                                            <p className="text-xs text-slate-500">{new Date(visit.timeAdded).toDateString()}</p>
+                                            <p className="text-sm font-semibold text-primary-700 flex items-center gap-1">
+                                                <User className="h-3 w-3" /> {visit.name}
+                                            </p>
+                                            <p className="text-xs text-slate-500 mt-1">{new Date(visit.timeAdded).toDateString()}</p>
                                         </div>
                                         <Badge status={visit.status} />
                                     </div>
                                     
                                     <div className="text-center mb-6 relative z-10 bg-slate-50 p-4 rounded-xl border border-slate-100">
                                         <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold">
-                                            {isAppt ? 'Appointment Token' : 'Walk-in Token'}
+                                            {visit.isEmergency ? 'Emergency Token' : isAppt ? 'Appointment Token' : 'Walk-in Token'}
                                         </p>
-                                        <div className={`text-5xl font-black mt-2 ${isAppt ? 'text-purple-600' : 'text-primary-600'}`}>
+                                        <div className={`text-5xl font-black mt-2 ${visit.isEmergency ? 'text-orange-500' : isAppt ? 'text-purple-600' : 'text-primary-600'}`}>
                                             #{visit.tokenNumber}
                                         </div>
                                         {isAppt && (
                                             <span className="inline-block mt-2 text-xs font-bold text-purple-700 bg-purple-100 px-2 py-1 rounded">
                                                 {visit.appointmentDate} @ {visit.appointmentTime}
+                                            </span>
+                                        )}
+                                        {visit.isEmergency && (
+                                            <span className="inline-block mt-2 text-xs font-bold text-orange-700 bg-orange-100 px-2 py-1 rounded flex items-center justify-center gap-1">
+                                                <Zap className="h-3 w-3 fill-current"/> PRIORITY
                                             </span>
                                         )}
                                     </div>
@@ -821,7 +1173,57 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
                                             </div>
                                         </div>
 
+                                        {/* APPOINTMENT REMINDER SECTION */}
+                                        {isAppt && apptTime && apptTime > Date.now() && visit.status === PatientStatus.WAITING && (
+                                            <div className="border-t border-slate-100 pt-3">
+                                                <div className="flex justify-between items-center">
+                                                     <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase">
+                                                         {existingReminder ? <BellRing className="h-3 w-3 text-purple-600" /> : <Bell className="h-3 w-3" />}
+                                                         Reminder
+                                                     </div>
+                                                     
+                                                     {existingReminder ? (
+                                                         <div className="flex items-center gap-2 bg-purple-50 px-2 py-1 rounded-lg">
+                                                             <span className="text-xs text-purple-700 font-medium">
+                                                                Set for {existingReminder.minutesBefore}m before
+                                                             </span>
+                                                             <button 
+                                                                onClick={() => handleRemoveReminder(visit.id)}
+                                                                className="text-slate-400 hover:text-red-500"
+                                                                title="Remove Reminder"
+                                                             >
+                                                                 <BellOff className="h-3 w-3" />
+                                                             </button>
+                                                         </div>
+                                                     ) : (
+                                                         <div className="flex gap-1">
+                                                             <button onClick={() => handleSetReminder(visit.id, apptTime, 15, visit.doctorName)} className="text-[10px] bg-white border border-slate-200 hover:bg-slate-50 hover:border-purple-300 text-slate-600 px-2 py-1 rounded">
+                                                                15m
+                                                             </button>
+                                                             <button onClick={() => handleSetReminder(visit.id, apptTime, 30, visit.doctorName)} className="text-[10px] bg-white border border-slate-200 hover:bg-slate-50 hover:border-purple-300 text-slate-600 px-2 py-1 rounded">
+                                                                30m
+                                                             </button>
+                                                             <button onClick={() => handleSetReminder(visit.id, apptTime, 60, visit.doctorName)} className="text-[10px] bg-white border border-slate-200 hover:bg-slate-50 hover:border-purple-300 text-slate-600 px-2 py-1 rounded">
+                                                                1h
+                                                             </button>
+                                                         </div>
+                                                     )}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {visit.status === PatientStatus.WAITING && queueInfo && (
+                                            <>
+                                            {queueInfo.doctorDelay > 0 && (
+                                                <div className="bg-red-50 text-red-700 px-3 py-2 rounded-lg text-sm flex items-start gap-2">
+                                                    <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                                    <div>
+                                                        <strong>Doctor Delayed</strong><br/>
+                                                        Running {queueInfo.doctorDelay} mins late.
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="p-3 text-center bg-slate-800 text-white rounded-lg">
                                                     <div className="text-2xl font-bold mb-1">{queueInfo.position}</div>
@@ -834,6 +1236,11 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
                                                     <p className="text-xs text-slate-500 font-medium">Est. Wait Time</p>
                                                 </div>
                                             </div>
+                                            
+                                            <div className="bg-blue-50 text-blue-800 p-3 rounded-lg text-sm text-center font-medium border border-blue-100">
+                                                {queueInfo.statusMsg}
+                                            </div>
+                                            </>
                                         )}
                                     </div>
                                 </Card>
@@ -893,32 +1300,69 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({ clinics, userPho
                      )}
 
                      {historyVisits.length > 0 ? (
-                         historyVisits.map((visit) => (
-                             <Card key={visit.id} className="p-4 flex flex-col gap-3">
-                                 <div className="flex justify-between items-start">
+                         historyVisits.map((visit) => {
+                             const isAppt = visit.visitType === 'APPOINTMENT';
+                             return (
+                             <Card key={visit.id} className="p-0 overflow-hidden border border-slate-200 flex flex-col">
+                                 <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
                                      <div className="flex items-center gap-3">
-                                         <div className="bg-slate-100 p-2 rounded-lg text-slate-500">
+                                         <div className="bg-white p-2 rounded-lg border border-slate-200 text-slate-500">
                                             <Building className="h-5 w-5" />
                                          </div>
                                          <div>
                                              <h3 className="font-bold text-slate-900 text-sm">{visit.clinicName}</h3>
-                                             <p className="text-xs text-slate-500">{new Date(visit.timeAdded).toLocaleDateString()} • {new Date(visit.timeAdded).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                             <div className="flex items-center gap-2 text-xs text-slate-500">
+                                                 <Clock className="h-3 w-3" />
+                                                 {new Date(visit.timeAdded).toLocaleDateString()} • {new Date(visit.timeAdded).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                             </div>
                                          </div>
                                      </div>
                                      <Badge status={visit.status} />
                                  </div>
-                                 <div className="pl-12">
-                                     <div className="flex items-center gap-2 text-sm text-slate-700 mb-1">
-                                         <User className="h-3 w-3 text-slate-400" />
-                                         <span className="font-medium">{visit.doctorName}</span>
+                                 
+                                 <div className="p-4">
+                                     <div className="flex justify-between items-start mb-4">
+                                         <div>
+                                             <div className="flex items-center gap-2 text-sm text-slate-900 font-bold mb-1">
+                                                 <User className="h-4 w-4 text-primary-600" />
+                                                 {visit.doctorName}
+                                             </div>
+                                             <div className="flex items-center gap-2">
+                                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isAppt ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                     {isAppt ? 'APPOINTMENT' : 'WALK-IN'}
+                                                 </span>
+                                                 <span className="text-xs text-slate-500">Token #{visit.tokenNumber}</span>
+                                             </div>
+                                         </div>
+                                         <div className="text-right">
+                                             {isAppt && (
+                                                <div className="text-xs text-slate-400">
+                                                    Scheduled: {visit.appointmentTime}
+                                                </div>
+                                             )}
+                                         </div>
                                      </div>
-                                     <div className="flex items-center gap-2 text-xs text-slate-500">
-                                         <Ticket className="h-3 w-3" />
-                                         <span>Token #{visit.tokenNumber}</span>
-                                     </div>
+
+                                     {visit.notes && (
+                                         <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-3 mb-4">
+                                             <div className="flex items-center gap-1 text-[10px] font-bold text-yellow-700 uppercase mb-1">
+                                                 <FileText className="h-3 w-3" /> Doctor's Note
+                                             </div>
+                                             <p className="text-xs text-slate-700 leading-relaxed italic">"{visit.notes}"</p>
+                                         </div>
+                                     )}
+
+                                     <Button 
+                                        variant="secondary" 
+                                        size="sm" 
+                                        className="w-full border-slate-200 hover:bg-slate-50 text-slate-600"
+                                        onClick={() => handleBookAgain(visit.clinicId, visit.doctorId)}
+                                     >
+                                         <RefreshCcw className="h-3 w-3 mr-2" /> Book Again
+                                     </Button>
                                  </div>
                              </Card>
-                         ))
+                         )})
                      ) : (
                          userPhone && (
                             <div className="text-center py-12">

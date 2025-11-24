@@ -85,9 +85,11 @@ export default function App() {
             weeklySchedule: defaultSchedule
         }],
         patients: [],
+        city: 'Bangalore', // Default city
         address: '123 Health Street',
         pincode: '000000',
-        coordinates: { x: 50, y: 50 }
+        coordinates: { x: 50, y: 50 },
+        geoLocation: { lat: 12.9716, lng: 77.6412 } // Default location
     };
     setClinics([...clinics, newClinic]);
     setCurrentClinicId(newClinic.id);
@@ -122,7 +124,8 @@ export default function App() {
       timeAdded: Date.now(),
       visitType: appointmentTime ? 'APPOINTMENT' : 'WALK_IN',
       appointmentTime,
-      appointmentDate: appointmentDate || new Date().toISOString().split('T')[0]
+      appointmentDate: appointmentDate || new Date().toISOString().split('T')[0],
+      isEmergency: false
     };
   };
 
@@ -165,6 +168,24 @@ export default function App() {
         return c;
     }));
     addToast('Patient removed from records', 'info');
+  };
+
+  const handleToggleEmergency = (patientId: string) => {
+    if (!currentClinic) return;
+    setClinics(prevClinics => prevClinics.map(c => {
+        if (c.id !== currentClinicId) return c;
+        return {
+            ...c,
+            patients: c.patients.map(p => {
+                if (p.id === patientId) {
+                    const newValue = !p.isEmergency;
+                    addToast(newValue ? "Marked as Emergency Priority" : "Removed Emergency Priority", newValue ? "warning" : "info");
+                    return { ...p, isEmergency: newValue };
+                }
+                return p;
+            })
+        };
+    }));
   };
 
   const handleAddDoctor = (name: string, specialty: string, room: string, schedule: DaySchedule[]) => {
@@ -452,6 +473,7 @@ export default function App() {
                                     onUpdateStatus={handleUpdateStatus}
                                     onCancelPatient={(id) => handleUpdateStatus(id, PatientStatus.CANCELLED)}
                                     onUpdateClinicName={handleUpdateClinicName}
+                                    onToggleEmergency={handleToggleEmergency}
                                     addToast={addToast}
                                 />
                             </main>

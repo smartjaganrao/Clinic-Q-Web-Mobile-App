@@ -1,3 +1,4 @@
+
 import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule } from './types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -13,10 +14,21 @@ const createDefaultSchedule = (): DaySchedule[] => {
 
 // Helper to create doctors
 const createDoctors = (startId: number, count: number, prefix: string): Doctor[] => {
-  const specialties = ['General Physician', 'Pediatrician', 'Cardiologist', 'Dermatologist'];
+  // Expanded list of specialties for category search
+  const specialties = [
+    'General Physician', 
+    'Pediatrician', 
+    'Cardiologist', 
+    'Dermatologist', 
+    'Dentist', 
+    'Orthopedic', 
+    'Gynecologist',
+    'ENT Specialist'
+  ];
+  
   return Array.from({ length: count }).map((_, i) => ({
     id: `doc_${prefix}_${startId + i}`,
-    name: `Dr. ${['Sharma', 'Verma', 'Gupta', 'Patel', 'Singh'][i % 5]}`,
+    name: `Dr. ${['Sharma', 'Verma', 'Gupta', 'Patel', 'Singh', 'Reddy', 'Kumar', 'Das'][i % 8]}`,
     specialty: specialties[i % specialties.length],
     roomNumber: `${100 + i + 1}`,
     isAvailable: true,
@@ -33,9 +45,11 @@ export const INITIAL_CLINICS: Clinic[] = [
     name: 'City Care Clinic',
     slug: 'city-care',
     plan: PlanType.SOLO,
+    city: 'Bangalore',
     address: '12, MG Road, Indiranagar',
     pincode: '560038',
     coordinates: { x: 30, y: 40 },
+    geoLocation: { lat: 12.9716, lng: 77.6412 }, // Indiranagar, Bangalore
     doctors: createDoctors(1, 1, 'c1'),
     patients: [
       { id: 'p1', name: 'Rohan Gupta', phone: '9998887771', tokenNumber: 101, status: PatientStatus.WITH_DOCTOR, doctorId: 'doc_c1_1', timeAdded: Date.now(), visitType: 'WALK_IN' },
@@ -47,14 +61,66 @@ export const INITIAL_CLINICS: Clinic[] = [
     name: 'Green Valley Hospital',
     slug: 'green-valley',
     plan: PlanType.SMALL,
+    city: 'Bangalore',
     address: 'Plot 45, Tech Park Road, Whitefield',
     pincode: '560066',
     coordinates: { x: 65, y: 70 },
-    doctors: createDoctors(1, 3, 'c2'),
+    geoLocation: { lat: 12.9698, lng: 77.7500 }, // Whitefield, Bangalore
+    doctors: createDoctors(1, 4, 'c2'), // Increased doctor count to show diverse categories
     patients: [
       { id: 'p3', name: 'Vikram Singh', phone: '9876543210', tokenNumber: 201, status: PatientStatus.WAITING, doctorId: 'doc_c2_1', timeAdded: Date.now(), visitType: 'WALK_IN' },
       { id: 'p4', name: 'Priya Mehta', phone: '9876543211', tokenNumber: 202, status: PatientStatus.WAITING, doctorId: 'doc_c2_2', timeAdded: Date.now(), visitType: 'WALK_IN' }
     ]
+  },
+  {
+    id: 'clinic_3',
+    name: 'Smile Dental & Ortho',
+    slug: 'smile-dental',
+    plan: PlanType.SOLO,
+    city: 'Bangalore',
+    address: '88, 5th Block, Koramangala',
+    pincode: '560034',
+    coordinates: { x: 45, y: 25 },
+    geoLocation: { lat: 12.9352, lng: 77.6245 }, // Koramangala
+    doctors: [
+        {
+            id: 'doc_c3_1',
+            name: 'Dr. Neha Reddy',
+            specialty: 'Dentist',
+            roomNumber: 'D-1',
+            isAvailable: true,
+            status: DoctorStatus.AVAILABLE,
+            delayMinutes: 0,
+            avatarUrl: `https://picsum.photos/100/100?random=99`,
+            weeklySchedule: createDefaultSchedule()
+        }
+    ],
+    patients: []
+  },
+  {
+    id: 'clinic_4',
+    name: 'Mumbai Heart Institute',
+    slug: 'mumbai-heart',
+    plan: PlanType.SMALL,
+    city: 'Mumbai',
+    address: '101, Bandra West, Near Sea Link',
+    pincode: '400050',
+    coordinates: { x: 20, y: 80 },
+    geoLocation: { lat: 19.0596, lng: 72.8295 },
+    doctors: [
+        {
+            id: 'doc_c4_1',
+            name: 'Dr. Arjun Kapoor',
+            specialty: 'Cardiologist',
+            roomNumber: 'H-101',
+            isAvailable: true,
+            status: DoctorStatus.AVAILABLE,
+            delayMinutes: 0,
+            avatarUrl: `https://picsum.photos/100/100?random=102`,
+            weeklySchedule: createDefaultSchedule()
+        }
+    ],
+    patients: []
   }
 ];
 
