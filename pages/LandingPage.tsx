@@ -1,6 +1,6 @@
-
 import React, { useState } from 'react';
-import { PRICING_PLANS } from '../constants';
+import { PRICING_PLANS, INITIAL_CLINICS } from '../constants';
+import { Clinic } from '../types';
 import { 
   Check, Activity, Users, Monitor, 
   Smartphone, Star, LayoutDashboard, Stethoscope, 
@@ -13,9 +13,11 @@ import { Card } from '../components/Card';
 interface LandingPageProps {
   onPatientEnter: () => void;
   onStaffLogin: () => void;
+  onSimulateQRScan: (clinicId: string) => void; // New prop for QR testing
+  clinics: Clinic[]; // Needed to pick a clinic for QR
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaffLogin }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaffLogin, onSimulateQRScan, clinics }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const scrollToSection = (id: string) => {
@@ -152,6 +154,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
                         </div>
                     </div>
                 </div>
+
+                {/* SIMULATE QR SCAN (Demo Feature) */}
+                <div className="mt-8 text-center animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
+                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Developer Preview Tools</p>
+                     <Button 
+                        variant="secondary" 
+                        size="sm"
+                        onClick={() => onSimulateQRScan(clinics[0]?.id || 'clinic_1')}
+                        className="border-dashed border-slate-300 text-slate-500 hover:text-primary-600 hover:border-primary-400"
+                     >
+                        <QrCode className="h-4 w-4 mr-2" />
+                        Simulate Physical QR Scan (Clinic 1)
+                     </Button>
+                </div>
+
             </div>
         </div>
       </section>

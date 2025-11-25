@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, Notification } from './types';
 import { INITIAL_CLINICS } from './constants';
@@ -37,6 +36,11 @@ export default function App() {
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [currentClinicId, setCurrentClinicId] = useState<string | null>(null);
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
+  
+  // QR Code / Deep Link Context
+  // If a user scans a QR but isn't logged in, we store the clinic ID here
+  // After login, we pass this to the PatientTracker to auto-open that clinic
+  const [pendingClinicId, setPendingClinicId] = useState<string | null>(null);
   
   // Patient Session State
   const [loggedInPatient, setLoggedInPatient] = useState<{ phone: string; name: string } | null>(null);
@@ -109,7 +113,17 @@ export default function App() {
     }
   };
 
-  const createNewPatient = (clinic: Clinic, name: string, phone: string, doctorId: string, appointmentTime?: string, appointmentDate?: string): Patient => {
+  const createNewPatient = (
+      clinic: Clinic, 
+      name: string, 
+      phone: string, 
+      doctorId: string, 
+      appointmentTime?: string, 
+      appointmentDate?: string,
+      age?: string,
+      gender?: 'Male' | 'Female' | 'Other',
+      symptoms?: string
+    ): Patient => {
     const docPatients = clinic.patients.filter(p => p.doctorId === doctorId);
     const docIndex = clinic.doctors.findIndex(d => d.id === doctorId);
     const baseToken = (docIndex + 1) * 100;
@@ -127,14 +141,18 @@ export default function App() {
       appointmentTime,
       appointmentDate: appointmentDate || new Date().toISOString().split('T')[0],
       isEmergency: false,
+      isCheckedIn: false,
       vitals: { bp: '', temp: '', weight: '', pulse: '' },
-      painPoints: []
+      painPoints: [],
+      age,
+      gender,
+      symptoms
     };
   };
 
-  const handleAddPatient = (name: string, phone: string, doctorId: string, date?: string, time?: string) => {
+  const handleAddPatient = (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string) => {
     if (!currentClinic) return;
-    const newPatient = createNewPatient(currentClinic, name, phone, doctorId, time, date);
+    const newPatient = createNewPatient(currentClinic, name, phone, doctorId, time, date, age, gender, symptoms);
 
     setClinics(prevClinics => prevClinics.map(c => {
         if (c.id === currentClinicId) {
@@ -160,12 +178,31 @@ export default function App() {
   };
 
   const handleUpdatePatientDetails = (id: string, updates: Partial<Patient>) => {
-      if (!currentClinic) return;
+      // Need to find which clinic this patient belongs to if currentClinicId is not set (e.g. from Patient App)
+      // For global updates, we iterate all clinics
       setClinics(prevClinics => prevClinics.map(c => {
-          if (c.id === currentClinicId) {
+          if (c.patients.some(p => p.id === id)) {
               return {
                   ...c,
                   patients: c.patients.map(p => p.id === id ? { ...p, ...updates } : p)
+              };
+          }
+          return c;
+      }));
+  };
+
+  const handlePatientCheckIn = (clinicId: string, patientId: string) => {
+      setClinics(prevClinics => prevClinics.map(c => {
+          if (c.id === clinicId) {
+              return {
+                  ...c,
+                  patients: c.patients.map(p => {
+                      if (p.id === patientId && !p.isCheckedIn) {
+                          addToast("Check-in Successful! Queue priority updated.", "success");
+                          return { ...p, isCheckedIn: true };
+                      }
+                      return p;
+                  })
               };
           }
           return c;
@@ -255,10 +292,20 @@ export default function App() {
       addToast('Doctor removed', 'info');
   };
 
-  const handlePatientSelfRegister = (name: string, phone: string, doctorId: string, clinicId: string, appointmentTime?: string, appointmentDate?: string) => {
+  const handlePatientSelfRegister = (
+      name: string, 
+      phone: string, 
+      doctorId: string, 
+      clinicId: string, 
+      appointmentTime?: string, 
+      appointmentDate?: string,
+      age?: string,
+      gender?: 'Male' | 'Female' | 'Other',
+      symptoms?: string
+    ) => {
       setClinics(prevClinics => prevClinics.map(c => {
           if (c.id === clinicId) {
-               const newPatient = createNewPatient(c, name, phone, doctorId, appointmentTime, appointmentDate);
+               const newPatient = createNewPatient(c, name, phone, doctorId, appointmentTime, appointmentDate, age, gender, symptoms);
                addToast(`Booking Confirmed! Your token is #${newPatient.tokenNumber}`, 'success');
                return { ...c, patients: [...c.patients, newPatient] };
           }
@@ -266,10 +313,14 @@ export default function App() {
       }));
   };
 
-  const handleUpdateStatus = (patientId: string, status: PatientStatus) => {
-    if (!currentClinic) return;
+  const handleUpdateStatus = (patientId: string, status: PatientStatus, specificClinicId?: string) => {
+    // If specificClinicId is passed (from PatientTracker), use it. Otherwise use currentClinicId (Reception Dashboard)
+    const targetClinicId = specificClinicId || currentClinicId;
+    
+    if (!targetClinicId) return;
+
     setClinics(prevClinics => prevClinics.map(c => {
-        if (c.id === currentClinicId) {
+        if (c.id === targetClinicId) {
             let updatedPatients = c.patients.map(p => {
                 if (p.id === patientId) {
                     const updates: Partial<Patient> = { status };
@@ -324,6 +375,44 @@ export default function App() {
       }));
   };
 
+  const handleDragDrop = (draggedId: string, targetId: string) => {
+      if (!currentClinic) return;
+      
+      setClinics(prevClinics => prevClinics.map(c => {
+          if (c.id !== currentClinicId) return c;
+
+          const draggedPatient = c.patients.find(p => p.id === draggedId);
+          const targetPatient = c.patients.find(p => p.id === targetId);
+          
+          if (!draggedPatient || !targetPatient) return c;
+          
+          // Cannot drag onto self
+          if (draggedId === targetId) return c;
+
+          // Logic: Update Dragged Patient's timestamp to be just before/after the target
+          const isMovingDown = draggedPatient.timeAdded < targetPatient.timeAdded;
+          
+          let newTimestamp;
+          if (isMovingDown) {
+              // Moving down: Place AFTER target
+              newTimestamp = targetPatient.timeAdded + 1;
+          } else {
+              // Moving up: Place BEFORE target
+              newTimestamp = targetPatient.timeAdded - 1;
+          }
+
+          const updatedPatients = c.patients.map(p => {
+              if (p.id === draggedId) {
+                  return { ...p, timeAdded: newTimestamp };
+              }
+              return p;
+          });
+
+          return { ...c, patients: updatedPatients };
+      }));
+      addToast("Queue reordered manually", "info");
+  };
+
   const handleUpdateDoctorStatus = (doctorId: string, status: DoctorStatus, delayMinutes: number) => {
       if (!currentClinic) return;
       setClinics(prevClinics => prevClinics.map(c => {
@@ -358,21 +447,14 @@ export default function App() {
         }
 
         // Improved Selection Logic for NEXT
-        // (Replicating Smart Queue Logic here for consistency)
         const waiting = nextPatients.filter(p => p.doctorId === doctorId && p.status === PatientStatus.WAITING);
-        // Simplified sorting by priority then time (assuming DoctorDashboard handles complex sort visually)
-        // Here we just pick highest priority based on same logic or rely on Doctor clicking specific patient
-        // For "Auto Next", let's just pick the first based on current sort order (timeAdded modified by reorder)
         
-        // Actually, DoctorDashboard passes the ID usually? No, the prop is void.
-        // Let's implement a basic sort here to pick the right "Next"
         waiting.sort((a, b) => {
              if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
              return a.timeAdded - b.timeAdded;
         });
 
         if (waiting.length > 0) {
-            // Find the index in the original array
             const nextP = waiting[0];
             const originalIdx = nextPatients.findIndex(p => p.id === nextP.id);
             if (originalIdx !== -1) {
@@ -399,7 +481,16 @@ export default function App() {
   const handlePatientLogin = (phone: string, name: string) => {
       setLoggedInPatient({ phone, name });
       setCurrentView('PATIENT_APP');
-      addToast(`Welcome back, ${name}`, 'success');
+      
+      if (pendingClinicId) {
+          const clinic = clinics.find(c => c.id === pendingClinicId);
+          if (clinic) {
+            addToast(`Welcome ${name}! Taking you to ${clinic.name}...`, 'success');
+          }
+          // Do NOT clear pendingClinicId here, it is passed as a prop to PatientTracker
+      } else {
+          addToast(`Welcome back, ${name}`, 'success');
+      }
   };
 
   // ------------------------------------------------------------------
@@ -412,12 +503,30 @@ export default function App() {
     setCurrentClinicId(null);
     setCurrentDoctorId(null);
     setLoggedInPatient(null);
+    setPendingClinicId(null);
   };
 
   const enterPatientPortal = () => {
       setSelectedRole(UserRole.PATIENT);
       // Redirect to login first
       setCurrentView('PATIENT_LOGIN');
+  };
+
+  // Simulated QR Scan Handler from Landing Page
+  const handleQRScanSimulated = (clinicId: string) => {
+      setPendingClinicId(clinicId);
+      
+      // Scenario: User Scans QR
+      // If already logged in? (In this app flow, 'goHome' clears login, but realistically:)
+      if (loggedInPatient) {
+          setCurrentView('PATIENT_APP');
+          addToast("QR Scanned. Redirecting...", "success");
+      } else {
+          // Not logged in -> Go to Login
+          setSelectedRole(UserRole.PATIENT);
+          setCurrentView('PATIENT_LOGIN');
+          addToast("Please login to continue booking.", "info");
+      }
   };
 
   const enterStaffPortal = () => {
@@ -482,13 +591,23 @@ export default function App() {
         {(() => {
             switch (currentView) {
                 case 'HOME':
-                    return <LandingPage onPatientEnter={enterPatientPortal} onStaffLogin={enterStaffPortal} />;
+                    return <LandingPage 
+                        onPatientEnter={enterPatientPortal} 
+                        onStaffLogin={enterStaffPortal}
+                        onSimulateQRScan={handleQRScanSimulated} // Pass QR handler
+                        clinics={clinics} // Pass clinics to allow simulation
+                    />;
 
                 case 'STAFF_LOGIN':
                     return <StaffLogin onSelectRole={handleRoleSelection} onBack={goHome} />;
 
                 case 'PATIENT_LOGIN':
-                    return <PatientLogin onLogin={handlePatientLogin} onBack={goHome} addToast={addToast} />;
+                    return <PatientLogin 
+                        onLogin={handlePatientLogin} 
+                        onBack={goHome} 
+                        addToast={addToast} 
+                        pendingActionMessage={pendingClinicId ? "Login to confirm booking" : undefined}
+                    />;
 
                 case 'PATIENT_APP':
                     if (!loggedInPatient) return <div>Error: Not Logged In</div>;
@@ -502,9 +621,13 @@ export default function App() {
                             addToast={addToast}
                             onUpdateDetails={handleUpdatePatientDetails}
                             onCancelVisit={(clinicId, patientId) => {
-                                setCurrentClinicId(clinicId); // Temp set context to clinic
-                                handleUpdateStatus(patientId, PatientStatus.CANCELLED);
+                                // PASS EXPLICIT CLINIC ID to update function
+                                handleUpdateStatus(patientId, PatientStatus.CANCELLED, clinicId);
                             }}
+                            onCheckIn={handlePatientCheckIn}
+                            // Pass the pending clinic from QR scan
+                            preSelectedClinicId={pendingClinicId || undefined}
+                            onClearPendingAction={() => setPendingClinicId(null)}
                         />
                     );
 
@@ -550,6 +673,7 @@ export default function App() {
                                     onUpdateClinicName={handleUpdateClinicName}
                                     onToggleEmergency={handleToggleEmergency}
                                     onManualReorder={handleManualReorder}
+                                    onDragDrop={handleDragDrop}
                                     addToast={addToast}
                                 />
                             </main>

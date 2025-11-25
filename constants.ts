@@ -121,6 +121,42 @@ export const INITIAL_CLINICS: Clinic[] = [
         }
     ],
     patients: []
+  },
+  {
+    id: 'clinic_5',
+    name: 'Chennai Care Hospital',
+    slug: 'chennai-care',
+    plan: PlanType.SMALL,
+    city: 'Chennai',
+    address: '45, Anna Salai, Guindy',
+    pincode: '600032',
+    coordinates: { x: 60, y: 60 },
+    geoLocation: { lat: 13.0067, lng: 80.2206 },
+    doctors: [
+        {
+            id: 'doc_c5_1',
+            name: 'Dr. S. Raman',
+            specialty: 'Orthopedic',
+            roomNumber: '202',
+            isAvailable: true,
+            status: DoctorStatus.AVAILABLE,
+            delayMinutes: 0,
+            avatarUrl: `https://picsum.photos/100/100?random=108`,
+            weeklySchedule: createDefaultSchedule()
+        },
+        {
+            id: 'doc_c5_2',
+            name: 'Dr. Priya Kumar',
+            specialty: 'Gynecologist',
+            roomNumber: '203',
+            isAvailable: true,
+            status: DoctorStatus.AVAILABLE,
+            delayMinutes: 0,
+            avatarUrl: `https://picsum.photos/100/100?random=109`,
+            weeklySchedule: createDefaultSchedule()
+        }
+    ],
+    patients: []
   }
 ];
 

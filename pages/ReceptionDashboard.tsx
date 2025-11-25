@@ -9,14 +9,14 @@ import {
   UserPlus, Clock, X, Settings, MessageCircle, 
   Save, Stethoscope, Plus, CalendarClock, User, Play, 
   CheckSquare, Activity, BarChart3, PieChart, Calendar as CalendarIcon, 
-  Download, History, UserCheck, Users, Search, FileText, ChevronRight, Edit2, Trash2, List, Copy, Zap, ChevronLeft, CalendarDays, AlertTriangle, TrendingUp, IndianRupee, ArrowUpRight, ArrowUp, ArrowDown, UserMinus, RotateCcw
+  Download, History, UserCheck, Users, Search, FileText, ChevronRight, Edit2, Trash2, List, Copy, Zap, ChevronLeft, CalendarDays, AlertTriangle, TrendingUp, IndianRupee, ArrowUpRight, ArrowUp, ArrowDown, UserMinus, RotateCcw, CheckCircle, AlertCircle, GripVertical, Smartphone, Unlock
 } from 'lucide-react';
 
 interface ReceptionProps {
   doctors: Doctor[];
   patients: Patient[];
   clinicName: string;
-  onAddPatient: (name: string, phone: string, doctorId: string, date?: string, time?: string) => void;
+  onAddPatient: (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string) => void;
   onEditPatient: (id: string, updates: Partial<Patient>) => void;
   onDeletePatient: (id: string) => void;
   onAddDoctor: (name: string, specialty: string, room: string, schedule: DaySchedule[]) => void;
@@ -27,6 +27,7 @@ interface ReceptionProps {
   onUpdateClinicName: (name: string) => void;
   onToggleEmergency: (patientId: string) => void;
   onManualReorder: (patientId: string, direction: 'UP' | 'DOWN') => void;
+  onDragDrop: (draggedId: string, targetId: string) => void; // New Prop
   addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
@@ -55,6 +56,7 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
   onUpdateClinicName,
   onToggleEmergency,
   onManualReorder,
+  onDragDrop,
   addToast
 }) => {
   // Navigation State
@@ -89,8 +91,19 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
   const [appointmentTime, setAppointmentTime] = useState('');
   const [bookingMonth, setBookingMonth] = useState(new Date()); // For admin calendar navigation
   
+  // Extended Details State
+  const [newPatientAge, setNewPatientAge] = useState('');
+  const [newPatientGender, setNewPatientGender] = useState<'Male' | 'Female' | 'Other'>('Male');
+  const [newPatientSymptoms, setNewPatientSymptoms] = useState('');
+  const [isExistingPatient, setIsExistingPatient] = useState(false); // Track if auto-filled
+  const [isEditingExisting, setIsEditingExisting] = useState(false); // To unlock fields for existing patient
+
   // Settings State
   const [tempClinicName, setTempClinicName] = useState(clinicName);
+
+  // Drag and Drop State
+  const [draggedPatientId, setDraggedPatientId] = useState<string | null>(null);
+  const [dragOverPatientId, setDragOverPatientId] = useState<string | null>(null);
 
   // Doctor Form State
   const getDefaultSchedule = (): DaySchedule[] => DAYS.map(day => ({
@@ -218,8 +231,7 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
                       <button 
                         onClick={() => {
                             setAppointmentDate(dateStr);
-                            setIsAppointment(true);
-                            setShowAddModal(true);
+                            openAddModal('APPOINTMENT');
                         }}
                         className="absolute inset-0 bg-primary-500/10 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
                       >
@@ -317,7 +329,7 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
 
 
   // ------------------------------------------------------------
-  // PATIENT DATABASE LOGIC
+  // PATIENT DATABASE LOGIC (Used for Lookup & List)
   // ------------------------------------------------------------
   const uniquePatients = useMemo(() => {
     const map = new Map<string, { name: string, phone: string, lastVisit: number, totalVisits: number, visits: Patient[] }>();
@@ -352,18 +364,76 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
   // ------------------------------------------------------------
   // HANDLERS
   // ------------------------------------------------------------
+  
+  // New Handler for Auto-Fill by Phone
+  const handlePhoneLookup = (phone: string) => {
+      // Validate length to only trigger lookup on plausible numbers
+      const cleaned = phone.replace(/\D/g, '').slice(0, 10);
+      setNewPatientPhone(cleaned);
+      
+      if (cleaned.length === 10) {
+        // Check if patient exists in database
+        const existing = uniquePatients.find(p => p.phone === cleaned);
+        if (existing) {
+            const latest = existing.visits[0]; // Most recent visit details
+            setNewPatientName(latest.name);
+            setNewPatientAge(latest.age || '');
+            setNewPatientGender(latest.gender || 'Male');
+            setIsExistingPatient(true); // Flag to show UI feedback
+            setIsEditingExisting(false); // Lock fields by default
+        } else {
+            // If typing a new number after finding an old one, reset
+            if (isExistingPatient) {
+                setNewPatientName('');
+                setNewPatientAge('');
+                setNewPatientGender('Male');
+                setIsExistingPatient(false);
+                setIsEditingExisting(true);
+            }
+        }
+      } else {
+          // Reset if number is incomplete
+          if (isExistingPatient) {
+            setNewPatientName('');
+            setNewPatientAge('');
+            setNewPatientGender('Male');
+            setIsExistingPatient(false);
+            setIsEditingExisting(true);
+          }
+      }
+  };
+  
+  const resetAddForm = () => {
+    setNewPatientName('');
+    setNewPatientPhone('');
+    setNewPatientAge('');
+    setNewPatientSymptoms('');
+    setIsAppointment(false);
+    setAppointmentTime('');
+    setIsExistingPatient(false);
+    setIsEditingExisting(false);
+    setShowAddModal(false);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newPatientName && newPatientPhone && selectedDoctor) {
-      // DUPLICATE NAME CHECK
+      
+      // VALIDATION: Phone Number Format
+      if (newPatientPhone.length !== 10) {
+          addToast("Invalid Phone: Must be 10 digits to sync with Patient App.", "error");
+          return;
+      }
+
+      // DUPLICATE CHECK: Active Queue Only
       const isDuplicate = patients.some(p => 
+        p.phone === newPatientPhone &&
         p.name.trim().toLowerCase() === newPatientName.trim().toLowerCase() && 
         (p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR)
       );
 
       if (isDuplicate) {
-        addToast("A patient with this exact name is already active. Please add an initial.", "error");
+        addToast("Duplicate: This patient (Name + Phone) is already in the active queue.", "error");
         return;
       }
 
@@ -376,21 +446,32 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
           newPatientPhone, 
           selectedDoctor, 
           isAppointment ? appointmentDate : undefined,
-          isAppointment ? appointmentTime : undefined
+          isAppointment ? appointmentTime : undefined,
+          newPatientAge,
+          newPatientGender,
+          newPatientSymptoms
       );
       
-      setNewPatientName('');
-      setNewPatientPhone('');
-      setIsAppointment(false);
-      setAppointmentTime('');
-      setShowAddModal(false);
+      resetAddForm();
     }
+  };
+  
+  const openAddModal = (mode: 'WALK_IN' | 'APPOINTMENT') => {
+      resetAddForm(); // Clear prev data
+      setIsAppointment(mode === 'APPOINTMENT');
+      setShowAddModal(true);
   };
 
   const handleEditPatientSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if (editingPatient) {
-          onEditPatient(editingPatient.id, { name: editingPatient.name, phone: editingPatient.phone });
+          onEditPatient(editingPatient.id, { 
+              name: editingPatient.name, 
+              phone: editingPatient.phone,
+              age: editingPatient.age,
+              gender: editingPatient.gender,
+              symptoms: editingPatient.symptoms 
+            });
           setEditingPatient(null);
       }
   };
@@ -414,10 +495,30 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
       onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR);
   };
 
-  const handleQuickBook = (name: string, phone: string) => {
-      setNewPatientName(name);
-      setNewPatientPhone(phone);
+  const handleQuickBook = (patient: Patient) => {
+      setNewPatientName(patient.name);
+      setNewPatientPhone(patient.phone);
+      setNewPatientAge(patient.age || '');
+      setNewPatientGender(patient.gender || 'Male');
+      // Symptoms reset as it is a new visit
+      setNewPatientSymptoms('');
+      setIsAppointment(false); // Default to walk-in for quick book, user can change
+      setIsExistingPatient(true); // Flag as existing
       setShowAddModal(true);
+  };
+
+  const handleEditDatabasePatient = (entry: { visits: Patient[] }) => {
+      // Use the most recent visit to populate
+      if (entry.visits.length > 0) {
+          setEditingPatient(entry.visits[0]);
+      }
+  };
+
+  const handleDeleteDatabasePatient = (entry: { name: string, totalVisits: number, visits: Patient[] }) => {
+      if (window.confirm(`Are you sure you want to delete ALL ${entry.totalVisits} records for ${entry.name}? This cannot be undone.`)) {
+          // Delete all visits
+          entry.visits.forEach(v => onDeletePatient(v.id));
+      }
   };
 
   const openDoctorModal = (mode: 'ADD' | 'EDIT', doctor?: Doctor) => {
@@ -488,19 +589,90 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
       addToast(`WhatsApp Sent to ${patient.name}: "It is your turn soon!"`, 'success');
   };
 
+  // ------------------------------------------------------------
+  // DRAG AND DROP HANDLERS
+  // ------------------------------------------------------------
+  const handleDragStart = (e: React.DragEvent<HTMLTableRowElement>, patientId: string) => {
+    setDraggedPatientId(patientId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLTableRowElement>, patientId: string) => {
+    e.preventDefault();
+    if (draggedPatientId === patientId) return;
+    setDragOverPatientId(patientId);
+  };
+
+  const handleDragLeave = () => {
+    // Optional: Clear highlight if leaving the row
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLTableRowElement>, targetId: string) => {
+    e.preventDefault();
+    setDragOverPatientId(null);
+    if (draggedPatientId && draggedPatientId !== targetId) {
+        onDragDrop(draggedPatientId, targetId);
+    }
+    setDraggedPatientId(null);
+  };
+
+  const handleDragEnd = () => {
+      setDraggedPatientId(null);
+      setDragOverPatientId(null);
+  };
+
+  // ------------------------------------------------------------
+  // SMART QUEUE LOGIC (VISUAL FOR RECEPTION)
+  // ------------------------------------------------------------
+  const getPriority = (p: Patient) => {
+      // 1. With Doctor (Always Top)
+      if (p.status === PatientStatus.WITH_DOCTOR) return 0;
+      
+      // 2. Emergency
+      if (p.isEmergency) return 1;
+
+      // 3. Appointments logic
+      if (p.visitType === 'APPOINTMENT' && p.appointmentTime) {
+          const now = new Date();
+          const currentMins = now.getHours() * 60 + now.getMinutes();
+          const [h, m] = p.appointmentTime.split(':').map(Number);
+          const apptMins = h * 60 + m;
+          const minsUntilAppt = apptMins - currentMins;
+
+          // If Checked In -> High Priority (2)
+          if (p.isCheckedIn) return 2;
+          
+          // If < 15 mins to slot (or late) AND Not Checked In -> Drop Priority (4)
+          if (minsUntilAppt <= 15) return 4;
+          
+          // Future appointments (>15 mins) -> Bottom (5)
+          return 5;
+      }
+
+      // 4. Walk-ins -> Priority 3
+      return 3;
+  };
+
+  // Filter first, then sort
   const filteredPatients = patients
     .filter(p => 
         p.status !== PatientStatus.COMPLETED && 
         p.status !== PatientStatus.CANCELLED &&
         (filterDoc === 'all' || p.doctorId === filterDoc)
-    )
-    .sort((a, b) => {
-        // Simple sort for display: With Doctor First, then by timeAdded (if not reordered manually logic is in App.tsx)
-        // Actually, we should rely on App.tsx order which handles manual reorder timestamps
-        if (a.status === PatientStatus.WITH_DOCTOR) return -1;
-        if (b.status === PatientStatus.WITH_DOCTOR) return 1;
-        return a.timeAdded - b.timeAdded;
-    });
+    );
+
+  const smartSortedPatients = [...filteredPatients].sort((a, b) => {
+      const pA = getPriority(a);
+      const pB = getPriority(b);
+      
+      if (pA !== pB) return pA - pB;
+      
+      // Tie breakers
+      if (a.visitType === 'APPOINTMENT' && b.visitType === 'APPOINTMENT' && a.appointmentTime && b.appointmentTime) {
+          return a.appointmentTime.localeCompare(b.appointmentTime);
+      }
+      return a.timeAdded - b.timeAdded;
+  });
 
   // ------------------------------------------------------------
   // REPORTING LOGIC
@@ -579,7 +751,7 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
 
 
   // ------------------------------------------------------------
-  // SMART QUEUE HELPERS (Visual only)
+  // QUEUE HELPERS (Visual only)
   // ------------------------------------------------------------
   const isLateAppointment = (patient: Patient) => {
       if (patient.visitType !== 'APPOINTMENT' || !patient.appointmentTime) return false;
@@ -599,6 +771,15 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
       return apptMins <= currentMins && currentMins <= apptMins + 15;
   };
 
+  const isCheckInImminent = (patient: Patient) => {
+      if (patient.visitType !== 'APPOINTMENT' || !patient.appointmentTime || patient.isCheckedIn) return false;
+      const now = new Date();
+      const currentMins = now.getHours() * 60 + now.getMinutes();
+      const [h, m] = patient.appointmentTime.split(':').map(Number);
+      const apptMins = h * 60 + m;
+      return currentMins > apptMins - 15; // 15 mins before or LATE
+  };
+
   return (
     <div className="p-6 h-full overflow-y-auto bg-slate-50">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -614,9 +795,10 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
             <Button variant="secondary" onClick={() => setShowSettingsModal(true)}>
                 <Settings className="h-5 w-5" />
             </Button>
-            <Button onClick={() => setShowAddModal(true)}>
-                <UserPlus className="h-5 w-5 mr-2" />
-                New Patient
+            
+            <Button onClick={() => openAddModal('WALK_IN')} className="shadow-lg shadow-primary-200 bg-primary-600 hover:bg-primary-700 text-white">
+                <Plus className="h-5 w-5 mr-2" />
+                Add Patient
             </Button>
         </div>
       </div>
@@ -681,7 +863,7 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
         {activeTab === 'QUEUE' && (
             <>
                 <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">Live Queue</h2>
+                <h2 className="text-lg font-bold text-slate-900">Live Queue <span className="text-xs font-normal text-slate-500 ml-2">(Auto-Sorted by Priority)</span></h2>
                 <div className="flex gap-2">
                     <select 
                     className="px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -700,7 +882,7 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
                     <tr>
                         <th className="px-6 py-4 font-semibold text-slate-700 w-16">Ord</th>
                         <th className="px-6 py-4 font-semibold text-slate-700">Token</th>
-                        <th className="px-6 py-4 font-semibold text-slate-700">Patient Name</th>
+                        <th className="px-6 py-4 font-semibold text-slate-700">Patient</th>
                         <th className="px-6 py-4 font-semibold text-slate-700">Doctor</th>
                         <th className="px-6 py-4 font-semibold text-slate-700">Type</th>
                         <th className="px-6 py-4 font-semibold text-slate-700">Status</th>
@@ -708,26 +890,42 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
                     </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                    {filteredPatients.length === 0 ? (
+                    {smartSortedPatients.length === 0 ? (
                         <tr>
                         <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
                             No patients in the waiting queue.
                         </td>
                         </tr>
                     ) : (
-                        filteredPatients.map((patient) => {
+                        smartSortedPatients.map((patient) => {
                             const isLate = isLateAppointment(patient);
                             const isDue = isDueAppointment(patient);
+                            const isImminentNoCheckIn = isCheckInImminent(patient);
                             const isSkipped = patient.status === PatientStatus.SKIPPED;
                             
+                            // Drag and Drop Logic variables
+                            const isReorderable = patient.status === PatientStatus.WAITING;
+                            const isDragging = draggedPatientId === patient.id;
+                            const isDragOver = dragOverPatientId === patient.id;
+
                             return (
-                        <tr key={patient.id} className={`hover:bg-slate-50 transition-colors group ${isSkipped ? 'bg-slate-50 opacity-60' : ''}`}>
+                        <tr 
+                            key={patient.id} 
+                            draggable={isReorderable}
+                            onDragStart={(e) => isReorderable && handleDragStart(e, patient.id)}
+                            onDragOver={(e) => isReorderable && handleDragOver(e, patient.id)}
+                            onDragLeave={handleDragLeave}
+                            onDragEnd={handleDragEnd}
+                            onDrop={(e) => isReorderable && handleDrop(e, patient.id)}
+                            className={`transition-colors group ${isSkipped ? 'bg-slate-50 opacity-60' : 'hover:bg-slate-50'} ${isDragging ? 'opacity-50 bg-slate-100' : ''} ${isDragOver ? 'border-y-2 border-blue-500 bg-blue-50' : ''}`}
+                        >
                              <td className="px-6 py-4">
-                                {patient.status === PatientStatus.WAITING && (
-                                    <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => onManualReorder(patient.id, 'UP')} className="p-1 hover:bg-slate-200 rounded"><ArrowUp className="h-3 w-3" /></button>
-                                        <button onClick={() => onManualReorder(patient.id, 'DOWN')} className="p-1 hover:bg-slate-200 rounded"><ArrowDown className="h-3 w-3" /></button>
+                                {isReorderable ? (
+                                    <div className="cursor-move text-slate-300 hover:text-slate-600 flex items-center justify-center p-2 rounded hover:bg-slate-100">
+                                        <GripVertical className="h-5 w-5" />
                                     </div>
+                                ) : (
+                                    <span className="text-slate-300 block w-5 text-center">-</span>
                                 )}
                              </td>
                             <td className="px-6 py-4 font-bold text-primary-700">
@@ -737,9 +935,21 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
                             <td className="px-6 py-4">
                             <div className="font-medium text-slate-900 flex items-center gap-2">
                                 {patient.name}
+                                {(patient.age || patient.gender) && (
+                                    <span className="text-xs text-slate-500 font-normal">
+                                        ({patient.age || '?'}, {patient.gender === 'Male' ? 'M' : patient.gender === 'Female' ? 'F' : '?'})
+                                    </span>
+                                )}
                                 {patient.isEmergency && <span className="text-[10px] bg-orange-100 text-orange-800 font-bold px-1.5 py-0.5 rounded">URGENT</span>}
                             </div>
-                            <div className="text-xs text-slate-500">{patient.phone}</div>
+                            <div className="text-xs text-slate-500 flex items-center gap-2">
+                                <span>{patient.phone}</span>
+                                {patient.symptoms && (
+                                    <span className="bg-slate-100 px-1.5 rounded text-[10px] text-slate-600 truncate max-w-[150px]" title={patient.symptoms}>
+                                        Reason: {patient.symptoms}
+                                    </span>
+                                )}
+                            </div>
                             </td>
                             <td className="px-6 py-4 text-slate-600">
                             {doctors.find(d => d.id === patient.doctorId)?.name}
@@ -751,8 +961,17 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
                                         <CalendarClock className="h-3 w-3" />
                                         {patient.appointmentTime} Appt
                                     </span>
-                                    {isLate && <span className="text-[10px] text-red-600 font-bold">LATE (Wait)</span>}
+                                    {isLate && <span className="text-[10px] text-red-600 font-bold">LATE</span>}
                                     {isDue && <span className="text-[10px] text-green-600 font-bold">ON TIME</span>}
+                                    {patient.isCheckedIn ? (
+                                        <span className="text-[10px] bg-green-500 text-white font-bold px-1.5 py-0.5 rounded flex items-center w-fit gap-1">
+                                            <CheckCircle className="h-3 w-3" /> CHECKED IN
+                                        </span>
+                                    ) : isImminentNoCheckIn ? (
+                                        <span className="text-[10px] bg-red-100 text-red-700 border border-red-200 font-bold px-1.5 py-0.5 rounded flex items-center w-fit gap-1 animate-pulse">
+                                            <AlertCircle className="h-3 w-3" /> LATE CHECK-IN
+                                        </span>
+                                    ) : null}
                                 </div>
                             ) : (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800">
@@ -903,24 +1122,38 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
                                     </td>
                                 </tr>
                             ) : (
-                                filteredDatabase.map((patient) => (
-                                    <tr key={patient.phone} className="hover:bg-slate-50 transition-colors group">
-                                        <td className="px-6 py-4 font-medium text-slate-900">{patient.name}</td>
-                                        <td className="px-6 py-4 text-slate-600 font-mono">{patient.phone}</td>
+                                filteredDatabase.map((patientEntry) => (
+                                    <tr key={patientEntry.phone} className="hover:bg-slate-50 transition-colors group">
+                                        <td className="px-6 py-4 font-medium text-slate-900">
+                                            {patientEntry.name}
+                                            {/* Show Age/Gender in DB view if available */}
+                                            {(patientEntry.visits[0].age || patientEntry.visits[0].gender) && (
+                                                <span className="text-xs text-slate-500 font-normal ml-2">
+                                                    ({patientEntry.visits[0].age || '?'}, {patientEntry.visits[0].gender?.[0] || '?'})
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 text-slate-600 font-mono">{patientEntry.phone}</td>
                                         <td className="px-6 py-4 text-slate-600">
-                                            {new Date(patient.lastVisit).toLocaleDateString()}
+                                            {new Date(patientEntry.lastVisit).toLocaleDateString()}
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded-full text-xs font-bold">
-                                                {patient.totalVisits} visits
+                                                {patientEntry.totalVisits} visits
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex justify-end gap-2">
-                                                <Button size="sm" variant="outline" onClick={() => setShowHistoryModal(patient.phone)}>
+                                                <Button size="sm" variant="ghost" onClick={() => handleEditDatabasePatient(patientEntry)} title="Edit Details">
+                                                    <Edit2 className="h-4 w-4 text-slate-400 hover:text-primary-600" />
+                                                </Button>
+                                                <Button size="sm" variant="ghost" onClick={() => handleDeleteDatabasePatient(patientEntry)} title="Delete All Records">
+                                                    <Trash2 className="h-4 w-4 text-slate-400 hover:text-red-600" />
+                                                </Button>
+                                                <Button size="sm" variant="outline" onClick={() => setShowHistoryModal(patientEntry.phone)}>
                                                     <History className="h-4 w-4 mr-1" /> History
                                                 </Button>
-                                                <Button size="sm" onClick={() => handleQuickBook(patient.name, patient.phone)}>
+                                                <Button size="sm" onClick={() => handleQuickBook(patientEntry.visits[0])}>
                                                     Book Again
                                                 </Button>
                                             </div>
@@ -1049,624 +1282,493 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
                 )}
              </div>
         )}
+
       </div>
 
-      {/* Reports Modal */}
-      {showReportsModal && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <Card className="w-full max-w-6xl p-8 animate-in fade-in zoom-in duration-200 max-h-[95vh] overflow-y-auto">
-                <div className="flex justify-between items-start mb-6">
-                    <div>
-                        <h3 className="text-2xl font-bold text-slate-900">Clinic Analytics</h3>
-                        <p className="text-slate-500">Business Intelligence & Patient Logs</p>
-                    </div>
-                    <button onClick={() => setShowReportsModal(false)} className="text-slate-400 hover:text-slate-600">
-                        <X className="h-6 w-6" />
-                    </button>
-                </div>
-
-                {/* FILTER TOOLBAR */}
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div className="flex gap-2">
-                        {['TODAY', 'WEEK', 'MONTH'].map((range) => (
-                            <button 
-                                key={range}
-                                onClick={() => setReportRange(range as any)}
-                                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${reportRange === range ? 'bg-white text-primary-700 shadow ring-1 ring-primary-200' : 'text-slate-500 hover:bg-slate-100'}`}
-                            >
-                                {range === 'TODAY' ? 'Today' : range === 'WEEK' ? 'Last 7 Days' : 'Last 30 Days'}
-                            </button>
-                        ))}
-                        <button 
-                             onClick={() => setReportRange('CUSTOM')}
-                             className={`px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-2 ${reportRange === 'CUSTOM' ? 'bg-white text-primary-700 shadow ring-1 ring-primary-200' : 'text-slate-500 hover:bg-slate-100'}`}
-                        >
-                            <CalendarDays className="h-4 w-4" /> Custom
-                        </button>
-                    </div>
-
-                    {reportRange === 'CUSTOM' && (
-                        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-300">
-                             <input 
-                                type="date" 
-                                value={customStartDate} 
-                                onChange={(e) => setCustomStartDate(e.target.value)}
-                                className="text-sm outline-none text-slate-600" 
-                             />
-                             <span className="text-slate-400">-</span>
-                             <input 
-                                type="date" 
-                                value={customEndDate} 
-                                onChange={(e) => setCustomEndDate(e.target.value)}
-                                className="text-sm outline-none text-slate-600" 
-                             />
-                        </div>
-                    )}
-
-                    <Button variant="outline" size="sm">
-                        <Download className="h-4 w-4 mr-2" /> Export CSV
-                    </Button>
-                </div>
-
-                {/* KEY BUSINESS METRICS */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                     {/* Revenue Card */}
-                     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group">
-                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                             <IndianRupee className="h-16 w-16 text-green-600" />
-                         </div>
-                         <div className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Est. Revenue</div>
-                         <div className="text-3xl font-black text-slate-900 flex items-baseline">
-                             ₹{estimatedRevenue.toLocaleString()}
-                             <span className="text-xs font-normal text-slate-400 ml-2">@ ₹500/visit</span>
-                         </div>
-                         <div className="mt-2 text-xs text-green-600 font-medium flex items-center">
-                             <TrendingUp className="h-3 w-3 mr-1" /> Based on {completedVisits} visits
-                         </div>
-                     </div>
-
-                     {/* Total Visits Card */}
-                     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group">
-                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                             <Users className="h-16 w-16 text-blue-600" />
-                         </div>
-                         <div className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Total Patients</div>
-                         <div className="text-3xl font-black text-slate-900">{totalVisits}</div>
-                         <div className="mt-2 flex gap-2">
-                             <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded font-medium">{returningCount} Returning</span>
-                             <span className="text-xs px-2 py-0.5 bg-green-50 text-green-700 rounded font-medium">{newPatientsCount} New</span>
-                         </div>
-                     </div>
-
-                     {/* Efficiency Card */}
-                     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group">
-                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                             <Clock className="h-16 w-16 text-purple-600" />
-                         </div>
-                         <div className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Avg Turnaround</div>
-                         <div className="text-3xl font-black text-slate-900 flex items-baseline">
-                             {avgTurnaroundTime}
-                             <span className="text-sm font-normal text-slate-400 ml-1">mins</span>
-                         </div>
-                         <p className="mt-2 text-xs text-slate-400">Door-to-Door time per patient</p>
-                     </div>
-
-                     {/* Cancellation Card */}
-                     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group">
-                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                             <AlertTriangle className="h-16 w-16 text-red-600" />
-                         </div>
-                         <div className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Cancellations</div>
-                         <div className="text-3xl font-black text-slate-900">{cancelledVisits}</div>
-                         <div className="mt-2 text-xs text-red-600 font-medium">
-                             {totalVisits > 0 ? ((cancelledVisits / totalVisits) * 100).toFixed(1) : 0}% Rate
-                         </div>
-                     </div>
-                </div>
-
-                {/* CHARTS & GRAPHS */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                    {/* Peak Hours Chart */}
-                    <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-6">
-                        <h4 className="font-bold text-slate-800 mb-6 flex items-center">
-                            <Activity className="h-5 w-5 mr-2 text-primary-500" />
-                            Peak Hours Heatmap
-                        </h4>
-                        <div className="h-48 flex items-end justify-between gap-2">
-                             {peakHours.length > 0 ? peakHours.map(data => (
-                                 <div key={data.hour} className="flex-1 flex flex-col items-center group relative">
-                                     <div 
-                                        className="w-full bg-blue-100 rounded-t-md hover:bg-blue-300 transition-all relative"
-                                        style={{ height: `${(data.count / Math.max(...peakHours.map(p => p.count))) * 100}%` }}
-                                     >
-                                        {/* Tooltip */}
-                                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-10">
-                                            {data.count} visits
-                                        </div>
-                                     </div>
-                                     <span className="text-[10px] text-slate-400 mt-2 font-medium">
-                                         {data.hour > 12 ? `${data.hour-12}PM` : `${data.hour}AM`}
-                                     </span>
-                                 </div>
-                             )) : (
-                                 <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">
-                                     Not enough data for peak analysis.
-                                 </div>
-                             )}
-                        </div>
-                    </div>
-
-                    {/* Doctor Breakdown */}
-                    <div className="bg-white border border-slate-200 rounded-xl p-6">
-                        <h4 className="font-bold text-slate-800 mb-6 flex items-center">
-                            <PieChart className="h-5 w-5 mr-2 text-purple-500" />
-                            Visits by Doctor
-                        </h4>
-                        <div className="space-y-5">
-                            {doctors.map(d => {
-                                const count = reportPatients.filter(p => p.doctorId === d.id).length;
-                                const percent = totalVisits > 0 ? (count / totalVisits) * 100 : 0;
-                                return (
-                                    <div key={d.id}>
-                                        <div className="flex justify-between text-sm mb-1.5">
-                                            <span className="font-medium text-slate-700">{d.name}</span>
-                                            <span className="text-slate-900 font-bold">{count}</span>
-                                        </div>
-                                        <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                                            <div className="h-full bg-purple-500 rounded-full transition-all duration-500" style={{ width: `${percent}%`}}></div>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    </div>
-                </div>
-
-                {/* DETAILED LOG */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-                    <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                         <h4 className="font-bold text-slate-700">Detailed Patient Log</h4>
-                         <span className="text-xs text-slate-500">{reportPatients.length} records found</span>
-                    </div>
-                    <div className="max-h-[300px] overflow-y-auto">
-                        <table className="min-w-full divide-y divide-slate-200">
-                            <thead className="bg-white sticky top-0 z-10 shadow-sm">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Date/Time</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Patient Details</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Type</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Assigned To</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-slate-100">
-                                {reportPatients.length > 0 ? (
-                                    reportPatients.map(p => {
-                                        const patientType = getPatientType(p);
-                                        return (
-                                        <tr key={p.id} className="hover:bg-slate-50 transition-colors">
-                                            <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
-                                                <div className="font-medium text-slate-900">{new Date(p.timeAdded).toLocaleDateString()}</div>
-                                                <div className="text-[10px]">{new Date(p.timeAdded).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                            </td>
-                                            <td className="px-4 py-3 text-sm font-medium text-slate-900">
-                                                {p.name}
-                                                <div className="text-xs text-slate-400">{p.phone}</div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${patientType === 'Returning' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                                                    {patientType}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-slate-600">
-                                                {doctors.find(d => d.id === p.doctorId)?.name}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <Badge status={p.status} />
-                                            </td>
-                                        </tr>
-                                    )})
-                                ) : (
-                                    <tr>
-                                        <td colSpan={5} className="px-4 py-12 text-center text-sm text-slate-400 italic">
-                                            No records found for the selected date range.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </Card>
-          </div>
-      )}
-
-      {/* Patient History Modal */}
-      {showHistoryModal && selectedPatientHistory && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <Card className="w-full max-w-2xl p-6 animate-in fade-in zoom-in duration-200 flex flex-col max-h-[85vh]">
-                <div className="flex justify-between items-start mb-6 border-b border-slate-100 pb-4">
-                    <div>
-                        <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                             <User className="h-6 w-6 text-primary-500" />
-                             {selectedPatientHistory.name}
-                        </h3>
-                        <p className="text-slate-500 flex items-center gap-1 mt-1">
-                            <span className="font-mono">{selectedPatientHistory.phone}</span>
-                            <span className="mx-2">•</span>
-                            <span className="text-xs bg-slate-100 px-2 py-0.5 rounded-full">{selectedPatientHistory.totalVisits} total visits</span>
-                        </p>
-                    </div>
-                    <button onClick={() => setShowHistoryModal(null)} className="text-slate-400 hover:text-slate-600 bg-slate-50 p-2 rounded-full">
-                        <X className="h-5 w-5" />
-                    </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-                    {selectedPatientHistory.visits.sort((a,b) => b.timeAdded - a.timeAdded).map((visit, idx) => (
-                        <div key={visit.id} className="border border-slate-200 rounded-xl p-4 relative hover:border-primary-200 transition-colors bg-white">
-                            <div className="flex justify-between items-start mb-2">
-                                <div>
-                                    <div className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                                        {new Date(visit.timeAdded).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                                        {idx === 0 && <span className="bg-green-100 text-green-700 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full">Latest</span>}
-                                    </div>
-                                    <div className="text-xs text-slate-500 mt-0.5">
-                                        {new Date(visit.timeAdded).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                    </div>
-                                </div>
-                                <Badge status={visit.status} />
-                            </div>
-                            
-                            <div className="flex items-center gap-3 mb-3 bg-slate-50 p-2 rounded-lg">
-                                <div className="bg-white p-1.5 rounded-full shadow-sm">
-                                    <Stethoscope className="h-4 w-4 text-primary-600" />
-                                </div>
-                                <div className="text-sm">
-                                    <span className="text-slate-500">Doctor: </span>
-                                    <span className="font-medium text-slate-900">{doctors.find(d => d.id === visit.doctorId)?.name}</span>
-                                </div>
-                            </div>
-
-                            {visit.notes ? (
-                                <div className="bg-yellow-50 border border-yellow-100 p-3 rounded-lg text-sm text-slate-700">
-                                    <div className="flex items-center gap-1 text-yellow-700 font-bold text-xs mb-1 uppercase tracking-wide">
-                                        <FileText className="h-3 w-3" /> Consultation Notes
-                                    </div>
-                                    {visit.notes}
-                                </div>
-                            ) : (
-                                <div className="text-xs text-slate-400 italic">No notes recorded for this visit.</div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-                
-                <div className="mt-6 pt-4 border-t border-slate-100 flex justify-end">
-                    <Button onClick={() => { 
-                        handleQuickBook(selectedPatientHistory.name, selectedPatientHistory.phone);
-                        setShowHistoryModal(null);
-                    }}>
-                        <Plus className="h-4 w-4 mr-2" /> Book New Appointment
-                    </Button>
-                </div>
-            </Card>
-          </div>
-      )}
-
-      {/* Add Patient Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <Card className={`w-full ${isAppointment ? 'max-w-2xl' : 'max-w-md'} p-6 animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto`}>
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-900">
-                  {isAppointment ? 'Book Appointment' : 'Add Walk-in Patient'}
-              </h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="flex gap-2 mb-6">
-                 <button 
-                    onClick={() => setIsAppointment(false)} 
-                    className={`flex-1 py-2 text-sm font-medium rounded-lg border transition-all ${!isAppointment ? 'bg-primary-50 border-primary-500 text-primary-700' : 'bg-white border-slate-200 text-slate-500'}`}
-                 >
-                     Walk-in
-                 </button>
-                 <button 
-                    onClick={() => setIsAppointment(true)}
-                    className={`flex-1 py-2 text-sm font-medium rounded-lg border transition-all ${isAppointment ? 'bg-primary-50 border-primary-500 text-primary-700' : 'bg-white border-slate-200 text-slate-500'}`}
-                 >
-                     Appointment
-                 </button>
-            </div>
-            
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input 
-                    label="Patient Name"
-                    value={newPatientName}
-                    onChange={(e) => setNewPatientName(e.target.value)}
-                    placeholder="e.g. John Doe"
-                    required
-                  />
-                  <Input 
-                    label="Phone Number"
-                    value={newPatientPhone}
-                    onChange={(e) => setNewPatientPhone(e.target.value)}
-                    placeholder="10 digit number"
-                    required
-                  />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Assign Doctor</label>
-                <select 
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  value={selectedDoctor}
-                  onChange={(e) => { setSelectedDoctor(e.target.value); setAppointmentTime(''); }}
-                >
-                  {doctors.map(d => (
-                    <option key={d.id} value={d.id}>{d.name} ({d.specialty})</option>
-                  ))}
-                </select>
-              </div>
-
-              {isAppointment && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4 pt-4 border-t border-slate-100">
-                      {/* Left: Calendar */}
-                      <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-2">Select Date</label>
-                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h4 className="font-bold text-slate-800 text-sm">{bookingMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}</h4>
-                                    <div className="flex gap-1">
-                                        <button type="button" onClick={() => setBookingMonth(new Date(bookingMonth.getFullYear(), bookingMonth.getMonth() - 1, 1))} className="p-1 hover:bg-slate-200 rounded"><ChevronLeft className="h-4 w-4" /></button>
-                                        <button type="button" onClick={() => setBookingMonth(new Date(bookingMonth.getFullYear(), bookingMonth.getMonth() + 1, 1))} className="p-1 hover:bg-slate-200 rounded"><ChevronRight className="h-4 w-4" /></button>
-                                    </div>
-                                </div>
-                                
-                                <div className="grid grid-cols-7 gap-1 text-center mb-1">
-                                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <span key={d} className="text-[10px] font-bold text-slate-400">{d}</span>)}
-                                </div>
-                                <div className="grid grid-cols-7 gap-1">
-                                    {renderBookingCalendar()}
-                                </div>
-                          </div>
-                      </div>
-
-                      {/* Right: Slots */}
-                      <div>
-                          <div className="flex justify-between items-center mb-2">
-                                <label className="text-sm font-medium text-slate-700">Available Slots</label>
-                                {bookingSlots.workingHours && <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{bookingSlots.workingHours}</span>}
-                          </div>
-                          
-                          {bookingSlots.isOff ? (
-                              <div className="h-48 flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-500">
-                                  <AlertTriangle className="h-8 w-8 mb-2 opacity-30" />
-                                  <p className="text-sm">Doctor is Off Duty</p>
-                              </div>
-                          ) : (
-                              <div className="grid grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
-                                  {bookingSlots.slots.length > 0 ? bookingSlots.slots.map((slot) => (
-                                      <button
-                                          key={slot.time}
-                                          type="button"
-                                          disabled={slot.isBooked}
-                                          onClick={() => setAppointmentTime(slot.time)}
-                                          className={`px-2 py-2 text-xs font-medium rounded border transition-all
-                                              ${slot.isBooked 
-                                                  ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed line-through opacity-60' 
-                                                  : appointmentTime === slot.time 
-                                                      ? 'bg-purple-600 text-white border-purple-600 shadow-md transform scale-105' 
-                                                      : 'bg-white text-slate-700 border-slate-200 hover:border-purple-300 hover:bg-purple-50'
-                                              }
-                                          `}
-                                      >
-                                          {slot.time}
-                                      </button>
-                                  )) : (
-                                      <div className="col-span-3 text-center py-8 text-slate-400 text-sm">
-                                          Select a date to view slots.
-                                      </div>
-                                  )}
-                              </div>
-                          )}
-                          
-                          {appointmentTime && (
-                              <div className="mt-4 p-3 bg-purple-50 text-purple-700 rounded-lg text-sm text-center">
-                                  Booking for <strong>{appointmentDate}</strong> at <strong>{appointmentTime}</strong>
-                              </div>
-                          )}
-                      </div>
-                  </div>
-              )}
-
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
-                <Button variant="secondary" onClick={() => setShowAddModal(false)} type="button">
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isAppointment && !appointmentTime}>
-                  {isAppointment ? 'Confirm Appointment' : 'Add to Queue'}
-                </Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      )}
-
-      {/* Edit Patient Modal */}
+      {/* EDIT MODAL */}
       {editingPatient && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-              <Card className="w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
-                  <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-xl font-bold text-slate-900">Edit Patient Details</h3>
-                      <button onClick={() => setEditingPatient(null)} className="text-slate-400 hover:text-slate-600">
-                          <X className="h-6 w-6" />
-                      </button>
-                  </div>
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+                  <h3 className="text-lg font-bold mb-4">Edit Patient</h3>
                   <form onSubmit={handleEditPatientSubmit} className="space-y-4">
                       <Input 
-                          label="Full Name"
-                          value={editingPatient.name}
-                          onChange={(e) => setEditingPatient({...editingPatient, name: e.target.value})}
-                          required
+                          label="Name" 
+                          value={editingPatient.name} 
+                          onChange={(e) => setEditingPatient({...editingPatient, name: e.target.value})} 
                       />
                       <Input 
-                          label="Phone Number"
-                          value={editingPatient.phone}
-                          onChange={(e) => setEditingPatient({...editingPatient, phone: e.target.value})}
-                          required
+                          label="Phone" 
+                          value={editingPatient.phone} 
+                          onChange={(e) => setEditingPatient({...editingPatient, phone: e.target.value})} 
                       />
-                      <div className="flex justify-end gap-3 mt-4">
-                          <Button variant="secondary" onClick={() => setEditingPatient(null)} type="button">Cancel</Button>
+                      <div className="flex gap-2">
+                        <Input 
+                            label="Age" 
+                            type="number"
+                            value={editingPatient.age || ''} 
+                            onChange={(e) => setEditingPatient({...editingPatient, age: e.target.value})} 
+                        />
+                        <div className="w-full">
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
+                            <select 
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900"
+                                value={editingPatient.gender || 'Male'}
+                                onChange={(e) => setEditingPatient({...editingPatient, gender: e.target.value as any})}
+                            >
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                      </div>
+                      <Input 
+                        label="Symptoms"
+                        value={editingPatient.symptoms || ''}
+                        onChange={(e) => setEditingPatient({...editingPatient, symptoms: e.target.value})}
+                      />
+
+                      <div className="flex justify-end gap-2 mt-6">
+                          <Button variant="secondary" type="button" onClick={() => setEditingPatient(null)}>Cancel</Button>
                           <Button type="submit">Save Changes</Button>
                       </div>
                   </form>
-              </Card>
+              </div>
           </div>
       )}
 
-      {/* Doctor Add/Edit Modal */}
-      {doctorModal.isOpen && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <Card className="w-full max-w-2xl p-6 animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold text-slate-900">
-                        {doctorModal.mode === 'ADD' ? 'Add New Doctor' : 'Edit Doctor Schedule'}
-                    </h3>
-                    <button onClick={() => setDoctorModal({ ...doctorModal, isOpen: false })} className="text-slate-400 hover:text-slate-600">
-                        <X className="h-6 w-6" />
+      {/* ADD PATIENT MODAL - REDESIGNED */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto relative">
+            
+            <button onClick={resetAddForm} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600">
+              <X className="h-6 w-6" />
+            </button>
+            
+            <div className="mb-4">
+                <div className="flex gap-2 mb-4 justify-center">
+                    <button 
+                        type="button" 
+                        onClick={() => setIsAppointment(false)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-colors ${!isAppointment ? 'bg-primary-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                    >
+                        <UserPlus className="h-4 w-4" /> Walk-In
+                    </button>
+                    <button 
+                        type="button" 
+                        onClick={() => setIsAppointment(true)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-colors ${isAppointment ? 'bg-purple-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                    >
+                        <CalendarClock className="h-4 w-4" /> Appointment
                     </button>
                 </div>
-                
-                <form onSubmit={handleDoctorSubmit} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Input 
-                            label="Doctor Name" 
-                            placeholder="e.g. Dr. Smith"
-                            value={docForm.name}
-                            onChange={(e) => setDocForm({...docForm, name: e.target.value})}
-                            required
-                        />
-                        <Input 
-                            label="Specialty" 
-                            placeholder="e.g. Cardiologist"
-                            value={docForm.specialty}
-                            onChange={(e) => setDocForm({...docForm, specialty: e.target.value})}
-                            required
-                        />
-                        <Input 
-                            label="Room Number" 
-                            placeholder="e.g. 101"
-                            value={docForm.room}
-                            onChange={(e) => setDocForm({...docForm, room: e.target.value})}
-                            required
-                        />
-                    </div>
+            </div>
+            
+            <form onSubmit={handleSubmit} className="space-y-4">
+               
+               {/* 1. SMART PHONE LOOKUP (First Step) */}
+               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                   <div className="flex justify-between items-center mb-1">
+                        <label className="block text-xs font-bold text-slate-400 uppercase">Mobile Number</label>
+                        <span className="text-[10px] text-primary-600 font-medium flex items-center gap-1">
+                            <Smartphone className="h-3 w-3" /> Lookup
+                        </span>
+                   </div>
+                   <Input 
+                        placeholder="10-digit Mobile..." 
+                        value={newPatientPhone} 
+                        onChange={(e) => handlePhoneLookup(e.target.value)} 
+                        autoFocus
+                        className="font-mono text-lg tracking-wide bg-white"
+                        required
+                        type="tel"
+                        maxLength={10}
+                   />
+                   
+                   {/* DYNAMIC FEEDBACK AREA */}
+                   {newPatientPhone.length === 10 && (
+                       <div className="mt-3 animate-in fade-in">
+                           {isExistingPatient ? (
+                               <div className="bg-white p-3 rounded-lg border-l-4 border-green-500 shadow-sm flex justify-between items-center">
+                                   <div>
+                                       <div className="flex items-center gap-1 text-xs font-bold text-green-700 mb-0.5">
+                                           <CheckCircle className="h-3 w-3" /> EXISTING PATIENT
+                                       </div>
+                                       <div className="font-bold text-slate-900">{newPatientName}</div>
+                                       <div className="text-xs text-slate-500">{newPatientAge || '?'} yrs • {newPatientGender}</div>
+                                   </div>
+                                   {!isEditingExisting && (
+                                       <Button size="sm" variant="ghost" type="button" onClick={() => setIsEditingExisting(true)} className="text-xs h-7">
+                                           <Edit2 className="h-3 w-3 mr-1" /> Edit
+                                       </Button>
+                                   )}
+                               </div>
+                           ) : (
+                               <div className="flex items-center gap-2 text-slate-500 bg-white p-2 rounded-lg border border-dashed border-slate-300">
+                                   <UserPlus className="h-4 w-4" />
+                                   <span className="text-xs font-medium">New Number. Please fill details below.</span>
+                               </div>
+                           )}
+                       </div>
+                   )}
+               </div>
 
-                    {/* Weekly Schedule Grid */}
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                        <div className="flex justify-between items-center mb-4">
-                            <h4 className="font-bold text-slate-700">Weekly Schedule</h4>
-                            <button 
-                                type="button" 
-                                onClick={copyMondayToAll}
-                                className="text-xs text-primary-600 font-medium hover:underline flex items-center"
+               {/* 2. DETAILS (Name, Age, etc) */}
+               <div className={`space-y-3 transition-opacity duration-300 ${newPatientPhone.length === 10 ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                   <div className="relative">
+                        <Input 
+                            label="Full Name" 
+                            value={newPatientName} 
+                            onChange={(e) => setNewPatientName(e.target.value)} 
+                            placeholder="Patient Name" 
+                            required 
+                            disabled={isExistingPatient && !isEditingExisting}
+                            className={isExistingPatient && !isEditingExisting ? 'bg-slate-100 text-slate-500' : ''}
+                        />
+                        {isExistingPatient && !isEditingExisting && <div className="absolute top-8 right-3 text-slate-400"><Unlock className="h-4 w-4" /></div>}
+                   </div>
+                   
+                   <div className="grid grid-cols-2 gap-4">
+                        <Input 
+                            label="Age" 
+                            type="number" 
+                            placeholder="25" 
+                            value={newPatientAge} 
+                            onChange={e => setNewPatientAge(e.target.value)} 
+                            disabled={isExistingPatient && !isEditingExisting}
+                            className={isExistingPatient && !isEditingExisting ? 'bg-slate-100 text-slate-500' : ''}
+                        />
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
+                            <select 
+                                className={`w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 ${isExistingPatient && !isEditingExisting ? 'bg-slate-100 text-slate-500' : ''}`}
+                                value={newPatientGender}
+                                onChange={(e) => setNewPatientGender(e.target.value as any)}
+                                disabled={isExistingPatient && !isEditingExisting}
                             >
-                                <Copy className="h-3 w-3 mr-1" /> Copy Monday to All
-                            </button>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </select>
                         </div>
-                        
-                        <div className="space-y-3">
-                            {docForm.schedule.map((day, idx) => (
-                                <div key={day.day} className={`flex items-center gap-3 p-2 rounded-lg ${day.isOff ? 'bg-slate-100 opacity-60' : 'bg-white shadow-sm'}`}>
-                                    <div className="w-24 font-medium text-sm text-slate-700">{day.day}</div>
-                                    
-                                    <label className="flex items-center cursor-pointer">
-                                        <input 
-                                            type="checkbox" 
-                                            className="sr-only peer"
-                                            checked={!day.isOff}
-                                            onChange={(e) => updateScheduleDay(idx, 'isOff', !e.target.checked)}
-                                        />
-                                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500 relative"></div>
-                                        <span className="ml-2 text-xs font-medium text-slate-500">{day.isOff ? 'OFF' : 'ON'}</span>
-                                    </label>
+                   </div>
+                   
+                   <Input label="Reason / Symptoms" placeholder="e.g. Fever, Headache" value={newPatientSymptoms} onChange={e => setNewPatientSymptoms(e.target.value)} />
 
-                                    {!day.isOff && (
-                                        <div className="flex items-center gap-2 ml-auto">
-                                            <input 
-                                                type="time" 
-                                                className="border border-slate-300 rounded px-2 py-1 text-sm w-24"
-                                                value={day.startTime}
-                                                onChange={(e) => updateScheduleDay(idx, 'startTime', e.target.value)}
-                                            />
-                                            <span className="text-slate-400">-</span>
-                                            <input 
-                                                type="time" 
-                                                className="border border-slate-300 rounded px-2 py-1 text-sm w-24"
-                                                value={day.endTime}
-                                                onChange={(e) => updateScheduleDay(idx, 'endTime', e.target.value)}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                   <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Assign Doctor</label>
+                      <select 
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                          value={selectedDoctor}
+                          onChange={(e) => setSelectedDoctor(e.target.value)}
+                      >
+                          {doctors.map(d => (
+                              <option key={d.id} value={d.id}>{d.name} ({d.specialty})</option>
+                          ))}
+                      </select>
+                   </div>
+               </div>
 
-                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                        <Button variant="secondary" onClick={() => setDoctorModal({ ...doctorModal, isOpen: false })} type="button">
-                            Cancel
-                        </Button>
-                        <Button type="submit">
-                            {doctorModal.mode === 'ADD' ? 'Create Staff Profile' : 'Update Schedule'}
-                        </Button>
-                    </div>
-                </form>
-            </Card>
+               {/* 3. APPOINTMENT SPECIFIC (Only if booking appointment) */}
+               {isAppointment && (
+                   <div className="space-y-4 border-t border-slate-100 pt-4 mt-2">
+                       <div className="flex items-center justify-between">
+                           <h4 className="font-bold text-sm text-slate-700">Select Date & Time</h4>
+                           <div className="flex gap-1">
+                               <button type="button" onClick={() => setBookingMonth(new Date(bookingMonth.getFullYear(), bookingMonth.getMonth()-1, 1))}><ChevronLeft className="h-4 w-4"/></button>
+                               <span className="text-xs font-bold">{bookingMonth.toLocaleString('default', {month:'short', year:'2-digit'})}</span>
+                               <button type="button" onClick={() => setBookingMonth(new Date(bookingMonth.getFullYear(), bookingMonth.getMonth()+1, 1))}><ChevronRight className="h-4 w-4"/></button>
+                           </div>
+                       </div>
+                       
+                       <div className="grid grid-cols-7 gap-1 text-center">
+                            {['S','M','T','W','T','F','S'].map(d => <div key={d} className="text-[10px] font-bold text-slate-400">{d}</div>)}
+                            {renderBookingCalendar()}
+                       </div>
+
+                       <div>
+                           <div className="flex justify-between items-center mb-2">
+                               <span className="text-xs font-bold text-slate-500 uppercase">Available Slots</span>
+                               <span className="text-xs text-slate-400">{appointmentDate}</span>
+                           </div>
+                           
+                           {bookingSlots.isOff ? (
+                               <div className="p-3 bg-red-50 text-red-600 text-xs rounded text-center">Doctor is OFF on this day</div>
+                           ) : bookingSlots.slots.length === 0 ? (
+                               <div className="p-3 bg-slate-100 text-slate-500 text-xs rounded text-center">No slots available</div>
+                           ) : (
+                               <div className="grid grid-cols-4 gap-2 max-h-32 overflow-y-auto pr-1">
+                                   {bookingSlots.slots.map(slot => (
+                                       <button
+                                           key={slot.time}
+                                           type="button"
+                                           disabled={slot.isBooked}
+                                           onClick={() => setAppointmentTime(slot.time)}
+                                           className={`px-1 py-1.5 text-xs rounded border ${slot.isBooked ? 'bg-slate-100 text-slate-400 line-through' : appointmentTime === slot.time ? 'bg-primary-600 text-white border-primary-600' : 'bg-white border-slate-200 hover:border-primary-400'}`}
+                                       >
+                                           {slot.time}
+                                       </button>
+                                   ))}
+                               </div>
+                           )}
+                       </div>
+                   </div>
+               )}
+
+               <div className="pt-4 flex gap-3">
+                  <Button variant="secondary" type="button" className="flex-1" onClick={resetAddForm}>Cancel</Button>
+                  <Button type="submit" className={`flex-1 ${isAppointment ? 'bg-purple-600 hover:bg-purple-700' : 'bg-primary-600'}`} disabled={newPatientPhone.length !== 10}>
+                      {isAppointment ? 'Confirm Booking' : 'Generate Token'}
+                  </Button>
+               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DOCTOR MODAL */}
+      {doctorModal.isOpen && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-lg font-bold">{doctorModal.mode === 'ADD' ? 'Add Doctor' : 'Edit Doctor'}</h3>
+                      <button onClick={() => setDoctorModal({ ...doctorModal, isOpen: false })} className="text-slate-400 hover:text-slate-600">
+                          <X className="h-6 w-6" />
+                      </button>
+                  </div>
+                  <form onSubmit={handleDoctorSubmit} className="space-y-6">
+                      <div className="grid grid-cols-2 gap-4">
+                          <Input label="Doctor Name" value={docForm.name} onChange={e => setDocForm({...docForm, name: e.target.value})} placeholder="Dr. Name" required />
+                          <Input label="Specialty" value={docForm.specialty} onChange={e => setDocForm({...docForm, specialty: e.target.value})} placeholder="e.g. Cardiologist" required />
+                          <Input label="Room Number" value={docForm.room} onChange={e => setDocForm({...docForm, room: e.target.value})} placeholder="e.g. 104" required />
+                      </div>
+
+                      <div className="border-t border-slate-100 pt-4">
+                          <div className="flex justify-between items-center mb-4">
+                              <h4 className="font-bold text-slate-700">Weekly Schedule</h4>
+                              <Button type="button" size="sm" variant="secondary" onClick={copyMondayToAll}>Copy Mon to All</Button>
+                          </div>
+                          <div className="space-y-2">
+                              {docForm.schedule.map((day, idx) => (
+                                  <div key={day.day} className="flex items-center gap-3 text-sm">
+                                      <div className="w-24 font-medium text-slate-700">{day.day}</div>
+                                      <label className="flex items-center gap-2 cursor-pointer">
+                                          <input type="checkbox" checked={!day.isOff} onChange={(e) => updateScheduleDay(idx, 'isOff', !e.target.checked)} className="rounded text-primary-600 focus:ring-primary-500" />
+                                          <span className="text-xs text-slate-500">Working</span>
+                                      </label>
+                                      {!day.isOff && (
+                                          <div className="flex items-center gap-2">
+                                              <input type="time" value={day.startTime} onChange={(e) => updateScheduleDay(idx, 'startTime', e.target.value)} className="border border-slate-300 rounded px-2 py-1" />
+                                              <span className="text-slate-400">-</span>
+                                              <input type="time" value={day.endTime} onChange={(e) => updateScheduleDay(idx, 'endTime', e.target.value)} className="border border-slate-300 rounded px-2 py-1" />
+                                          </div>
+                                      )}
+                                      {day.isOff && <span className="text-xs text-slate-400 italic ml-4">Off Duty</span>}
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-4">
+                          <Button variant="secondary" type="button" onClick={() => setDoctorModal({ ...doctorModal, isOpen: false })}>Cancel</Button>
+                          <Button type="submit">Save Doctor</Button>
+                      </div>
+                  </form>
+              </div>
           </div>
       )}
 
-      {/* Settings Modal */}
-      {showSettingsModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <Card className="w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
-            <h3 className="text-xl font-bold text-slate-900 mb-6">Clinic Settings</h3>
-            
-            <div className="space-y-4">
-              <Input 
-                label="Clinic Name" 
-                value={tempClinicName} 
-                onChange={(e) => setTempClinicName(e.target.value)}
-              />
-              
-              <div className="pt-4 border-t border-slate-100">
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Subscription</p>
-                  <div className="bg-primary-50 p-4 rounded-lg flex justify-between items-center">
+      {/* REPORTS MODAL */}
+      {showReportsModal && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl p-6 max-h-[90vh] overflow-y-auto">
+                   <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold flex items-center gap-2"><BarChart3 className="h-6 w-6 text-primary-600"/> Clinic Analytics</h3>
+                      <button onClick={() => setShowReportsModal(false)} className="text-slate-400 hover:text-slate-600"><X className="h-6 w-6" /></button>
+                   </div>
+
+                   {/* Report Filters */}
+                   <div className="flex flex-wrap gap-4 mb-8 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                       <div className="flex bg-white rounded-lg p-1 shadow-sm border border-slate-200">
+                           {['TODAY', 'WEEK', 'MONTH', 'CUSTOM'].map((r) => (
+                               <button 
+                                key={r} 
+                                onClick={() => setReportRange(r as any)}
+                                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${reportRange === r ? 'bg-primary-600 text-white shadow' : 'text-slate-600 hover:bg-slate-50'}`}
+                               >
+                                   {r === 'TODAY' ? 'Today' : r === 'WEEK' ? 'This Week' : r === 'MONTH' ? 'This Month' : 'Custom'}
+                               </button>
+                           ))}
+                       </div>
+                       
+                       {reportRange === 'CUSTOM' && (
+                           <div className="flex items-center gap-2">
+                               <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                               <span className="text-slate-400">-</span>
+                               <input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                           </div>
+                       )}
+
+                       <Button variant="outline" size="sm" className="ml-auto">
+                           <Download className="h-4 w-4 mr-2" /> Export PDF
+                       </Button>
+                   </div>
+
+                   {/* KPIs */}
+                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                       <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                           <p className="text-xs font-bold text-blue-500 uppercase">Total Visits</p>
+                           <p className="text-3xl font-bold text-slate-900 mt-1">{totalVisits}</p>
+                       </div>
+                       <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+                           <p className="text-xs font-bold text-green-500 uppercase">Completed</p>
+                           <p className="text-3xl font-bold text-slate-900 mt-1">{completedVisits}</p>
+                       </div>
+                       <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                           <p className="text-xs font-bold text-purple-500 uppercase">Avg Turnaround</p>
+                           <p className="text-3xl font-bold text-slate-900 mt-1">{avgTurnaroundTime}<span className="text-sm font-normal text-slate-500 ml-1">mins</span></p>
+                       </div>
+                       <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
+                           <p className="text-xs font-bold text-orange-500 uppercase">Est. Revenue</p>
+                           <p className="text-3xl font-bold text-slate-900 mt-1">₹{estimatedRevenue.toLocaleString()}</p>
+                       </div>
+                   </div>
+
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                       {/* Patient Type Distribution */}
+                       <div className="bg-white p-4 rounded-xl border border-slate-200">
+                           <h4 className="font-bold text-slate-700 mb-4 flex items-center gap-2"><PieChart className="h-4 w-4"/> Patient Retention</h4>
+                           <div className="flex items-center gap-4">
+                               <div className="h-32 w-32 rounded-full border-[16px] border-primary-500 border-r-blue-500 rotate-45"></div>
+                               <div className="space-y-2">
+                                   <div className="flex items-center gap-2">
+                                       <span className="w-3 h-3 bg-primary-500 rounded-full"></span>
+                                       <span className="text-sm text-slate-600">New Patients ({newPatientsCount})</span>
+                                   </div>
+                                   <div className="flex items-center gap-2">
+                                       <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
+                                       <span className="text-sm text-slate-600">Returning ({returningCount})</span>
+                                   </div>
+                               </div>
+                           </div>
+                       </div>
+
+                       {/* Peak Hours Heatmap */}
+                       <div className="bg-white p-4 rounded-xl border border-slate-200">
+                           <h4 className="font-bold text-slate-700 mb-4 flex items-center gap-2"><Activity className="h-4 w-4"/> Peak Hours</h4>
+                           <div className="flex items-end gap-1 h-32">
+                               {peakHours.map((d) => (
+                                   <div key={d.hour} className="flex-1 flex flex-col justify-end group relative">
+                                       <div 
+                                        className="w-full bg-primary-200 hover:bg-primary-500 transition-all rounded-t-sm" 
+                                        style={{ height: `${(d.count / (Math.max(...peakHours.map(x=>x.count)) || 1)) * 100}%` }}
+                                       ></div>
+                                       <span className="text-[10px] text-slate-400 mt-1 text-center">{d.hour}h</span>
+                                       <div className="absolute bottom-full left-1/2 -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none mb-1 whitespace-nowrap z-10">
+                                           {d.count} patients
+                                       </div>
+                                   </div>
+                               ))}
+                           </div>
+                       </div>
+                   </div>
+
+                   <div className="border-t border-slate-200 pt-6">
+                       <h4 className="font-bold text-slate-700 mb-4">Detailed Visit Log</h4>
+                       <table className="w-full text-left text-sm">
+                           <thead className="bg-slate-50 border-b border-slate-200">
+                               <tr>
+                                   <th className="px-4 py-3 font-semibold text-slate-600">Time</th>
+                                   <th className="px-4 py-3 font-semibold text-slate-900">Patient</th>
+                                   <th className="px-4 py-3 font-semibold text-slate-600">Type</th>
+                                   <th className="px-4 py-3 font-semibold text-slate-600">Doctor</th>
+                                   <th className="px-4 py-3 font-semibold text-slate-600">Status</th>
+                               </tr>
+                           </thead>
+                           <tbody className="divide-y divide-slate-100">
+                               {reportPatients.slice(0, 10).map(p => (
+                                   <tr key={p.id}>
+                                       <td className="px-4 py-3 text-slate-500">{new Date(p.timeAdded).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
+                                       <td className="px-4 py-3 font-medium text-slate-900">{p.name}</td>
+                                       <td className="px-4 py-3">
+                                           <span className={`text-xs px-2 py-1 rounded-full font-bold ${getPatientType(p) === 'New' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                               {getPatientType(p)}
+                                           </span>
+                                       </td>
+                                       <td className="px-4 py-3 text-slate-600">{doctors.find(d => d.id === p.doctorId)?.name}</td>
+                                       <td className="px-4 py-3"><Badge status={p.status} /></td>
+                                   </tr>
+                               ))}
+                           </tbody>
+                       </table>
+                       {reportPatients.length > 10 && (
+                           <p className="text-center text-xs text-slate-400 mt-4">Showing recent 10 of {reportPatients.length} records</p>
+                       )}
+                   </div>
+              </div>
+          </div>
+      )}
+
+      {/* HISTORY MODAL (For single patient) */}
+      {selectedPatientHistory && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 max-h-[80vh] overflow-y-auto">
+                  <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
                       <div>
-                          <p className="font-bold text-primary-800">Small Hospital Plan</p>
-                          <p className="text-xs text-primary-600">Active until Dec 2024</p>
+                          <h3 className="text-xl font-bold">{selectedPatientHistory.name}</h3>
+                          <p className="text-slate-500 text-sm">{selectedPatientHistory.phone}</p>
                       </div>
-                      <Button size="sm" variant="secondary">Manage</Button>
+                      <button onClick={() => setShowHistoryModal(null)} className="p-2 hover:bg-slate-100 rounded-full"><X className="h-6 w-6 text-slate-400"/></button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                      {selectedPatientHistory.visits.sort((a,b) => b.timeAdded - a.timeAdded).map((visit, idx) => (
+                          <div key={visit.id} className="border border-slate-200 rounded-xl p-4 hover:border-primary-200 transition-colors">
+                              <div className="flex justify-between items-start mb-2">
+                                  <div className="flex items-center gap-2">
+                                      <CalendarIcon className="h-4 w-4 text-primary-600" />
+                                      <span className="font-bold text-slate-800">{new Date(visit.timeAdded).toLocaleDateString()}</span>
+                                      <span className="text-slate-400 text-sm">{new Date(visit.timeAdded).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                                  </div>
+                                  <Badge status={visit.status} />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                                  <div>
+                                      <span className="text-slate-400 text-xs block">Doctor</span>
+                                      <span className="font-medium text-slate-700">{doctors.find(d => d.id === visit.doctorId)?.name}</span>
+                                  </div>
+                                  <div>
+                                      <span className="text-slate-400 text-xs block">Type</span>
+                                      <span className="font-medium text-slate-700">{visit.visitType}</span>
+                                  </div>
+                              </div>
+                              {visit.notes && (
+                                  <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100">
+                                      <p className="text-xs font-bold text-yellow-700 mb-1">NOTES</p>
+                                      <p className="text-sm text-slate-700 italic">"{visit.notes}"</p>
+                                  </div>
+                              )}
+                          </div>
+                      ))}
                   </div>
               </div>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <Button variant="secondary" onClick={() => setShowSettingsModal(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSaveSettings}>
-                Save Changes
-              </Button>
-            </div>
-          </Card>
-        </div>
+          </div>
       )}
+
+      {/* SETTINGS MODAL */}
+      {showSettingsModal && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+                  <h3 className="text-lg font-bold mb-4">Clinic Settings</h3>
+                  <Input label="Clinic Name" value={tempClinicName} onChange={e => setTempClinicName(e.target.value)} />
+                  <div className="flex justify-end gap-2 mt-6">
+                      <Button variant="secondary" onClick={() => setShowSettingsModal(false)}>Cancel</Button>
+                      <Button onClick={handleSaveSettings}>Save Changes</Button>
+                  </div>
+              </div>
+          </div>
+      )}
+
     </div>
   );
 };

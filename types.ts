@@ -75,10 +75,15 @@ export interface Patient {
   appointmentDate?: string; // YYYY-MM-DD
   appointmentTime?: string; // e.g. "10:20"
   isEmergency?: boolean; // New: Priority flag
+  isCheckedIn?: boolean; // New: QR Check-in status
   vitals?: Vitals; // New: Vitals
   painPoints?: PainPoint[]; // New: Body map coordinates
   rating?: number; // New: 1-5 stars
   feedback?: string; // New: Patient feedback
+  // New Demographic Fields
+  age?: string;
+  gender?: 'Male' | 'Female' | 'Other';
+  symptoms?: string; // Reason for visit
 }
 
 export interface ClinicStats {

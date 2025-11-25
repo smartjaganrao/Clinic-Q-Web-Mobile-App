@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
-import { ArrowLeft, Smartphone, Lock, ShieldCheck, User, FlaskConical } from 'lucide-react';
+import { ArrowLeft, Smartphone, Lock, ShieldCheck, User, FlaskConical, AlertCircle } from 'lucide-react';
 
 interface PatientLoginProps {
   onLogin: (phone: string, name: string) => void;
   onBack: () => void;
   addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
+  pendingActionMessage?: string;
 }
 
-export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, addToast }) => {
+export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, addToast, pendingActionMessage }) => {
   const [step, setStep] = useState<'LOGIN' | 'NAME'>('LOGIN');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -95,6 +96,16 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
             <h1 className="text-2xl font-bold text-slate-900">Patient Login</h1>
             <p className="text-slate-500">Access appointments & records.</p>
         </div>
+
+        {/* Pending Action Banner */}
+        {pendingActionMessage && (
+            <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-4">
+                <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-blue-800">
+                    <strong>Action Required:</strong> {pendingActionMessage}
+                </div>
+            </div>
+        )}
 
         <Card className="p-8 shadow-xl border-0">
             {step === 'LOGIN' && (

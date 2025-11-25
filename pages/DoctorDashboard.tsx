@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Doctor, Patient, PatientStatus, DoctorStatus, PainPoint } from '../types';
 import { Card } from '../components/Card';
@@ -53,18 +54,25 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
 
         if (p.visitType === 'APPOINTMENT' && p.appointmentTime) {
             const apptMins = timeToMins(p.appointmentTime);
-            
-            // Check if Future
-            if (apptMins > currentMins) return 4; // Future
+            const minsUntilAppt = apptMins - currentMins;
 
-            // Check if Late (>15 mins past appt time)
-            if (currentMins > apptMins + LATE_THRESHOLD_MINS) return 3; // Treat as Walk-in (Late)
+            // Priority 2: Appointment Checked In OR On-Time (within window and not late)
+            // Priority 3: Walk-in
+            // Priority 4: Appointment Not Checked In & Imminent (<15 mins away) or Late
+            // Priority 5: Future (>15 mins away)
 
-            // Must be On Time / Due
-            return 2;
+            if (minsUntilAppt > LATE_THRESHOLD_MINS) return 5; // Future
+
+            // If Checked In, they maintain Priority 2
+            if (p.isCheckedIn) return 2;
+
+            // If NOT Checked in, and we are within the 15 min window (or late), they drop below walk-ins
+            if (minsUntilAppt <= LATE_THRESHOLD_MINS) return 4; 
+
+            return 2; // Default catch-all for appointment
         }
 
-        // Walk-in
+        // Walk-in is Priority 3
         return 3;
     };
 
@@ -229,10 +237,17 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
             <Card className="p-0 overflow-hidden h-full flex flex-col">
               <div className={`px-6 py-4 flex justify-between items-center text-white ${currentPatient.isEmergency ? 'bg-orange-500' : currentPatient.visitType === 'APPOINTMENT' ? 'bg-purple-600' : 'bg-primary-600'}`}>
                 <div>
-                  <h2 className="text-xl font-bold flex items-center gap-2">
-                      {currentPatient.name}
-                      {currentPatient.isEmergency && <span className="text-xs bg-white text-orange-600 px-2 py-0.5 rounded font-bold uppercase">Emergency</span>}
-                  </h2>
+                  <div className="flex items-baseline gap-2">
+                    <h2 className="text-xl font-bold flex items-center gap-2">
+                        {currentPatient.name}
+                    </h2>
+                    {(currentPatient.age || currentPatient.gender) && (
+                        <span className="text-sm font-medium text-white/80">
+                            ({currentPatient.age || '?'}, {currentPatient.gender || '?'})
+                        </span>
+                    )}
+                    {currentPatient.isEmergency && <span className="text-xs bg-white text-orange-600 px-2 py-0.5 rounded font-bold uppercase">Emergency</span>}
+                  </div>
                   <div className="flex items-center gap-2 text-white/90 text-sm mt-1">
                      <span>Token #{currentPatient.tokenNumber}</span>
                      <span>•</span>
@@ -240,8 +255,15 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
                      {currentPatient.appointmentTime && <span>({currentPatient.appointmentTime})</span>}
                   </div>
                 </div>
-                <div className="bg-white/10 px-3 py-1 rounded-md text-sm backdrop-blur-sm">
-                  In Consultation
+                <div className="text-right">
+                  <div className="bg-white/10 px-3 py-1 rounded-md text-sm backdrop-blur-sm mb-1">
+                    In Consultation
+                  </div>
+                  {currentPatient.symptoms && (
+                      <div className="text-xs text-white/90 italic font-medium">
+                          Reason: {currentPatient.symptoms}
+                      </div>
+                  )}
                 </div>
               </div>
               
@@ -422,8 +444,10 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
                     const currentMins = now.getHours() * 60 + now.getMinutes();
                     const apptMins = p.appointmentTime ? parseInt(p.appointmentTime.split(':')[0]) * 60 + parseInt(p.appointmentTime.split(':')[1]) : 0;
                     
+                    // Logic check for visual labels
                     const isDue = isAppt && apptMins <= currentMins && currentMins <= apptMins + 15;
                     const isLate = isAppt && currentMins > apptMins + 15;
+                    const isNotCheckedIn = isAppt && !p.isCheckedIn && (currentMins > apptMins - 15);
 
                     return (
                         <div key={p.id} className={`p-3 rounded-lg border transition-colors flex justify-between items-center group ${idx === 0 ? 'bg-blue-50 border-blue-200' : 'border-slate-100 hover:bg-slate-50'}`}>
@@ -434,9 +458,10 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
                                 <div>
                                     <div className="flex items-center gap-2">
                                         <p className="font-medium text-slate-900 text-sm">{p.name}</p>
+                                        {(p.age || p.gender) && <span className="text-[10px] text-slate-500">({p.age}, {p.gender?.[0]})</span>}
                                         {p.isEmergency && <span className="text-[10px] bg-orange-500 text-white font-bold px-1 py-0.5 rounded">URGENT</span>}
-                                        {isDue && !p.isEmergency && <span className="bg-green-100 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded">DUE</span>}
-                                        {isLate && !p.isEmergency && <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded">LATE</span>}
+                                        {p.isCheckedIn && <span className="text-[10px] bg-green-500 text-white font-bold px-1 py-0.5 rounded">HERE</span>}
+                                        {isNotCheckedIn && <span className="text-[10px] bg-slate-200 text-slate-500 font-bold px-1 py-0.5 rounded">NO SHOW?</span>}
                                     </div>
                                     <p className="text-xs text-slate-500 flex items-center gap-1">
                                         {isAppt ? (
@@ -444,6 +469,7 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
                                         ) : (
                                             <><User className="h-3 w-3" /> Walk-in</>
                                         )}
+                                        {p.symptoms && <span className="ml-1 text-slate-400 italic truncate max-w-[80px]">- {p.symptoms}</span>}
                                     </p>
                                 </div>
                             </div>
