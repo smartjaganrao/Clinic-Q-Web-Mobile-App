@@ -5,7 +5,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Badge } from '../components/Badge';
-import { ArrowLeft, MapPin, Search, Building, Ticket, CalendarCheck, User, Users, Plus, Trash2, Save, History, Clock, ChevronRight, Activity, ChevronLeft, AlertTriangle, QrCode, Map, List, ScanLine, LogOut, Zap, AlertCircle, LocateFixed, Navigation, Heart, Smile, Baby, Stethoscope, Microscope, Brain, Filter, FileText, RefreshCcw, Bell, BellRing, BellOff, Calendar, Star, XCircle, Map as MapIcon, CheckCircle, X, Thermometer, Sparkles, Check, Info, Wallet, ShieldCheck, ThumbsUp, ArrowUpDown, ChevronDown, GraduationCap, Languages, BadgeCheck, Phone, FilterX, Clock12 } from 'lucide-react';
+import { ArrowLeft, MapPin, Search, Building, Ticket, CalendarCheck, User, Users, Plus, Trash2, Save, History, Clock, ChevronRight, Activity, ChevronLeft, AlertTriangle, QrCode, Map, List, ScanLine, LogOut, Zap, AlertCircle, LocateFixed, Navigation, Heart, Smile, Baby, Stethoscope, Microscope, Brain, Filter, FileText, RefreshCcw, Bell, BellRing, BellOff, Calendar, Star, XCircle, Map as MapIcon, CheckCircle, X, Thermometer, Sparkles, Check, Info, Wallet, ShieldCheck, ThumbsUp, ArrowUpDown, ChevronDown, GraduationCap, Languages, BadgeCheck, Phone, FilterX, Clock12, Eye, Ear } from 'lucide-react';
 
 interface PatientTrackerProps {
   clinics: Clinic[];
@@ -47,12 +47,14 @@ interface Reminder {
 // Categories for Filter
 const CATEGORIES = [
     { id: 'General Physician', label: 'General', icon: Stethoscope, color: 'text-blue-600 bg-blue-50' },
-    { id: 'Dentist', label: 'Dentist', icon: Smile, color: 'text-yellow-600 bg-yellow-50' },
     { id: 'Pediatrician', label: 'Kids', icon: Baby, color: 'text-pink-600 bg-pink-50' },
-    { id: 'Cardiologist', label: 'Heart', icon: Heart, color: 'text-red-600 bg-red-50' },
-    { id: 'Dermatologist', label: 'Skin', icon: User, color: 'text-purple-600 bg-purple-50' },
-    { id: 'Orthopedic', label: 'Bone', icon: Activity, color: 'text-indigo-600 bg-indigo-50' },
     { id: 'Gynecologist', label: 'Women', icon: User, color: 'text-rose-600 bg-rose-50' },
+    { id: 'Ophthalmologist', label: 'Eye', icon: Eye, color: 'text-teal-600 bg-teal-50' },
+    { id: 'Dentist', label: 'Dentist', icon: Smile, color: 'text-yellow-600 bg-yellow-50' },
+    { id: 'ENT Specialist', label: 'ENT', icon: Ear, color: 'text-orange-600 bg-orange-50' },
+    { id: 'Cardiologist', label: 'Heart', icon: Heart, color: 'text-red-600 bg-red-50' },
+    { id: 'Dermatologist', label: 'Skin', icon: Sparkles, color: 'text-purple-600 bg-purple-50' },
+    { id: 'Orthopedic', label: 'Bone', icon: Activity, color: 'text-indigo-600 bg-indigo-50' },
 ];
 
 // Symptom to Category Mapper for "Smart Search"
@@ -63,22 +65,39 @@ const SYMPTOM_MAP: Record<string, string> = {
     'flu': 'General Physician',
     'headache': 'General Physician',
     'stomach': 'General Physician',
+    'vomit': 'General Physician',
+    'diarrhea': 'General Physician',
     'tooth': 'Dentist',
     'gum': 'Dentist',
     'root canal': 'Dentist',
+    'cavity': 'Dentist',
     'child': 'Pediatrician',
     'baby': 'Pediatrician',
+    'vaccine': 'Pediatrician',
     'heart': 'Cardiologist',
     'chest': 'Cardiologist',
     'bp': 'Cardiologist',
     'rash': 'Dermatologist',
     'pimple': 'Dermatologist',
     'acne': 'Dermatologist',
+    'skin': 'Dermatologist',
+    'hair': 'Dermatologist',
     'bone': 'Orthopedic',
     'joint': 'Orthopedic',
     'fracture': 'Orthopedic',
+    'pain': 'Orthopedic',
+    'knee': 'Orthopedic',
     'pregnant': 'Gynecologist',
-    'period': 'Gynecologist'
+    'period': 'Gynecologist',
+    'women': 'Gynecologist',
+    'delivery': 'Gynecologist',
+    'eye': 'Ophthalmologist',
+    'vision': 'Ophthalmologist',
+    'glasses': 'Ophthalmologist',
+    'ear': 'ENT Specialist',
+    'nose': 'ENT Specialist',
+    'throat': 'ENT Specialist',
+    'hearing': 'ENT Specialist',
 };
 
 // Helper for Local Date String (YYYY-MM-DD)
@@ -112,13 +131,17 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 const getFacilities = (clinicName: string) => {
     if (clinicName.includes('Hospital')) return ['Pharmacy', 'X-Ray', 'Parking', '24/7', 'ICU', 'Ambulance'];
     if (clinicName.includes('Dental')) return ['X-Ray', 'Cosmetic', 'Implants', 'Aligners'];
+    if (clinicName.includes('Eye') || clinicName.includes('Nethralaya')) return ['Optical Shop', 'Laser', 'Surgery'];
     return ['Pharmacy', 'Parking', 'Online Reports', 'Wheelchair'];
 };
 
 const getClinicImage = (slug: string) => {
     if (slug.includes('dental')) return "https://images.unsplash.com/photo-1606811841689-23dfddce3e95?auto=format&fit=crop&q=80&w=800";
-    if (slug.includes('heart')) return "https://images.unsplash.com/photo-1628348068343-c6a848d2b6dd?auto=format&fit=crop&q=80&w=800";
-    if (slug.includes('care')) return "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800";
+    if (slug.includes('heart') || slug.includes('cardio')) return "https://images.unsplash.com/photo-1628348068343-c6a848d2b6dd?auto=format&fit=crop&q=80&w=800";
+    if (slug.includes('eye') || slug.includes('nethralaya')) return "https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&q=80&w=800";
+    if (slug.includes('child') || slug.includes('pediatric') || slug.includes('cloudnine')) return "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800";
+    if (slug.includes('ortho') || slug.includes('miot')) return "https://images.unsplash.com/photo-1530497610245-94d3c16cda28?auto=format&fit=crop&q=80&w=800";
+    if (slug.includes('skin') || slug.includes('derma')) return "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=800";
     return "https://images.unsplash.com/photo-1587351021759-3e566b9af923?auto=format&fit=crop&q=80&w=800";
 };
 
@@ -172,7 +195,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [reminders, setReminders] = useState<Reminder[]>([]);
   
   // -- SEARCH & MAP STATE --
-  const [searchCity, setSearchCity] = useState<string>(''); // City Filter
+  const [searchCity, setSearchCity] = useState<string>('Chennai'); // Default to Chennai as per req, but can be empty
   const [searchQuery, setSearchQuery] = useState(''); // Name Filter
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'RELEVANCE' | 'NEAREST' | 'WAIT_TIME' | 'RATING'>('RELEVANCE');
@@ -819,6 +842,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium border flex items-center gap-2 transition-colors ${isSelected ? 'bg-primary-600 border-primary-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
                                 >
                                     {isSelected && <Check className="h-3 w-3" />}
+                                    <cat.icon className={`h-3 w-3 ${isSelected ? 'text-white' : ''}`} />
                                     {cat.label}
                                 </button>
                             );

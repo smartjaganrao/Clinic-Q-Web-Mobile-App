@@ -1,5 +1,5 @@
 
-import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule } from './types';
+import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType } from './types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -12,226 +12,236 @@ const createDefaultSchedule = (): DaySchedule[] => {
   }));
 };
 
-// Helper to create doctors
-const createDoctors = (startId: number, count: number, prefix: string): Doctor[] => {
-  // Expanded list of specialties for category search
-  const specialties = [
-    'General Physician', 
-    'Pediatrician', 
-    'Cardiologist', 
-    'Dermatologist', 
-    'Dentist', 
-    'Orthopedic', 
-    'Gynecologist',
-    'ENT Specialist'
+// Helper to create doctors with realistic profiles
+const createRealDoctors = (startId: number, count: number, specialty: string, feeRange: [number, number]): Doctor[] => {
+  const names = [
+    'Dr. Ravi Kumar', 'Dr. Lakshmi Narayanan', 'Dr. Anita Desai', 'Dr. Suresh Menon', 
+    'Dr. Priya Krishnan', 'Dr. Rajeshwari S', 'Dr. Vikram Reddy', 'Dr. Meera Iyer',
+    'Dr. Sanjay Gupta', 'Dr. Anjali Rao', 'Dr. Deepak Thomas', 'Dr. Sarah John',
+    'Dr. Karthik Raja', 'Dr. Swathi Balaji', 'Dr. Arjun Das', 'Dr. Nithya Ram'
   ];
   
-  return Array.from({ length: count }).map((_, i) => ({
-    id: `doc_${prefix}_${startId + i}`,
-    name: `Dr. ${['Sharma', 'Verma', 'Gupta', 'Patel', 'Singh', 'Reddy', 'Kumar', 'Das'][i % 8]}`,
-    specialty: specialties[i % specialties.length],
-    roomNumber: `${100 + i + 1}`,
-    isAvailable: true,
-    status: DoctorStatus.AVAILABLE,
-    delayMinutes: 0,
-    avatarUrl: `https://picsum.photos/100/100?random=${startId + i}`,
-    weeklySchedule: createDefaultSchedule(),
-    // Randomize Fee between 300 and 1000
-    consultationFee: Math.floor(Math.random() * (1000 - 300 + 1) + 300),
-    // Randomize Rating between 3.5 and 5.0
-    rating: parseFloat((3.5 + Math.random() * 1.5).toFixed(1)),
-    reviewCount: Math.floor(Math.random() * 100) + 10
-  }));
+  const qualMap: Record<string, string> = {
+      'Cardiologist': 'MD, DM (Cardio)',
+      'Dermatologist': 'MD (DVL)',
+      'Dentist': 'BDS, MDS',
+      'Orthopedic': 'MS (Ortho)',
+      'Gynecologist': 'MBBS, DGO',
+      'Pediatrician': 'MD (Pediatrics)',
+      'General Physician': 'MBBS, MD (Gen Med)',
+      'Ophthalmologist': 'MBBS, MS (Ophth)',
+      'ENT Specialist': 'MBBS, MS (ENT)'
+  };
+
+  return Array.from({ length: count }).map((_, i) => {
+    const idVal = startId + i;
+    // Deterministic random for consistency across reloads
+    const rand = (idVal * 9301 + 49297) % 233280; 
+    const fee = Math.floor(Math.random() * (feeRange[1] - feeRange[0] + 1) + feeRange[0]);
+    const rating = (3.8 + (rand % 12) / 10).toFixed(1);
+    
+    return {
+        id: `doc_${specialty.substring(0,3)}_${idVal}`,
+        name: names[(idVal + i) % names.length],
+        specialty: specialty,
+        roomNumber: `${100 + i + 1}`,
+        isAvailable: true,
+        status: DoctorStatus.AVAILABLE,
+        delayMinutes: 0,
+        avatarUrl: `https://i.pravatar.cc/150?u=${idVal}`,
+        weeklySchedule: createDefaultSchedule(),
+        consultationFee: fee - (fee % 50), // Round to 50
+        rating: parseFloat(rating),
+        reviewCount: 50 + (rand % 400)
+    };
+  });
 };
 
 export const INITIAL_CLINICS: Clinic[] = [
+  // --- CHENNAI CLINICS ---
   {
-    id: 'clinic_1',
-    name: 'City Care Clinic',
-    slug: 'city-care',
-    plan: PlanType.SOLO,
-    city: 'Bangalore',
-    address: '12, MG Road, Indiranagar',
-    pincode: '560038',
-    operatingHours: '08:00 AM - 09:00 PM',
-    coordinates: { x: 30, y: 40 },
-    geoLocation: { lat: 12.9716, lng: 77.6412 }, // Indiranagar, Bangalore
-    doctors: createDoctors(1, 1, 'c1'),
-    patients: [
-      { 
-        id: 'p1', 
-        name: 'Rohan Gupta', 
-        phone: '9998887771', 
-        tokenNumber: 101, 
-        status: PatientStatus.WITH_DOCTOR, 
-        doctorId: 'doc_c1_1', 
-        timeAdded: Date.now() - 1000 * 60 * 20, // 20 mins ago
-        visitType: 'WALK_IN',
-        age: '28',
-        gender: 'Male',
-        symptoms: 'High Fever & Cold',
-        isCheckedIn: true,
-        isEmergency: false
-      },
-      { 
-        id: 'p2', 
-        name: 'Anita Desai', 
-        phone: '9998887772', 
-        tokenNumber: 102, 
-        status: PatientStatus.WAITING, 
-        doctorId: 'doc_c1_1', 
-        timeAdded: Date.now() - 1000 * 60 * 5, // 5 mins ago
-        visitType: 'WALK_IN',
-        age: '34',
-        gender: 'Female',
-        symptoms: 'Migraine Headache',
-        isCheckedIn: true,
-        isEmergency: false
-      },
-    ]
-  },
-  {
-    id: 'clinic_2',
-    name: 'Green Valley Hospital',
-    slug: 'green-valley',
+    id: 'clinic_chn_1',
+    name: 'Apollo Clinic',
+    slug: 'apollo-anna-nagar',
     plan: PlanType.SMALL,
-    city: 'Bangalore',
-    address: 'Plot 45, Tech Park Road, Whitefield',
-    pincode: '560066',
-    operatingHours: '24 Hours',
-    coordinates: { x: 65, y: 70 },
-    geoLocation: { lat: 12.9698, lng: 77.7500 }, // Whitefield, Bangalore
-    doctors: createDoctors(1, 4, 'c2'), // Increased doctor count to show diverse categories
-    patients: [
-      { 
-        id: 'p3', 
-        name: 'Vikram Singh', 
-        phone: '9876543210', 
-        tokenNumber: 201, 
-        status: PatientStatus.WAITING, 
-        doctorId: 'doc_c2_1', 
-        timeAdded: Date.now() - 1000 * 60 * 30, 
-        visitType: 'WALK_IN',
-        age: '45',
-        gender: 'Male',
-        symptoms: 'Back Pain',
-        isCheckedIn: true
-      },
-      { 
-        id: 'p4', 
-        name: 'Priya Mehta', 
-        phone: '9876543211', 
-        tokenNumber: 202, 
-        status: PatientStatus.WAITING, 
-        doctorId: 'doc_c2_2', 
-        timeAdded: Date.now() - 1000 * 60 * 10, 
-        visitType: 'WALK_IN',
-        age: '6',
-        gender: 'Female',
-        symptoms: 'Stomach Ache',
-        isCheckedIn: true
-      }
-    ]
-  },
-  {
-    id: 'clinic_3',
-    name: 'Smile Dental & Ortho',
-    slug: 'smile-dental',
-    plan: PlanType.SOLO,
-    city: 'Bangalore',
-    address: '88, 5th Block, Koramangala',
-    pincode: '560034',
-    operatingHours: '10:00 AM - 08:00 PM',
-    coordinates: { x: 45, y: 25 },
-    geoLocation: { lat: 12.9352, lng: 77.6245 }, // Koramangala
-    doctors: [
-        {
-            id: 'doc_c3_1',
-            name: 'Dr. Neha Reddy',
-            specialty: 'Dentist',
-            roomNumber: 'D-1',
-            isAvailable: true,
-            status: DoctorStatus.AVAILABLE,
-            delayMinutes: 0,
-            avatarUrl: `https://picsum.photos/100/100?random=99`,
-            weeklySchedule: createDefaultSchedule(),
-            consultationFee: 400,
-            rating: 4.8,
-            reviewCount: 124
-        }
-    ],
-    patients: []
-  },
-  {
-    id: 'clinic_4',
-    name: 'Mumbai Heart Institute',
-    slug: 'mumbai-heart',
-    plan: PlanType.SMALL,
-    city: 'Mumbai',
-    address: '101, Bandra West, Near Sea Link',
-    pincode: '400050',
-    operatingHours: '09:00 AM - 06:00 PM',
-    coordinates: { x: 20, y: 80 },
-    geoLocation: { lat: 19.0596, lng: 72.8295 },
-    doctors: [
-        {
-            id: 'doc_c4_1',
-            name: 'Dr. Arjun Kapoor',
-            specialty: 'Cardiologist',
-            roomNumber: 'H-101',
-            isAvailable: true,
-            status: DoctorStatus.AVAILABLE,
-            delayMinutes: 0,
-            avatarUrl: `https://picsum.photos/100/100?random=102`,
-            weeklySchedule: createDefaultSchedule(),
-            consultationFee: 1200,
-            rating: 4.9,
-            reviewCount: 312
-        }
-    ],
-    patients: []
-  },
-  {
-    id: 'clinic_5',
-    name: 'Chennai Care Hospital',
-    slug: 'chennai-care',
-    plan: PlanType.SMALL,
+    type: ClinicType.GENERAL,
     city: 'Chennai',
-    address: '45, Anna Salai, Guindy',
-    pincode: '600032',
-    operatingHours: '24 Hours',
-    coordinates: { x: 60, y: 60 },
-    geoLocation: { lat: 13.0067, lng: 80.2206 },
+    address: 'Plot 12, 4th Avenue, Shanthi Colony, Anna Nagar',
+    pincode: '600040',
+    operatingHours: '08:00 AM - 09:00 PM',
+    geoLocation: { lat: 13.0850, lng: 80.2100 },
     doctors: [
-        {
-            id: 'doc_c5_1',
-            name: 'Dr. S. Raman',
-            specialty: 'Orthopedic',
-            roomNumber: '202',
-            isAvailable: true,
-            status: DoctorStatus.AVAILABLE,
-            delayMinutes: 0,
-            avatarUrl: `https://picsum.photos/100/100?random=108`,
-            weeklySchedule: createDefaultSchedule(),
-            consultationFee: 600,
-            rating: 4.5,
-            reviewCount: 89
-        },
-        {
-            id: 'doc_c5_2',
-            name: 'Dr. Priya Kumar',
-            specialty: 'Gynecologist',
-            roomNumber: '203',
-            isAvailable: true,
-            status: DoctorStatus.AVAILABLE,
-            delayMinutes: 0,
-            avatarUrl: `https://picsum.photos/100/100?random=109`,
-            weeklySchedule: createDefaultSchedule(),
-            consultationFee: 700,
-            rating: 4.7,
-            reviewCount: 156
-        }
+        ...createRealDoctors(100, 2, 'General Physician', [500, 700]),
+        ...createRealDoctors(102, 1, 'Diabetologist', [700, 900])
     ],
+    patients: []
+  },
+  {
+    id: 'clinic_chn_2',
+    name: 'Sankara Nethralaya',
+    slug: 'sankara-nethralaya',
+    plan: PlanType.PREMIUM,
+    type: ClinicType.OTHER,
+    city: 'Chennai',
+    address: '41, College Road, Nungambakkam',
+    pincode: '600006',
+    operatingHours: '08:00 AM - 06:00 PM',
+    geoLocation: { lat: 13.0629, lng: 80.2495 },
+    doctors: createRealDoctors(200, 4, 'Ophthalmologist', [600, 1000]),
+    patients: []
+  },
+  {
+    id: 'clinic_chn_3',
+    name: 'Cloudnine Hospital',
+    slug: 'cloudnine-tnagar',
+    plan: PlanType.PREMIUM,
+    type: ClinicType.GYNECOLOGY,
+    city: 'Chennai',
+    address: '54, Vijaya Raghava Rd, T. Nagar',
+    pincode: '600017',
+    operatingHours: '24 Hours',
+    geoLocation: { lat: 13.0350, lng: 80.2350 },
+    doctors: [
+        ...createRealDoctors(300, 3, 'Gynecologist', [800, 1200]),
+        ...createRealDoctors(303, 2, 'Pediatrician', [700, 1000])
+    ],
+    patients: []
+  },
+  {
+    id: 'clinic_chn_4',
+    name: 'MIOT International',
+    slug: 'miot-hospital',
+    plan: PlanType.PREMIUM,
+    type: ClinicType.ORTHOPEDIC,
+    city: 'Chennai',
+    address: '4/112, Mount Poonamallee Rd, Manapakkam',
+    pincode: '600089',
+    operatingHours: '24 Hours',
+    geoLocation: { lat: 13.0280, lng: 80.1850 },
+    doctors: createRealDoctors(400, 3, 'Orthopedic', [900, 1500]),
+    patients: []
+  },
+  {
+    id: 'clinic_chn_5',
+    name: 'Parasu Dental Centre',
+    slug: 'parasu-dental',
+    plan: PlanType.SOLO,
+    type: ClinicType.DENTAL,
+    city: 'Chennai',
+    address: '11, 3rd Cross St, Kasturba Nagar, Adyar',
+    pincode: '600020',
+    operatingHours: '10:00 AM - 08:00 PM',
+    geoLocation: { lat: 13.0012, lng: 80.2565 },
+    doctors: createRealDoctors(500, 2, 'Dentist', [400, 800]),
+    patients: []
+  },
+  {
+    id: 'clinic_chn_6',
+    name: 'Fortis Malar Hospital',
+    slug: 'fortis-malar',
+    plan: PlanType.PREMIUM,
+    type: ClinicType.CARDIOLOGY,
+    city: 'Chennai',
+    address: '52, 1st Main Rd, Gandhi Nagar, Adyar',
+    pincode: '600020',
+    operatingHours: '24 Hours',
+    geoLocation: { lat: 13.0060, lng: 80.2580 },
+    doctors: [
+        ...createRealDoctors(600, 2, 'Cardiologist', [1000, 1800]),
+        ...createRealDoctors(602, 1, 'General Physician', [600, 800])
+    ],
+    patients: []
+  },
+  {
+    id: 'clinic_chn_7',
+    name: 'Oliva Skin & Hair Clinic',
+    slug: 'oliva-alwarpet',
+    plan: PlanType.SOLO,
+    type: ClinicType.DERMATOLOGY,
+    city: 'Chennai',
+    address: '2nd Floor, TTK Road, Alwarpet',
+    pincode: '600018',
+    operatingHours: '10:00 AM - 08:00 PM',
+    geoLocation: { lat: 13.0330, lng: 80.2550 },
+    doctors: createRealDoctors(700, 2, 'Dermatologist', [700, 1200]),
+    patients: []
+  },
+  {
+    id: 'clinic_chn_8',
+    name: 'KKR ENT Hospital',
+    slug: 'kkr-ent',
+    plan: PlanType.SMALL,
+    type: ClinicType.OTHER,
+    city: 'Chennai',
+    address: '827, Poonamallee High Rd, Kilpauk',
+    pincode: '600010',
+    operatingHours: '09:00 AM - 07:00 PM',
+    geoLocation: { lat: 13.0780, lng: 80.2400 },
+    doctors: createRealDoctors(800, 3, 'ENT Specialist', [600, 900]),
+    patients: []
+  },
+  {
+    id: 'clinic_chn_9',
+    name: 'Dr. Mehta’s Hospitals',
+    slug: 'mehtas-chetpet',
+    plan: PlanType.SMALL,
+    type: ClinicType.PEDIATRIC,
+    city: 'Chennai',
+    address: '2, McNichols Rd, Chetpet',
+    pincode: '600031',
+    operatingHours: '24 Hours',
+    geoLocation: { lat: 13.0700, lng: 80.2380 },
+    doctors: createRealDoctors(900, 4, 'Pediatrician', [600, 1000]),
+    patients: []
+  },
+
+  // --- BANGALORE CLINICS (Legacy + Enhanced) ---
+  {
+    id: 'clinic_blr_1',
+    name: 'Manipal Hospital',
+    slug: 'manipal-old-airport',
+    plan: PlanType.PREMIUM,
+    type: ClinicType.GENERAL,
+    city: 'Bangalore',
+    address: '98, HAL Old Airport Rd, Kodihalli',
+    pincode: '560017',
+    operatingHours: '24 Hours',
+    geoLocation: { lat: 12.9592, lng: 77.6475 },
+    doctors: [
+        ...createRealDoctors(1000, 2, 'Cardiologist', [1000, 1500]),
+        ...createRealDoctors(1002, 2, 'Orthopedic', [900, 1400])
+    ],
+    patients: []
+  },
+  {
+    id: 'clinic_blr_2',
+    name: 'Ovum Woman & Child',
+    slug: 'ovum-hrbr',
+    plan: PlanType.SMALL,
+    type: ClinicType.PEDIATRIC,
+    city: 'Bangalore',
+    address: '4th Block, HRBR Layout, Kalyan Nagar',
+    pincode: '560043',
+    operatingHours: '24 Hours',
+    geoLocation: { lat: 13.0285, lng: 77.6400 },
+    doctors: [
+        ...createRealDoctors(1100, 2, 'Pediatrician', [600, 900]),
+        ...createRealDoctors(1102, 2, 'Gynecologist', [700, 1000])
+    ],
+    patients: []
+  },
+  {
+    id: 'clinic_blr_3',
+    name: 'Clove Dental',
+    slug: 'clove-indiranagar',
+    plan: PlanType.SOLO,
+    type: ClinicType.DENTAL,
+    city: 'Bangalore',
+    address: '12th Main Rd, Indiranagar',
+    pincode: '560038',
+    operatingHours: '10:00 AM - 08:00 PM',
+    geoLocation: { lat: 12.9716, lng: 77.6412 },
+    doctors: createRealDoctors(1200, 1, 'Dentist', [400, 800]),
     patients: []
   }
 ];

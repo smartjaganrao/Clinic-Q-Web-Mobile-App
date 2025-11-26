@@ -860,6 +860,16 @@ export const ReceptionDashboard: React.FC<ReceptionProps> = ({
                                         </button>
                                     )}
 
+                                    {patient.status === PatientStatus.WAITING && (
+                                        <button 
+                                            onClick={() => onToggleEmergency(patient.id)}
+                                            className={`p-2 rounded-lg transition-colors ${patient.isEmergency ? 'text-orange-600 bg-orange-50 hover:bg-orange-100' : 'text-slate-400 hover:text-orange-600 hover:bg-slate-100'}`}
+                                            title={patient.isEmergency ? "Unmark Emergency" : "Mark as Emergency"}
+                                        >
+                                            <Zap className={`h-5 w-5 ${patient.isEmergency ? 'fill-current' : ''}`} />
+                                        </button>
+                                    )}
+
                                     <button onClick={() => sendWhatsApp(patient)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg" title="Send WhatsApp Reminder"><MessageCircle className="h-5 w-5" /></button>
                                         
                                         {patient.status === PatientStatus.WAITING && (
