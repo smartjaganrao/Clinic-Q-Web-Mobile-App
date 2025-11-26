@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, Notification } from './types';
 import { INITIAL_CLINICS } from './constants';
 import { LandingPage } from './pages/LandingPage';
@@ -6,11 +7,12 @@ import { StaffLogin } from './pages/StaffLogin';
 import { PatientLogin } from './pages/PatientLogin';
 import { ReceptionDashboard } from './pages/ReceptionDashboard';
 import { DoctorDashboard } from './pages/DoctorDashboard';
+import { AdminDashboard } from './pages/AdminDashboard';
 import { DoctorLogin } from './pages/DoctorLogin';
 import { KioskView } from './pages/KioskView';
 import { PatientTracker } from './pages/PatientTracker';
 import { ClinicAuth } from './pages/ClinicAuth';
-import { Monitor, LogOut, Stethoscope, Home } from 'lucide-react';
+import { Monitor, LogOut, Stethoscope, Home, ShieldCheck } from 'lucide-react';
 import { Button } from './components/Button';
 import { ToastContainer } from './components/Toast';
 
@@ -26,27 +28,67 @@ type AppView =
   | 'AUTH_DOCTOR_SELECT' 
   | 'DASHBOARD_RECEPTION' 
   | 'DASHBOARD_DOCTOR' 
+  | 'DASHBOARD_ADMIN'
   | 'VIEW_KIOSK';
 
 export default function App() {
+  
+  // ------------------------------------------------------------------
+  // SESSION PERSISTENCE (Restore state on refresh)
+  // ------------------------------------------------------------------
+  const getSession = () => {
+    try {
+      const s = localStorage.getItem('clinicq_session_v1');
+      return s ? JSON.parse(s) : null;
+    } catch { return null; }
+  };
+  
+  const session = getSession();
+
   // State Machine
-  const [currentView, setCurrentView] = useState<AppView>('HOME');
+  const [currentView, setCurrentView] = useState<AppView>(session?.currentView || 'HOME');
   
   // Data Context
-  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
-  const [currentClinicId, setCurrentClinicId] = useState<string | null>(null);
-  const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
+  const [selectedRole, setSelectedRole] = useState<UserRole | null>(session?.selectedRole || null);
+  const [currentClinicId, setCurrentClinicId] = useState<string | null>(session?.currentClinicId || null);
+  const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(session?.currentDoctorId || null);
   
   // QR Code / Deep Link Context
-  // If a user scans a QR but isn't logged in, we store the clinic ID here
-  // After login, we pass this to the PatientTracker to auto-open that clinic
-  const [pendingClinicId, setPendingClinicId] = useState<string | null>(null);
+  const [pendingClinicId, setPendingClinicId] = useState<string | null>(session?.pendingClinicId || null);
   
   // Patient Session State
-  const [loggedInPatient, setLoggedInPatient] = useState<{ phone: string; name: string } | null>(null);
+  const [loggedInPatient, setLoggedInPatient] = useState<{ phone: string; name: string } | null>(session?.loggedInPatient || null);
 
-  // Database State (Multi-tenant)
-  const [clinics, setClinics] = useState<Clinic[]>(INITIAL_CLINICS);
+  // Save Session on Change
+  useEffect(() => {
+    const sessionData = {
+        currentView,
+        selectedRole,
+        currentClinicId,
+        currentDoctorId,
+        loggedInPatient,
+        pendingClinicId
+    };
+    localStorage.setItem('clinicq_session_v1', JSON.stringify(sessionData));
+  }, [currentView, selectedRole, currentClinicId, currentDoctorId, loggedInPatient, pendingClinicId]);
+
+  // ------------------------------------------------------------------
+  // Database State (Multi-tenant) with PERSISTENCE
+  // ------------------------------------------------------------------
+  const [clinics, setClinics] = useState<Clinic[]>(() => {
+    try {
+        const savedData = localStorage.getItem('clinicq_db_v1');
+        return savedData ? JSON.parse(savedData) : INITIAL_CLINICS;
+    } catch (e) {
+        console.error("Failed to load persistence", e);
+        return INITIAL_CLINICS;
+    }
+  });
+
+  // Save to LocalStorage whenever clinics change
+  useEffect(() => {
+    localStorage.setItem('clinicq_db_v1', JSON.stringify(clinics));
+  }, [clinics]);
   
   // Notification System
   const [toasts, setToasts] = useState<Notification[]>([]);
@@ -67,7 +109,7 @@ export default function App() {
   // Data Mutations (CRUD Handlers)
   // ------------------------------------------------------------------
 
-  const handleCreateClinic = (name: string, plan: PlanType) => {
+  const handleCreateClinic = (name: string, plan: PlanType, city: string = 'Bangalore', address: string = '123 Health Street', pincode: string = '000000') => {
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const defaultSchedule = days.map(day => ({
         day, startTime: '09:00', endTime: '17:00', isOff: day === 'Sunday'
@@ -78,6 +120,8 @@ export default function App() {
         name,
         slug: name.toLowerCase().replace(/\s+/g, '-'),
         plan,
+        subscriptionStatus: 'ACTIVE',
+        joinedDate: Date.now(),
         doctors: [{
             id: `doc_new_${generateId()}`,
             name: 'Dr. Admin',
@@ -87,12 +131,15 @@ export default function App() {
             status: DoctorStatus.AVAILABLE,
             delayMinutes: 0,
             avatarUrl: `https://picsum.photos/100/100?random=${Math.random()}`,
-            weeklySchedule: defaultSchedule
+            weeklySchedule: defaultSchedule,
+            consultationFee: 500,
+            rating: 5.0,
+            reviewCount: 0
         }],
         patients: [],
-        city: 'Bangalore', // Default city
-        address: '123 Health Street',
-        pincode: '000000',
+        city,
+        address,
+        pincode,
         coordinates: { x: 50, y: 50 },
         geoLocation: { lat: 12.9716, lng: 77.6412 } // Default location
     };
@@ -113,13 +160,34 @@ export default function App() {
     }
   };
 
+  // ADMIN HANDLERS
+  const handleUpdateClinicPlan = (clinicId: string, plan: PlanType) => {
+      setClinics(prev => prev.map(c => c.id === clinicId ? { ...c, plan } : c));
+      addToast("Subscription plan updated.", "success");
+  };
+
+  const handleToggleClinicStatus = (clinicId: string) => {
+      setClinics(prev => prev.map(c => c.id === clinicId ? { ...c, subscriptionStatus: c.subscriptionStatus === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE' } : c));
+      addToast("Clinic status changed.", "info");
+  };
+
+  const handleDeleteClinic = (clinicId: string) => {
+      setClinics(prev => prev.filter(c => c.id !== clinicId));
+      addToast("Clinic deleted permanently.", "warning");
+  };
+
+  const handleEditClinicDetails = (clinicId: string, updates: Partial<Clinic>) => {
+      setClinics(prev => prev.map(c => c.id === clinicId ? { ...c, ...updates } : c));
+      addToast("Clinic details updated.", "success");
+  };
+
   const createNewPatient = (
       clinic: Clinic, 
       name: string, 
       phone: string, 
       doctorId: string, 
       appointmentTime?: string, 
-      appointmentDate?: string,
+      appointmentDate?: string, 
       age?: string,
       gender?: 'Male' | 'Female' | 'Other',
       symptoms?: string
@@ -178,8 +246,6 @@ export default function App() {
   };
 
   const handleUpdatePatientDetails = (id: string, updates: Partial<Patient>) => {
-      // Need to find which clinic this patient belongs to if currentClinicId is not set (e.g. from Patient App)
-      // For global updates, we iterate all clinics
       setClinics(prevClinics => prevClinics.map(c => {
           if (c.patients.some(p => p.id === id)) {
               return {
@@ -209,6 +275,13 @@ export default function App() {
       }));
   };
 
+  // Wrapper for Reception Dashboard manual check-in
+  const handleReceptionCheckIn = (patientId: string) => {
+      if (currentClinicId) {
+          handlePatientCheckIn(currentClinicId, patientId);
+      }
+  };
+
   const handleDeletePatient = (id: string) => {
     if (!currentClinic) return;
     setClinics(prevClinics => prevClinics.map(c => {
@@ -221,6 +294,20 @@ export default function App() {
         return c;
     }));
     addToast('Patient removed from records', 'info');
+  };
+
+  const handleDeleteMultiplePatients = (ids: string[]) => {
+      if (!currentClinic) return;
+      setClinics(prevClinics => prevClinics.map(c => {
+          if (c.id === currentClinicId) {
+              return {
+                  ...c,
+                  patients: c.patients.filter(p => !ids.includes(p.id))
+              };
+          }
+          return c;
+      }));
+      addToast(`${ids.length} records deleted successfully`, 'info');
   };
 
   const handleToggleEmergency = (patientId: string) => {
@@ -252,7 +339,10 @@ export default function App() {
           status: DoctorStatus.AVAILABLE,
           delayMinutes: 0,
           weeklySchedule: schedule,
-          avatarUrl: `https://picsum.photos/100/100?random=${Math.random()}`
+          avatarUrl: `https://picsum.photos/100/100?random=${Math.random()}`,
+          consultationFee: 500, // Default fee
+          rating: 0,
+          reviewCount: 0
       };
 
       setClinics(prevClinics => prevClinics.map(c => {
@@ -298,7 +388,7 @@ export default function App() {
       doctorId: string, 
       clinicId: string, 
       appointmentTime?: string, 
-      appointmentDate?: string,
+      appointmentDate?: string, 
       age?: string,
       gender?: 'Male' | 'Female' | 'Other',
       symptoms?: string
@@ -314,9 +404,7 @@ export default function App() {
   };
 
   const handleUpdateStatus = (patientId: string, status: PatientStatus, specificClinicId?: string) => {
-    // If specificClinicId is passed (from PatientTracker), use it. Otherwise use currentClinicId (Reception Dashboard)
     const targetClinicId = specificClinicId || currentClinicId;
-    
     if (!targetClinicId) return;
 
     setClinics(prevClinics => prevClinics.map(c => {
@@ -328,7 +416,6 @@ export default function App() {
                         updates.timeCompleted = Date.now();
                     }
                     if (status === PatientStatus.WAITING) {
-                        // If re-queued (e.g. from Skipped), update timestamp to move to bottom
                          updates.timeAdded = Date.now();
                     }
                     return { ...p, ...updates };
@@ -350,7 +437,6 @@ export default function App() {
           const patient = c.patients.find(p => p.id === patientId);
           if (!patient) return c;
 
-          // We only reorder WAITING patients for specific doctor
           const queue = c.patients.filter(p => p.doctorId === patient.doctorId && p.status === PatientStatus.WAITING).sort((a,b) => a.timeAdded - b.timeAdded);
           const currentIndex = queue.findIndex(p => p.id === patientId);
           
@@ -361,7 +447,6 @@ export default function App() {
           const swapIndex = direction === 'UP' ? currentIndex - 1 : currentIndex + 1;
           const otherPatient = queue[swapIndex];
 
-          // Swap timestamps to persist order logic
           const tempTime = patient.timeAdded;
           const otherTime = otherPatient.timeAdded;
 
@@ -377,27 +462,18 @@ export default function App() {
 
   const handleDragDrop = (draggedId: string, targetId: string) => {
       if (!currentClinic) return;
-      
       setClinics(prevClinics => prevClinics.map(c => {
           if (c.id !== currentClinicId) return c;
-
           const draggedPatient = c.patients.find(p => p.id === draggedId);
           const targetPatient = c.patients.find(p => p.id === targetId);
-          
           if (!draggedPatient || !targetPatient) return c;
-          
-          // Cannot drag onto self
           if (draggedId === targetId) return c;
 
-          // Logic: Update Dragged Patient's timestamp to be just before/after the target
           const isMovingDown = draggedPatient.timeAdded < targetPatient.timeAdded;
-          
           let newTimestamp;
           if (isMovingDown) {
-              // Moving down: Place AFTER target
               newTimestamp = targetPatient.timeAdded + 1;
           } else {
-              // Moving up: Place BEFORE target
               newTimestamp = targetPatient.timeAdded - 1;
           }
 
@@ -407,7 +483,6 @@ export default function App() {
               }
               return p;
           });
-
           return { ...c, patients: updatedPatients };
       }));
       addToast("Queue reordered manually", "info");
@@ -437,18 +512,14 @@ export default function App() {
 
     setClinics(prevClinics => prevClinics.map(c => {
         if (c.id !== currentClinicId) return c;
-
         const nextPatients = [...c.patients];
-        
         const currentIdx = nextPatients.findIndex(p => p.doctorId === doctorId && p.status === PatientStatus.WITH_DOCTOR);
         if (currentIdx !== -1) {
             nextPatients[currentIdx].status = PatientStatus.COMPLETED;
             nextPatients[currentIdx].timeCompleted = Date.now();
         }
 
-        // Improved Selection Logic for NEXT
         const waiting = nextPatients.filter(p => p.doctorId === doctorId && p.status === PatientStatus.WAITING);
-        
         waiting.sort((a, b) => {
              if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
              return a.timeAdded - b.timeAdded;
@@ -461,7 +532,6 @@ export default function App() {
                  nextPatients[originalIdx].status = PatientStatus.WITH_DOCTOR;
             }
         }
-
         return { ...c, patients: nextPatients };
     }));
   };
@@ -481,21 +551,15 @@ export default function App() {
   const handlePatientLogin = (phone: string, name: string) => {
       setLoggedInPatient({ phone, name });
       setCurrentView('PATIENT_APP');
-      
       if (pendingClinicId) {
           const clinic = clinics.find(c => c.id === pendingClinicId);
           if (clinic) {
             addToast(`Welcome ${name}! Taking you to ${clinic.name}...`, 'success');
           }
-          // Do NOT clear pendingClinicId here, it is passed as a prop to PatientTracker
       } else {
           addToast(`Welcome back, ${name}`, 'success');
       }
   };
-
-  // ------------------------------------------------------------------
-  // Navigation Handlers
-  // ------------------------------------------------------------------
 
   const goHome = () => {
     setCurrentView('HOME');
@@ -508,21 +572,15 @@ export default function App() {
 
   const enterPatientPortal = () => {
       setSelectedRole(UserRole.PATIENT);
-      // Redirect to login first
       setCurrentView('PATIENT_LOGIN');
   };
 
-  // Simulated QR Scan Handler from Landing Page
   const handleQRScanSimulated = (clinicId: string) => {
       setPendingClinicId(clinicId);
-      
-      // Scenario: User Scans QR
-      // If already logged in? (In this app flow, 'goHome' clears login, but realistically:)
       if (loggedInPatient) {
           setCurrentView('PATIENT_APP');
           addToast("QR Scanned. Redirecting...", "success");
       } else {
-          // Not logged in -> Go to Login
           setSelectedRole(UserRole.PATIENT);
           setCurrentView('PATIENT_LOGIN');
           addToast("Please login to continue booking.", "info");
@@ -535,19 +593,20 @@ export default function App() {
 
   const handleRoleSelection = (role: UserRole) => {
       setSelectedRole(role);
-      setCurrentView('AUTH_CLINIC_SELECT');
+      if (role === UserRole.ADMIN) {
+          setCurrentView('DASHBOARD_ADMIN');
+      } else {
+          setCurrentView('AUTH_CLINIC_SELECT');
+      }
   };
 
   const handleClinicSelected = (clinicId: string) => {
       setCurrentClinicId(clinicId);
-      
-      // Route based on role
       if (selectedRole === UserRole.DOCTOR) {
           setCurrentView('AUTH_DOCTOR_SELECT');
       } else if (selectedRole === UserRole.KIOSK) {
           setCurrentView('VIEW_KIOSK');
       } else {
-          // Reception / Admin
           setCurrentView('DASHBOARD_RECEPTION');
       }
   };
@@ -557,15 +616,11 @@ export default function App() {
       setCurrentView('DASHBOARD_DOCTOR');
   };
 
-  // ------------------------------------------------------------------
-  // Render Views
-  // ------------------------------------------------------------------
-
   const CommonHeader = ({ title }: { title: string }) => (
     <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-6 flex-shrink-0 z-10">
         <div className="flex items-center gap-4">
-            <div className="bg-primary-600 rounded p-1">
-                {selectedRole === UserRole.DOCTOR ? <Stethoscope className="text-white h-5 w-5" /> : <Monitor className="text-white h-5 w-5" />}
+            <div className={`bg-primary-600 rounded p-1 ${selectedRole === UserRole.ADMIN ? 'bg-slate-800' : 'bg-primary-600'}`}>
+                {selectedRole === UserRole.DOCTOR ? <Stethoscope className="text-white h-5 w-5" /> : selectedRole === UserRole.ADMIN ? <ShieldCheck className="text-white h-5 w-5" /> : <Monitor className="text-white h-5 w-5" />}
             </div>
             <span className="font-bold text-lg text-slate-800 hidden sm:inline">ClinicQ <span className="text-slate-400 font-normal text-sm">| {title}</span></span>
         </div>
@@ -574,10 +629,16 @@ export default function App() {
                 <Home className="h-4 w-4 mr-2" />
                 Home
             </Button>
-            {currentView !== 'VIEW_KIOSK' && (
+            {currentView !== 'VIEW_KIOSK' && currentView !== 'DASHBOARD_ADMIN' && (
                  <Button variant="secondary" size="sm" onClick={() => setCurrentView('AUTH_CLINIC_SELECT')}>
                     <LogOut className="h-4 w-4 mr-2" />
                     Switch Clinic
+                </Button>
+            )}
+            {currentView === 'DASHBOARD_ADMIN' && (
+                 <Button variant="secondary" size="sm" onClick={goHome}>
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Logout
                 </Button>
             )}
         </div>
@@ -587,120 +648,53 @@ export default function App() {
   return (
     <>
         <ToastContainer notifications={toasts} remove={removeToast} />
-        
         {(() => {
             switch (currentView) {
                 case 'HOME':
-                    return <LandingPage 
-                        onPatientEnter={enterPatientPortal} 
-                        onStaffLogin={enterStaffPortal}
-                        onSimulateQRScan={handleQRScanSimulated} // Pass QR handler
-                        clinics={clinics} // Pass clinics to allow simulation
-                    />;
-
+                    return <LandingPage onPatientEnter={enterPatientPortal} onStaffLogin={enterStaffPortal} onSimulateQRScan={handleQRScanSimulated} clinics={clinics} />;
                 case 'STAFF_LOGIN':
                     return <StaffLogin onSelectRole={handleRoleSelection} onBack={goHome} />;
-
                 case 'PATIENT_LOGIN':
-                    return <PatientLogin 
-                        onLogin={handlePatientLogin} 
-                        onBack={goHome} 
-                        addToast={addToast} 
-                        pendingActionMessage={pendingClinicId ? "Login to confirm booking" : undefined}
-                    />;
-
+                    return <PatientLogin onLogin={handlePatientLogin} onBack={goHome} addToast={addToast} pendingActionMessage={pendingClinicId ? "Login to confirm booking" : undefined} />;
                 case 'PATIENT_APP':
                     if (!loggedInPatient) return <div>Error: Not Logged In</div>;
-                    return (
-                        <PatientTracker 
-                            clinics={clinics} 
-                            userPhone={loggedInPatient.phone}
-                            userName={loggedInPatient.name}
-                            onBack={goHome} 
-                            onGetToken={handlePatientSelfRegister}
-                            addToast={addToast}
-                            onUpdateDetails={handleUpdatePatientDetails}
-                            onCancelVisit={(clinicId, patientId) => {
-                                // PASS EXPLICIT CLINIC ID to update function
-                                handleUpdateStatus(patientId, PatientStatus.CANCELLED, clinicId);
-                            }}
-                            onCheckIn={handlePatientCheckIn}
-                            // Pass the pending clinic from QR scan
-                            preSelectedClinicId={pendingClinicId || undefined}
-                            onClearPendingAction={() => setPendingClinicId(null)}
-                        />
-                    );
-
+                    return <PatientTracker clinics={clinics} userPhone={loggedInPatient.phone} userName={loggedInPatient.name} onBack={goHome} onGetToken={handlePatientSelfRegister} addToast={addToast} onUpdateDetails={handleUpdatePatientDetails} onCancelVisit={(clinicId, patientId) => handleUpdateStatus(patientId, PatientStatus.CANCELLED, clinicId)} onCheckIn={handlePatientCheckIn} preSelectedClinicId={pendingClinicId || undefined} onClearPendingAction={() => setPendingClinicId(null)} />;
                 case 'AUTH_CLINIC_SELECT':
-                    return (
-                        <ClinicAuth 
-                            clinics={clinics} 
-                            role={selectedRole || UserRole.ADMIN}
-                            onSelectClinic={handleClinicSelected} 
-                            onCreateClinic={handleCreateClinic}
-                            onBack={() => setCurrentView('STAFF_LOGIN')}
-                        />
-                    );
-
+                    return <ClinicAuth clinics={clinics} role={selectedRole || UserRole.ADMIN} onSelectClinic={handleClinicSelected} onCreateClinic={(n, p) => handleCreateClinic(n, p)} onBack={() => setCurrentView('STAFF_LOGIN')} />;
                 case 'AUTH_DOCTOR_SELECT':
                     if (!currentClinic) return <div>Error: No Clinic</div>;
+                    return <DoctorLogin clinic={currentClinic} onSelectDoctor={handleDoctorSelected} onBack={() => setCurrentView('AUTH_CLINIC_SELECT')} />;
+                case 'DASHBOARD_ADMIN':
                     return (
-                        <DoctorLogin 
-                            clinic={currentClinic}
-                            onSelectDoctor={handleDoctorSelected}
-                            onBack={() => setCurrentView('AUTH_CLINIC_SELECT')}
-                        />
+                        <div className="h-screen flex flex-col bg-slate-50">
+                            <CommonHeader title="System Admin" />
+                            <main className="flex-1 overflow-hidden">
+                                <AdminDashboard clinics={clinics} onUpdatePlan={handleUpdateClinicPlan} onToggleStatus={handleToggleClinicStatus} onDeleteClinic={handleDeleteClinic} onEditClinic={handleEditClinicDetails} />
+                            </main>
+                        </div>
                     );
-
                 case 'DASHBOARD_RECEPTION':
                     if (!currentClinic) return <div>Error: No Clinic</div>;
                     return (
                         <div className="h-screen flex flex-col bg-slate-50">
                             <CommonHeader title="Front Desk" />
                             <main className="flex-1 overflow-hidden">
-                                <ReceptionDashboard 
-                                    doctors={currentClinic.doctors} 
-                                    patients={currentClinic.patients} 
-                                    clinicName={currentClinic.name}
-                                    onAddPatient={handleAddPatient} 
-                                    onEditPatient={handleEditPatient}
-                                    onDeletePatient={handleDeletePatient}
-                                    onAddDoctor={handleAddDoctor}
-                                    onEditDoctor={handleEditDoctor}
-                                    onDeleteDoctor={handleDeleteDoctor}
-                                    onUpdateStatus={handleUpdateStatus}
-                                    onCancelPatient={(id) => handleUpdateStatus(id, PatientStatus.CANCELLED)}
-                                    onUpdateClinicName={handleUpdateClinicName}
-                                    onToggleEmergency={handleToggleEmergency}
-                                    onManualReorder={handleManualReorder}
-                                    onDragDrop={handleDragDrop}
-                                    addToast={addToast}
-                                />
+                                <ReceptionDashboard doctors={currentClinic.doctors} patients={currentClinic.patients} clinicName={currentClinic.name} onAddPatient={handleAddPatient} onEditPatient={handleEditPatient} onDeletePatient={handleDeletePatient} onDeleteMultiplePatients={handleDeleteMultiplePatients} onAddDoctor={handleAddDoctor} onEditDoctor={handleEditDoctor} onDeleteDoctor={handleDeleteDoctor} onUpdateStatus={handleUpdateStatus} onCancelPatient={(id) => handleUpdateStatus(id, PatientStatus.CANCELLED)} onUpdateClinicName={handleUpdateClinicName} onToggleEmergency={handleToggleEmergency} onManualReorder={handleManualReorder} onDragDrop={handleDragDrop} onManualCheckIn={handleReceptionCheckIn} addToast={addToast} clinicType={currentClinic.type} />
                             </main>
                         </div>
                     );
-
                 case 'DASHBOARD_DOCTOR':
                     if (!currentClinic || !currentDoctorId) return <div>Error: Missing Data</div>;
                     const activeDoctor = currentClinic.doctors.find(d => d.id === currentDoctorId);
                     if (!activeDoctor) return <div>Error: Doctor not found</div>;
-
                     return (
                         <div className="h-screen flex flex-col bg-slate-50">
                             <CommonHeader title="Doctor Portal" />
                             <main className="flex-1 overflow-hidden">
-                                <DoctorDashboard 
-                                    doctor={activeDoctor} 
-                                    queue={currentClinic.patients.filter(p => p.doctorId === activeDoctor.id)}
-                                    onNextPatient={() => handleNextPatient(activeDoctor.id)}
-                                    onCompletePatient={handleCompleteConsultation}
-                                    onUpdateStatus={handleUpdateDoctorStatus}
-                                    onUpdatePatientDetails={handleUpdatePatientDetails}
-                                />
+                                <DoctorDashboard doctor={activeDoctor} queue={currentClinic.patients.filter(p => p.doctorId === activeDoctor.id)} onNextPatient={() => handleNextPatient(activeDoctor.id)} onCompletePatient={handleCompleteConsultation} onUpdateStatus={handleUpdateDoctorStatus} onUpdatePatientDetails={handleUpdatePatientDetails} />
                             </main>
                         </div>
                     );
-
                 case 'VIEW_KIOSK':
                     if (!currentClinic) return <div>Error: No Clinic</div>;
                     return (
@@ -708,14 +702,9 @@ export default function App() {
                             <div className="fixed top-0 right-0 p-2 opacity-0 hover:opacity-100 z-50 transition-opacity">
                                 <button onClick={goHome} className="bg-red-500 text-white px-4 py-2 rounded shadow-lg font-bold">Exit Kiosk</button>
                             </div>
-                            <KioskView 
-                                doctors={currentClinic.doctors} 
-                                patients={currentClinic.patients} 
-                                clinicName={currentClinic.name} 
-                            />
+                            <KioskView doctors={currentClinic.doctors} patients={currentClinic.patients} clinicName={currentClinic.name} />
                         </>
                     );
-                    
                 default:
                     return <div>Error: Unknown State</div>;
             }

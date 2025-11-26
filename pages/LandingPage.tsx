@@ -1,11 +1,12 @@
+
 import React, { useState } from 'react';
-import { PRICING_PLANS, INITIAL_CLINICS } from '../constants';
+import { PRICING_PLANS } from '../constants';
 import { Clinic } from '../types';
 import { 
   Check, Activity, Users, Monitor, 
   Smartphone, Star, LayoutDashboard, Stethoscope, 
-  ArrowRight, Menu, X, Zap, BarChart3, Lock, Play, ShieldCheck, Globe,
-  Baby, Heart, Eye, Syringe, UserPlus, MessageCircle, Clock, Smile, AlertTriangle, Tv, Laptop, Wifi, MapPin, QrCode, TrendingUp, BellRing
+  ArrowRight, Menu, X, Zap, BarChart3, Lock, ShieldCheck, Globe,
+  Baby, Heart, Syringe, UserPlus, MessageCircle, Clock, Smile, AlertTriangle, Tv, Laptop, Wifi, MapPin, QrCode, TrendingUp, ArrowDown, XCircle, CheckCircle, PlayCircle, Brain, Sparkles, FileText, Bell
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -13,8 +14,8 @@ import { Card } from '../components/Card';
 interface LandingPageProps {
   onPatientEnter: () => void;
   onStaffLogin: () => void;
-  onSimulateQRScan: (clinicId: string) => void; // New prop for QR testing
-  clinics: Clinic[]; // Needed to pick a clinic for QR
+  onSimulateQRScan: (clinicId: string) => void;
+  clinics: Clinic[];
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaffLogin, onSimulateQRScan, clinics }) => {
@@ -35,7 +36,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
       <nav className="fixed w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
-            {/* Logo */}
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
               <div className="bg-primary-600 p-2 rounded-lg shadow-lg shadow-primary-200">
                 <Activity className="h-6 w-6 text-white" />
@@ -43,15 +43,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
               <span className="text-2xl font-bold tracking-tight text-slate-900">Clinic<span className="text-primary-600">Q</span></span>
             </div>
 
-            {/* Desktop Links */}
             <div className="hidden md:flex items-center space-x-8">
-              <button onClick={() => scrollToSection('problems')} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Why ClinicQ?</button>
-              <button onClick={() => scrollToSection('features')} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Features</button>
-              <button onClick={() => scrollToSection('setup')} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Setup</button>
+              <button onClick={() => scrollToSection('reality')} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">The Problem</button>
+              <button onClick={() => scrollToSection('solution')} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Before vs After</button>
+              <button onClick={() => scrollToSection('features')} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">How it Works</button>
+              <button onClick={() => scrollToSection('powerful-features')} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Features</button>
               <button onClick={() => scrollToSection('pricing')} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Pricing</button>
             </div>
 
-            {/* Login Actions */}
             <div className="hidden md:flex items-center gap-4">
               <Button 
                 variant="outline"
@@ -68,19 +67,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
               </Button>
             </div>
 
-            {/* Mobile Toggle */}
             <button className="md:hidden p-2 text-slate-600" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
               {isMobileMenuOpen ? <X /> : <Menu />}
             </button>
           </div>
         </div>
 
-        {/* Mobile Menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden bg-white border-t border-slate-100 p-4 space-y-4 shadow-xl absolute w-full">
-            <button onClick={() => scrollToSection('problems')} className="block w-full text-left px-4 py-2 text-slate-600 font-medium">Why ClinicQ?</button>
-            <button onClick={() => scrollToSection('features')} className="block w-full text-left px-4 py-2 text-slate-600 font-medium">Features</button>
-            <button onClick={() => scrollToSection('setup')} className="block w-full text-left px-4 py-2 text-slate-600 font-medium">Setup</button>
+            <button onClick={() => scrollToSection('reality')} className="block w-full text-left px-4 py-2 text-slate-600 font-medium">The Problem</button>
+            <button onClick={() => scrollToSection('solution')} className="block w-full text-left px-4 py-2 text-slate-600 font-medium">Before vs After</button>
+            <button onClick={() => scrollToSection('features')} className="block w-full text-left px-4 py-2 text-slate-600 font-medium">How it Works</button>
+            <button onClick={() => scrollToSection('powerful-features')} className="block w-full text-left px-4 py-2 text-slate-600 font-medium">Features</button>
             <button onClick={() => scrollToSection('pricing')} className="block w-full text-left px-4 py-2 text-slate-600 font-medium">Pricing</button>
             <div className="pt-4 border-t border-slate-100 flex flex-col gap-3">
               <Button variant="outline" className="w-full justify-center" onClick={onPatientEnter}>Patient Portal</Button>
@@ -99,65 +97,39 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
             <div className="text-center max-w-4xl mx-auto">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 shadow-sm mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                    <span className="flex h-2 w-2 relative">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                    </span>
-                    <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Bring Peace to Your Waiting Room</span>
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-50 border border-green-200 text-green-700 shadow-sm mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <CheckCircle className="h-4 w-4" />
+                    <span className="text-xs font-bold uppercase tracking-wide">Solved: Walk-in vs Appointment Clashes</span>
                 </div>
 
                 <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 tracking-tight mb-6 animate-in fade-in slide-in-from-bottom-6 duration-700 leading-tight">
-                    Bring Discipline, Clarity, <br className="hidden md:block" />
-                    and <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-blue-600">Peace to Your Clinic.</span>
+                    Transform Your Clinic from <br/>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-500">Chaos</span> to <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-blue-600">Calm.</span>
                 </h1>
                 
                 <p className="text-xl text-slate-600 mb-10 max-w-2xl mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom-8 duration-700">
-                    Any clinic where people take a token and wait can use this. 
-                    Stop the chaos, reduce the noise, and let your doctors focus on healing.
+                    Stop answering "When is my turn?" 100 times a day. 
+                    <br/>Our Smart Hybrid Queue manages appointments, walk-ins, and emergencies automatically.
                 </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-1000">
-                    {/* Patient CTA */}
-                    <div 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-1000">
+                    <Button 
+                        onClick={onStaffLogin} 
+                        className="h-14 text-lg shadow-xl shadow-primary-200 bg-primary-600 hover:bg-primary-700"
+                    >
+                        Start My Clinic (Free) <ArrowRight className="ml-2 h-5 w-5" />
+                    </Button>
+                    <Button 
+                        variant="outline"
                         onClick={onPatientEnter}
-                        className="group bg-white p-6 rounded-2xl border border-slate-200 hover:border-purple-300 hover:shadow-xl hover:shadow-purple-100 transition-all cursor-pointer text-left relative overflow-hidden"
+                        className="h-14 text-lg border-2 hover:bg-slate-50"
                     >
-                        <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <ArrowRight className="h-5 w-5 text-purple-500" />
-                        </div>
-                        <div className="h-12 w-12 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600 mb-4 group-hover:scale-110 transition-transform">
-                            <Smartphone className="h-6 w-6" />
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-900 mb-1">I am a Patient</h3>
-                        <p className="text-slate-500 text-sm">Find a clinic, book token, track live queue.</p>
-                        <div className="mt-4 text-purple-600 font-bold text-sm flex items-center gap-1">
-                            Enter Portal &rarr;
-                        </div>
-                    </div>
-
-                    {/* Doctor/Clinic CTA */}
-                    <div 
-                        onClick={onStaffLogin}
-                        className="group bg-slate-900 p-6 rounded-2xl border border-slate-800 hover:border-primary-500 hover:shadow-xl hover:shadow-primary-900/20 transition-all cursor-pointer text-left relative overflow-hidden"
-                    >
-                        <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <ArrowRight className="h-5 w-5 text-primary-400" />
-                        </div>
-                        <div className="h-12 w-12 bg-white/10 rounded-xl flex items-center justify-center text-primary-400 mb-4 group-hover:scale-110 transition-transform">
-                            <LayoutDashboard className="h-6 w-6" />
-                        </div>
-                        <h3 className="text-lg font-bold text-white mb-1">I run a Clinic</h3>
-                        <p className="text-slate-400 text-sm">Manage queue, patients, and staff easily.</p>
-                        <div className="mt-4 text-primary-400 font-bold text-sm flex items-center gap-1">
-                            Staff Login &rarr;
-                        </div>
-                    </div>
+                        Patient Demo <Smartphone className="ml-2 h-5 w-5" />
+                    </Button>
                 </div>
 
-                {/* SIMULATE QR SCAN (Demo Feature) */}
                 <div className="mt-8 text-center animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
-                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Developer Preview Tools</p>
+                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Try the Magic</p>
                      <Button 
                         variant="secondary" 
                         size="sm"
@@ -165,289 +137,223 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
                         className="border-dashed border-slate-300 text-slate-500 hover:text-primary-600 hover:border-primary-400"
                      >
                         <QrCode className="h-4 w-4 mr-2" />
-                        Simulate Physical QR Scan (Clinic 1)
+                        Simulate Patient Scanning QR Code
                      </Button>
                 </div>
-
             </div>
         </div>
       </section>
 
-      {/* The "Who is Affected" Problem Section */}
-      <section id="problems" className="py-20 bg-slate-50">
+      {/* THE REALITY CHECK - PROBLEM SECTION */}
+      <section id="reality" className="py-20 bg-slate-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
-                <h2 className="text-3xl font-bold text-slate-900">Is your reception a war zone?</h2>
-                <p className="text-lg text-slate-600 mt-2">If you recognize these problems, you need ClinicQ today.</p>
+                <div className="inline-block p-3 bg-red-100 rounded-full mb-4">
+                    <AlertTriangle className="h-8 w-8 text-red-600" />
+                </div>
+                <h2 className="text-3xl font-bold text-slate-900">Is this your daily reality?</h2>
+                <p className="text-lg text-slate-600 mt-2">These problems are costing you patients and peace of mind.</p>
             </div>
 
             <div className="grid md:grid-cols-3 gap-8">
-                {/* Receptionist Pain */}
-                <Card className="p-8 border-red-100 bg-red-50/30">
-                    <div className="bg-red-100 w-14 h-14 rounded-full flex items-center justify-center mb-6">
-                        <Users className="h-7 w-7 text-red-600" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-3">Exhausted Receptionist</h3>
-                    <ul className="space-y-3 text-slate-700">
-                        <li className="flex items-start gap-2"><X className="h-5 w-5 text-red-400 flex-shrink-0" /> Repeating answers to "When is my turn?"</li>
-                        <li className="flex items-start gap-2"><X className="h-5 w-5 text-red-400 flex-shrink-0" /> Dealing with angry patients shouting.</li>
-                        <li className="flex items-start gap-2"><X className="h-5 w-5 text-red-400 flex-shrink-0" /> Managing manual chits & duplicate tokens.</li>
-                    </ul>
-                </Card>
+                <div className="bg-white p-8 rounded-2xl border-l-4 border-red-500 shadow-sm hover:shadow-lg transition-shadow">
+                    <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        <Users className="h-6 w-6 text-red-500" /> The Crowd
+                    </h3>
+                    <p className="text-slate-600 mb-4">"How long still?"</p>
+                    <p className="text-sm text-slate-500">
+                        Patients crowd the reception. Arguments happen. Infections spread. 
+                        <span className="block mt-2 font-bold text-red-600">Result: Patients leave.</span>
+                    </p>
+                </div>
 
-                {/* Patient Pain */}
-                <Card className="p-8 border-orange-100 bg-orange-50/30">
-                    <div className="bg-orange-100 w-14 h-14 rounded-full flex items-center justify-center mb-6">
-                        <Clock className="h-7 w-7 text-orange-600" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-3">Frustrated Patients</h3>
-                    <ul className="space-y-3 text-slate-700">
-                        <li className="flex items-start gap-2"><X className="h-5 w-5 text-orange-400 flex-shrink-0" /> Wasting 1-3 hours in a crowded room.</li>
-                        <li className="flex items-start gap-2"><X className="h-5 w-5 text-orange-400 flex-shrink-0" /> Risk of infection spreading to kids/elderly.</li>
-                        <li className="flex items-start gap-2"><X className="h-5 w-5 text-orange-400 flex-shrink-0" /> Leaving bad reviews on Google.</li>
-                    </ul>
-                </Card>
+                <div className="bg-white p-8 rounded-2xl border-l-4 border-orange-500 shadow-sm hover:shadow-lg transition-shadow">
+                    <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        <MessageCircle className="h-6 w-6 text-orange-500" /> The Stress
+                    </h3>
+                    <p className="text-slate-600 mb-4">"When is my turn?"</p>
+                    <p className="text-sm text-slate-500">
+                        Your receptionist answers the same question 50 times/hr instead of working.
+                        <span className="block mt-2 font-bold text-orange-600">Result: Staff burnout.</span>
+                    </p>
+                </div>
 
-                {/* Doctor Pain */}
-                <Card className="p-8 border-slate-100 bg-white shadow-sm">
-                    <div className="bg-slate-100 w-14 h-14 rounded-full flex items-center justify-center mb-6">
-                        <Stethoscope className="h-7 w-7 text-slate-600" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-3">Distracted Doctor</h3>
-                    <ul className="space-y-3 text-slate-700">
-                        <li className="flex items-start gap-2"><X className="h-5 w-5 text-slate-400 flex-shrink-0" /> Constant knocking: "Doctor, how many more?"</li>
-                        <li className="flex items-start gap-2"><X className="h-5 w-5 text-slate-400 flex-shrink-0" /> Unable to focus fully on the patient.</li>
-                        <li className="flex items-start gap-2"><X className="h-5 w-5 text-slate-400 flex-shrink-0" /> Losing patients to clinics with better systems.</li>
-                    </ul>
-                </Card>
+                <div className="bg-white p-8 rounded-2xl border-l-4 border-slate-500 shadow-sm hover:shadow-lg transition-shadow">
+                    <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        <Clock className="h-6 w-6 text-slate-500" /> The Delay
+                    </h3>
+                    <p className="text-slate-600 mb-4">"Doctor is late."</p>
+                    <p className="text-sm text-slate-500">
+                        Doctor takes a break or emergency occurs. No one knows. Patients feel cheated.
+                        <span className="block mt-2 font-bold text-slate-700">Result: Bad Google Reviews.</span>
+                    </p>
+                </div>
             </div>
         </div>
       </section>
 
-      {/* Solution / Features - REDESIGNED */}
-      <section id="features" className="py-24 bg-slate-900 text-white relative overflow-hidden">
-        {/* Decorative BG */}
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary-600/10 blur-[100px] rounded-full pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-600/10 blur-[100px] rounded-full pointer-events-none"></div>
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-            <div className="text-center max-w-3xl mx-auto mb-20">
-                <span className="text-primary-400 font-bold tracking-widest uppercase text-sm">The Complete Clinic OS</span>
-                <h2 className="text-4xl md:text-5xl font-extrabold mt-3 mb-6 leading-tight">
-                    Everything you need to run <br/> a <span className="text-primary-400">modern, efficient clinic.</span>
-                </h2>
-                <p className="text-xl text-slate-400">
-                    We've combined queue management, appointment booking, and patient engagement into one simple platform.
-                </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                
-                {/* Feature 1: Hybrid Queue */}
-                <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 hover:border-primary-500 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-primary-900/50 group">
-                    <div className="h-14 w-14 bg-primary-500/20 rounded-2xl flex items-center justify-center text-primary-400 mb-6 group-hover:bg-primary-500 group-hover:text-white transition-colors">
-                        <Zap className="h-8 w-8" />
-                    </div>
-                    <h3 className="text-2xl font-bold mb-3">Smart Hybrid Queue</h3>
-                    <p className="text-slate-400 text-sm mb-4 leading-relaxed">
-                        The system automatically prioritizes emergencies, then scheduled appointments, then walk-ins.
-                    </p>
-                    <div className="flex items-center gap-2 text-primary-300 text-xs font-bold uppercase tracking-wide bg-slate-900/50 p-2 rounded-lg w-fit">
-                        <Check className="h-4 w-4" /> Advantage: Zero Conflicts
-                    </div>
-                </div>
-
-                {/* Feature 2: WhatsApp Alerts */}
-                <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 hover:border-green-500 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-green-900/50 group">
-                    <div className="h-14 w-14 bg-green-500/20 rounded-2xl flex items-center justify-center text-green-400 mb-6 group-hover:bg-green-500 group-hover:text-white transition-colors">
-                        <MessageCircle className="h-8 w-8" />
-                    </div>
-                    <h3 className="text-2xl font-bold mb-3">WhatsApp Alerts</h3>
-                    <p className="text-slate-400 text-sm mb-4 leading-relaxed">
-                        Patients receive updates like "Your token is #32. You are next." directly on WhatsApp.
-                    </p>
-                    <div className="flex items-center gap-2 text-green-300 text-xs font-bold uppercase tracking-wide bg-slate-900/50 p-2 rounded-lg w-fit">
-                        <Check className="h-4 w-4" /> Advantage: Silent Reception
-                    </div>
-                </div>
-
-                {/* Feature 3: Kiosk TV */}
-                <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 hover:border-orange-500 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-orange-900/50 group">
-                    <div className="h-14 w-14 bg-orange-500/20 rounded-2xl flex items-center justify-center text-orange-400 mb-6 group-hover:bg-orange-500 group-hover:text-white transition-colors">
-                        <Tv className="h-8 w-8" />
-                    </div>
-                    <h3 className="text-2xl font-bold mb-3">Live TV Kiosk</h3>
-                    <p className="text-slate-400 text-sm mb-4 leading-relaxed">
-                        Transform any smart TV into a professional digital signage board showing live token status and voice alerts.
-                    </p>
-                    <div className="flex items-center gap-2 text-orange-300 text-xs font-bold uppercase tracking-wide bg-slate-900/50 p-2 rounded-lg w-fit">
-                        <Check className="h-4 w-4" /> Advantage: Professional Look
-                    </div>
-                </div>
-
-                 {/* Feature 4: Doctor Controls */}
-                 <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 hover:border-blue-500 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/50 group">
-                    <div className="h-14 w-14 bg-blue-500/20 rounded-2xl flex items-center justify-center text-blue-400 mb-6 group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                        <Clock className="h-8 w-8" />
-                    </div>
-                    <h3 className="text-2xl font-bold mb-3">Delay & Break Control</h3>
-                    <p className="text-slate-400 text-sm mb-4 leading-relaxed">
-                        Doctor running late? One click updates the estimated wait time for ALL patients instantly.
-                    </p>
-                    <div className="flex items-center gap-2 text-blue-300 text-xs font-bold uppercase tracking-wide bg-slate-900/50 p-2 rounded-lg w-fit">
-                        <Check className="h-4 w-4" /> Advantage: Honesty & Trust
-                    </div>
-                </div>
-
-                 {/* Feature 5: Reports */}
-                 <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 hover:border-purple-500 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-purple-900/50 group">
-                    <div className="h-14 w-14 bg-purple-500/20 rounded-2xl flex items-center justify-center text-purple-400 mb-6 group-hover:bg-purple-500 group-hover:text-white transition-colors">
-                        <TrendingUp className="h-8 w-8" />
-                    </div>
-                    <h3 className="text-2xl font-bold mb-3">Business Intelligence</h3>
-                    <p className="text-slate-400 text-sm mb-4 leading-relaxed">
-                        See peak hours, average turnaround time, and staff performance reports. Know your numbers.
-                    </p>
-                    <div className="flex items-center gap-2 text-purple-300 text-xs font-bold uppercase tracking-wide bg-slate-900/50 p-2 rounded-lg w-fit">
-                        <Check className="h-4 w-4" /> Advantage: More Revenue
-                    </div>
-                </div>
-
-                 {/* Feature 6: Patient Discovery */}
-                 <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 hover:border-pink-500 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-pink-900/50 group">
-                    <div className="h-14 w-14 bg-pink-500/20 rounded-2xl flex items-center justify-center text-pink-400 mb-6 group-hover:bg-pink-500 group-hover:text-white transition-colors">
-                        <MapPin className="h-8 w-8" />
-                    </div>
-                    <h3 className="text-2xl font-bold mb-3">GPS & QR Discovery</h3>
-                    <p className="text-slate-400 text-sm mb-4 leading-relaxed">
-                        Patients find you via "Near Me" search or simply scan a QR code at your door to book.
-                    </p>
-                    <div className="flex items-center gap-2 text-pink-300 text-xs font-bold uppercase tracking-wide bg-slate-900/50 p-2 rounded-lg w-fit">
-                        <Check className="h-4 w-4" /> Advantage: New Patients
-                    </div>
-                </div>
-
-            </div>
-        </div>
-      </section>
-
-      {/* DEVICE REQUIREMENTS SECTION */}
-      <section id="setup" className="py-24 bg-gradient-to-b from-white to-slate-50 border-t border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16 max-w-3xl mx-auto">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold uppercase tracking-wider mb-4 border border-blue-100">
-                    <Zap className="h-3 w-3" /> 5-Minute Setup
-                </div>
-                <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-6">
-                    Zero Hardware Investment Required.
-                </h2>
-                <p className="text-lg text-slate-600 leading-relaxed mb-8">
-                    Forget expensive servers and IT teams. ClinicQ runs entirely on the cloud, turning your existing devices into a powerful hospital management system.
-                </p>
-                
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 inline-block">
-                    <p className="text-slate-800 font-medium italic text-lg">
-                        "You only need 2 devices: One for reception, one for the TV display.<br/>Doctors can simply use their own phones."
-                    </p>
-                </div>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-8">
-                {/* 1. Reception */}
-                <Card className="p-8 border-slate-200 hover:border-primary-500 transition-all duration-300 group bg-white shadow-sm hover:shadow-xl">
-                    <div className="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-6 group-hover:scale-110 transition-transform">
-                        <Laptop className="h-7 w-7" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">1. The Command Center</h3>
-                    <p className="text-sm font-bold text-primary-600 mb-4 uppercase tracking-wide">For Receptionist</p>
-                    <p className="text-slate-600 text-sm mb-6 leading-relaxed">
-                        Control the entire clinic flow. Add walk-ins, manage appointments, and handle billing from a single dashboard.
-                    </p>
-                    <div className="pt-6 border-t border-slate-100">
-                         <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                            <Check className="h-4 w-4 text-green-500" /> Works on any Laptop/PC
-                         </div>
-                         <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mt-2">
-                            <Check className="h-4 w-4 text-green-500" /> Tablet Compatible
-                         </div>
-                    </div>
-                </Card>
-
-                {/* 2. Doctor */}
-                <Card className="p-8 border-slate-200 hover:border-primary-500 transition-all duration-300 group bg-white shadow-sm hover:shadow-xl">
-                    <div className="w-14 h-14 bg-green-50 rounded-xl flex items-center justify-center text-green-600 mb-6 group-hover:scale-110 transition-transform">
-                        <Stethoscope className="h-7 w-7" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">2. Provider Portal</h3>
-                    <p className="text-sm font-bold text-primary-600 mb-4 uppercase tracking-wide">For Doctors</p>
-                    <p className="text-slate-600 text-sm mb-6 leading-relaxed">
-                        Doctors view their live queue, call the next patient, and manage delays directly from their personal device.
-                    </p>
-                    <div className="pt-6 border-t border-slate-100">
-                         <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                            <Check className="h-4 w-4 text-green-500" /> Personal Mobile Phone
-                         </div>
-                         <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mt-2">
-                            <Check className="h-4 w-4 text-green-500" /> iPad / Tablet (Recommended)
-                         </div>
-                    </div>
-                </Card>
-
-                {/* 3. Display */}
-                <Card className="p-8 border-slate-200 hover:border-primary-500 transition-all duration-300 group bg-white shadow-sm hover:shadow-xl">
-                    <div className="w-14 h-14 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600 mb-6 group-hover:scale-110 transition-transform">
-                        <Tv className="h-7 w-7" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">3. Digital Signage</h3>
-                    <p className="text-sm font-bold text-primary-600 mb-4 uppercase tracking-wide">For Patients</p>
-                    <p className="text-slate-600 text-sm mb-6 leading-relaxed">
-                        Transform any smart TV into a professional digital token display. Just open the unique URL in the browser.
-                    </p>
-                    <div className="pt-6 border-t border-slate-100">
-                         <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                            <Check className="h-4 w-4 text-green-500" /> Any Smart TV
-                         </div>
-                         <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mt-2">
-                            <Check className="h-4 w-4 text-green-500" /> FireStick / ChromeCast
-                         </div>
-                    </div>
-                </Card>
-            </div>
-            
-            <div className="mt-16 bg-slate-900 rounded-2xl p-8 flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl">
-                 <div className="text-white">
-                     <h4 className="text-lg font-bold mb-2">Technical Reliability</h4>
-                     <p className="text-slate-400 text-sm max-w-lg">
-                         Built for stability in Tier 2/3 cities. Works smoothly on low-bandwidth 4G connections. 
-                         Data is encrypted and backed up daily.
-                     </p>
-                 </div>
-                 <div className="flex gap-4">
-                     <div className="flex flex-col items-center gap-2">
-                         <Wifi className="h-6 w-6 text-green-400" />
-                         <span className="text-xs text-slate-400 font-medium">Low Data</span>
-                     </div>
-                     <div className="w-px bg-slate-700 h-10"></div>
-                     <div className="flex flex-col items-center gap-2">
-                         <ShieldCheck className="h-6 w-6 text-blue-400" />
-                         <span className="text-xs text-slate-400 font-medium">Secure</span>
-                     </div>
-                     <div className="w-px bg-slate-700 h-10"></div>
-                     <div className="flex flex-col items-center gap-2">
-                         <Globe className="h-6 w-6 text-purple-400" />
-                         <span className="text-xs text-slate-400 font-medium">Cloud</span>
-                     </div>
-                 </div>
-            </div>
-        </div>
-      </section>
-
-      {/* Specialty Targeting */}
-      <section id="specialties" className="py-24 bg-white border-t border-slate-100">
+      {/* THE SOLUTION - BEFORE VS AFTER */}
+      <section id="solution" className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
-                <span className="text-primary-600 font-bold tracking-wide uppercase text-sm">Who is this for?</span>
-                <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mt-2">Perfect for High-Volume Clinics</h2>
+                <h2 className="text-4xl font-extrabold text-slate-900 mb-4">The ClinicQ Difference</h2>
+                <p className="text-xl text-slate-600">See how we fix the workflow instantly.</p>
+            </div>
+
+            <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+                <div className="grid md:grid-cols-2">
+                    {/* BEFORE */}
+                    <div className="p-10 bg-red-50/50 border-r border-slate-200">
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="bg-red-100 p-2 rounded-lg"><XCircle className="h-6 w-6 text-red-600" /></div>
+                            <h3 className="text-2xl font-bold text-red-900">The Old Way</h3>
+                        </div>
+                        <ul className="space-y-6">
+                            <li className="flex gap-4 items-start">
+                                <AlertTriangle className="h-6 w-6 text-red-400 flex-shrink-0 mt-1" />
+                                <div>
+                                    <h4 className="font-bold text-slate-900">Blind Waiting</h4>
+                                    <p className="text-slate-600 text-sm">Patient waits 1-2 hours in clinic not knowing when they will be called.</p>
+                                </div>
+                            </li>
+                            <li className="flex gap-4 items-start">
+                                <AlertTriangle className="h-6 w-6 text-red-400 flex-shrink-0 mt-1" />
+                                <div>
+                                    <h4 className="font-bold text-slate-900">Staff Overload</h4>
+                                    <p className="text-slate-600 text-sm">Receptionist spends 40% of time managing the crowd and shouting names.</p>
+                                </div>
+                            </li>
+                            <li className="flex gap-4 items-start">
+                                <AlertTriangle className="h-6 w-6 text-red-400 flex-shrink-0 mt-1" />
+                                <div>
+                                    <h4 className="font-bold text-slate-900">Queue Clashes</h4>
+                                    <p className="text-slate-600 text-sm">Walk-in patient fights with Appointment patient over who goes first.</p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+
+                    {/* AFTER */}
+                    <div className="p-10 bg-green-50/50">
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="bg-green-100 p-2 rounded-lg"><CheckCircle className="h-6 w-6 text-green-600" /></div>
+                            <h3 className="text-2xl font-bold text-green-900">The ClinicQ Way</h3>
+                        </div>
+                        <ul className="space-y-6">
+                            <li className="flex gap-4 items-start">
+                                <Smartphone className="h-6 w-6 text-green-600 flex-shrink-0 mt-1" />
+                                <div>
+                                    <h4 className="font-bold text-slate-900">Live Tracking</h4>
+                                    <p className="text-slate-600 text-sm">Patient waits at home. Enters clinic only when "Your turn is next" pops up.</p>
+                                </div>
+                            </li>
+                            <li className="flex gap-4 items-start">
+                                <Zap className="h-6 w-6 text-green-600 flex-shrink-0 mt-1" />
+                                <div>
+                                    <h4 className="font-bold text-slate-900">Silent Reception</h4>
+                                    <p className="text-slate-600 text-sm">QR Code & TV Display handle the questions. Staff works on billing/care.</p>
+                                </div>
+                            </li>
+                            <li className="flex gap-4 items-start">
+                                <Brain className="h-6 w-6 text-green-600 flex-shrink-0 mt-1" />
+                                <div>
+                                    <h4 className="font-bold text-slate-900">Smart Hybrid Logic</h4>
+                                    <p className="text-slate-600 text-sm">System automatically sorts Emergencies > Appointments > Walk-ins fairly.</p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            {/* ROI METRICS */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
+                <Card className="p-6 text-center border-primary-100 bg-primary-50/30">
+                    <TrendingUp className="h-10 w-10 text-primary-600 mx-auto mb-3" />
+                    <div className="text-4xl font-black text-slate-900 mb-1">+20%</div>
+                    <div className="text-sm font-bold text-primary-700 uppercase tracking-wide">Doctor Productivity</div>
+                </Card>
+                <Card className="p-6 text-center border-green-100 bg-green-50/30">
+                    <Smile className="h-10 w-10 text-green-600 mx-auto mb-3" />
+                    <div className="text-4xl font-black text-slate-900 mb-1">100%</div>
+                    <div className="text-sm font-bold text-green-700 uppercase tracking-wide">Patient Satisfaction</div>
+                </Card>
+                <Card className="p-6 text-center border-blue-100 bg-blue-50/30">
+                    <Clock className="h-10 w-10 text-blue-600 mx-auto mb-3" />
+                    <div className="text-4xl font-black text-slate-900 mb-1">-85%</div>
+                    <div className="text-sm font-bold text-blue-700 uppercase tracking-wide">Waiting Room Noise</div>
+                </Card>
+            </div>
+        </div>
+      </section>
+
+      {/* WORKFLOW STEPS */}
+      <section id="features" className="py-24 bg-slate-900 text-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+                <span className="text-primary-400 font-bold tracking-widest uppercase text-sm">Simple Workflow</span>
+                <h2 className="text-3xl md:text-4xl font-bold mt-3">How it works in real life</h2>
+            </div>
+
+            <div className="grid md:grid-cols-4 gap-8 relative">
+                {/* Connecting Line (Desktop) */}
+                <div className="hidden md:block absolute top-12 left-0 w-full h-0.5 bg-slate-700 z-0"></div>
+
+                {[
+                    { icon: QrCode, title: "1. Scan or Book", desc: "Patient scans QR at door or books from home." },
+                    { icon: Brain, title: "2. Smart Sort", desc: "AI places them in queue based on priority." },
+                    { icon: Tv, title: "3. Live Status", desc: "TV & Phone shows '3 people ahead'. No asking." },
+                    { icon: Stethoscope, title: "4. Consultation", desc: "Doctor clicks 'Next'. Patient enters room." }
+                ].map((step, idx) => (
+                    <div key={idx} className="relative z-10 flex flex-col items-center text-center">
+                        <div className="w-24 h-24 bg-slate-800 rounded-full border-4 border-slate-900 flex items-center justify-center mb-6 shadow-xl">
+                            <step.icon className="h-10 w-10 text-primary-400" />
+                        </div>
+                        <h3 className="text-xl font-bold mb-2">{step.title}</h3>
+                        <p className="text-slate-400 text-sm leading-relaxed px-4">{step.desc}</p>
+                    </div>
+                ))}
+            </div>
+        </div>
+      </section>
+
+      {/* NEW: POWERFUL FEATURES SECTION */}
+      <section id="powerful-features" className="py-24 bg-slate-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+                <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Everything you need to run a modern clinic</h2>
+                <p className="text-lg text-slate-600">Packed with powerful features to streamline operations and delight patients.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                {[
+                    { icon: Zap, title: 'Smart Hybrid Queue', desc: 'Automatically prioritizes Emergencies and Appointments over Walk-ins based on real-time logic.', color: 'text-yellow-600', bg: 'bg-yellow-50' },
+                    { icon: Monitor, title: 'TV Kiosk Display', desc: 'Turn any Smart TV into a live token board with voice announcements. No expensive hardware needed.', color: 'text-blue-600', bg: 'bg-blue-50' },
+                    { icon: Smartphone, title: 'Patient App', desc: 'Patients can book, track live status, and view history from their phone without calling you.', color: 'text-green-600', bg: 'bg-green-50' },
+                    { icon: FileText, title: 'Digital Rx & Vitals', desc: 'Doctors can write prescriptions and record vitals (BP, Weight) digitally in seconds.', color: 'text-purple-600', bg: 'bg-purple-50' },
+                    { icon: Bell, title: 'WhatsApp Alerts', desc: 'Auto-send "Your turn is next" and "Doctor is late" alerts to reduce anxiety.', color: 'text-green-600', bg: 'bg-green-50' },
+                    { icon: BarChart3, title: 'Analytics & Reports', desc: 'Track daily revenue, patient footfall, and doctor performance with one click.', color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                    { icon: Users, title: 'Staff Roles', desc: 'Dedicated logins for Reception, Doctors, and Admins with secure access controls.', color: 'text-orange-600', bg: 'bg-orange-50' },
+                    { icon: ShieldCheck, title: 'Secure & Cloud-Based', desc: 'Access your clinic data from anywhere. Safe, encrypted, and always available.', color: 'text-teal-600', bg: 'bg-teal-50' },
+                ].map((feature, idx) => (
+                    <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-lg transition-all hover:-translate-y-1">
+                        <div className={`w-12 h-12 ${feature.bg} rounded-xl flex items-center justify-center mb-4`}>
+                            <feature.icon className={`h-6 w-6 ${feature.color}`} />
+                        </div>
+                        <h3 className="font-bold text-lg text-slate-900 mb-2">{feature.title}</h3>
+                        <p className="text-sm text-slate-600 leading-relaxed">{feature.desc}</p>
+                    </div>
+                ))}
+            </div>
+        </div>
+      </section>
+
+      {/* TARGET AUDIENCE / SPECIALTIES */}
+      <section className="py-24 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+                <h2 className="text-3xl md:text-4xl font-bold text-slate-900">Perfect for High-Volume Clinics</h2>
+                <p className="text-slate-500 mt-2">If you have a crowd, you need ClinicQ.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -462,17 +368,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
                     </div>
                 </div>
 
-                {/* GYNAE */}
-                <div className="flex gap-4 p-6 rounded-2xl bg-rose-50 border border-rose-100 hover:shadow-lg transition-shadow">
-                    <div className="bg-rose-100 h-12 w-12 rounded-full flex items-center justify-center flex-shrink-0">
-                        <UserPlus className="h-6 w-6 text-rose-600" />
-                    </div>
-                    <div>
-                        <h4 className="font-bold text-lg text-slate-900">Gynecology / Maternity</h4>
-                        <p className="text-slate-600 text-sm mt-1">Pregnant women shouldn't wait for hours. Give them exact timing.</p>
-                    </div>
-                </div>
-
                 {/* GENERAL PHYSICIAN */}
                 <div className="flex gap-4 p-6 rounded-2xl bg-blue-50 border border-blue-100 hover:shadow-lg transition-shadow">
                     <div className="bg-blue-100 h-12 w-12 rounded-full flex items-center justify-center flex-shrink-0">
@@ -484,6 +379,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
                     </div>
                 </div>
 
+                {/* GYNAE */}
+                <div className="flex gap-4 p-6 rounded-2xl bg-rose-50 border border-rose-100 hover:shadow-lg transition-shadow">
+                    <div className="bg-rose-100 h-12 w-12 rounded-full flex items-center justify-center flex-shrink-0">
+                        <UserPlus className="h-6 w-6 text-rose-600" />
+                    </div>
+                    <div>
+                        <h4 className="font-bold text-lg text-slate-900">Gynecology</h4>
+                        <p className="text-slate-600 text-sm mt-1">Pregnant women shouldn't wait for hours. Give them exact timing.</p>
+                    </div>
+                </div>
+
                 {/* DENTAL */}
                 <div className="flex gap-4 p-6 rounded-2xl bg-yellow-50 border border-yellow-100 hover:shadow-lg transition-shadow">
                     <div className="bg-yellow-100 h-12 w-12 rounded-full flex items-center justify-center flex-shrink-0">
@@ -491,29 +397,29 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
                     </div>
                     <div>
                         <h4 className="font-bold text-lg text-slate-900">Dental Clinics</h4>
-                        <p className="text-slate-600 text-sm mt-1">Procedures take time. Let patients know exactly when the chair is free.</p>
+                        <p className="text-slate-600 text-sm mt-1">Procedures vary from 15m to 1hr. Live updates keep waiting patients calm.</p>
                     </div>
                 </div>
 
-                 {/* CARDIOLOGY / DIABETES */}
-                 <div className="flex gap-4 p-6 rounded-2xl bg-red-50 border border-red-100 hover:shadow-lg transition-shadow">
-                    <div className="bg-red-100 h-12 w-12 rounded-full flex items-center justify-center flex-shrink-0">
-                        <Heart className="h-6 w-6 text-red-600" />
+                {/* ORTHOPEDIC */}
+                <div className="flex gap-4 p-6 rounded-2xl bg-indigo-50 border border-indigo-100 hover:shadow-lg transition-shadow">
+                    <div className="bg-indigo-100 h-12 w-12 rounded-full flex items-center justify-center flex-shrink-0">
+                        <Activity className="h-6 w-6 text-indigo-600" />
                     </div>
                     <div>
-                        <h4 className="font-bold text-lg text-slate-900">Chronic Care</h4>
-                        <p className="text-slate-600 text-sm mt-1">Elderly patients with recurring visits need a smooth, predictable flow.</p>
+                        <h4 className="font-bold text-lg text-slate-900">Orthopedic</h4>
+                        <p className="text-slate-600 text-sm mt-1">Elderly patients struggle to sit. Reduce physical waiting time in the lobby.</p>
                     </div>
                 </div>
 
-                 {/* LABS */}
-                 <div className="flex gap-4 p-6 rounded-2xl bg-purple-50 border border-purple-100 hover:shadow-lg transition-shadow">
+                {/* DERMATOLOGY */}
+                <div className="flex gap-4 p-6 rounded-2xl bg-purple-50 border border-purple-100 hover:shadow-lg transition-shadow">
                     <div className="bg-purple-100 h-12 w-12 rounded-full flex items-center justify-center flex-shrink-0">
-                        <Syringe className="h-6 w-6 text-purple-600" />
+                        <Sparkles className="h-6 w-6 text-purple-600" />
                     </div>
                     <div>
-                        <h4 className="font-bold text-lg text-slate-900">Scans & Labs</h4>
-                        <p className="text-slate-600 text-sm mt-1">Why stand in line for a blood test? Tokenize the process.</p>
+                        <h4 className="font-bold text-lg text-slate-900">Dermatology</h4>
+                        <p className="text-slate-600 text-sm mt-1">Cosmetic sessions can run late. Auto-adjust the queue so no one waits needlessly.</p>
                     </div>
                 </div>
             </div>
@@ -566,39 +472,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
         </div>
       </section>
 
-      {/* Standard Footer */}
+      {/* Footer */}
       <footer className="bg-white border-t border-slate-200 pt-16 pb-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
-            <div className="col-span-2">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="bg-primary-600 p-1.5 rounded-lg">
-                  <Activity className="h-5 w-5 text-white" />
-                </div>
-                <span className="text-xl font-bold text-slate-900">ClinicQ</span>
-              </div>
-              <p className="text-slate-500 text-sm max-w-xs">
-                Making healthcare accessible, organized, and peaceful for everyone. Built for Tier 2 & Tier 3 cities.
-              </p>
-            </div>
-            <div>
-              <h4 className="font-bold text-slate-900 mb-4">Product</h4>
-              <ul className="space-y-2 text-sm text-slate-600">
-                <li><a href="#" className="hover:text-primary-600">Features</a></li>
-                <li><a href="#" className="hover:text-primary-600">For Doctors</a></li>
-                <li><a href="#" className="hover:text-primary-600">Kiosk Mode</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-bold text-slate-900 mb-4">Company</h4>
-              <ul className="space-y-2 text-sm text-slate-600">
-                <li><a href="#" className="hover:text-primary-600">About</a></li>
-                <li><a href="#" className="hover:text-primary-600">Contact Sales</a></li>
-                <li><a href="#" className="hover:text-primary-600">Support</a></li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-slate-100 pt-8 flex flex-col md:flex-row justify-between items-center text-sm text-slate-400">
+          <div className="flex flex-col md:flex-row justify-between items-center text-sm text-slate-400">
             <p>© 2024 ClinicQ SaaS Inc. All rights reserved.</p>
             <div className="flex gap-6 mt-4 md:mt-0">
               <a href="#" className="hover:text-slate-600">Privacy</a>

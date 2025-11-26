@@ -35,7 +35,12 @@ const createDoctors = (startId: number, count: number, prefix: string): Doctor[]
     status: DoctorStatus.AVAILABLE,
     delayMinutes: 0,
     avatarUrl: `https://picsum.photos/100/100?random=${startId + i}`,
-    weeklySchedule: createDefaultSchedule()
+    weeklySchedule: createDefaultSchedule(),
+    // Randomize Fee between 300 and 1000
+    consultationFee: Math.floor(Math.random() * (1000 - 300 + 1) + 300),
+    // Randomize Rating between 3.5 and 5.0
+    rating: parseFloat((3.5 + Math.random() * 1.5).toFixed(1)),
+    reviewCount: Math.floor(Math.random() * 100) + 10
   }));
 };
 
@@ -48,12 +53,41 @@ export const INITIAL_CLINICS: Clinic[] = [
     city: 'Bangalore',
     address: '12, MG Road, Indiranagar',
     pincode: '560038',
+    operatingHours: '08:00 AM - 09:00 PM',
     coordinates: { x: 30, y: 40 },
     geoLocation: { lat: 12.9716, lng: 77.6412 }, // Indiranagar, Bangalore
     doctors: createDoctors(1, 1, 'c1'),
     patients: [
-      { id: 'p1', name: 'Rohan Gupta', phone: '9998887771', tokenNumber: 101, status: PatientStatus.WITH_DOCTOR, doctorId: 'doc_c1_1', timeAdded: Date.now(), visitType: 'WALK_IN' },
-      { id: 'p2', name: 'Anita Desai', phone: '9998887772', tokenNumber: 102, status: PatientStatus.WAITING, doctorId: 'doc_c1_1', timeAdded: Date.now(), visitType: 'WALK_IN' },
+      { 
+        id: 'p1', 
+        name: 'Rohan Gupta', 
+        phone: '9998887771', 
+        tokenNumber: 101, 
+        status: PatientStatus.WITH_DOCTOR, 
+        doctorId: 'doc_c1_1', 
+        timeAdded: Date.now() - 1000 * 60 * 20, // 20 mins ago
+        visitType: 'WALK_IN',
+        age: '28',
+        gender: 'Male',
+        symptoms: 'High Fever & Cold',
+        isCheckedIn: true,
+        isEmergency: false
+      },
+      { 
+        id: 'p2', 
+        name: 'Anita Desai', 
+        phone: '9998887772', 
+        tokenNumber: 102, 
+        status: PatientStatus.WAITING, 
+        doctorId: 'doc_c1_1', 
+        timeAdded: Date.now() - 1000 * 60 * 5, // 5 mins ago
+        visitType: 'WALK_IN',
+        age: '34',
+        gender: 'Female',
+        symptoms: 'Migraine Headache',
+        isCheckedIn: true,
+        isEmergency: false
+      },
     ]
   },
   {
@@ -64,12 +98,39 @@ export const INITIAL_CLINICS: Clinic[] = [
     city: 'Bangalore',
     address: 'Plot 45, Tech Park Road, Whitefield',
     pincode: '560066',
+    operatingHours: '24 Hours',
     coordinates: { x: 65, y: 70 },
     geoLocation: { lat: 12.9698, lng: 77.7500 }, // Whitefield, Bangalore
     doctors: createDoctors(1, 4, 'c2'), // Increased doctor count to show diverse categories
     patients: [
-      { id: 'p3', name: 'Vikram Singh', phone: '9876543210', tokenNumber: 201, status: PatientStatus.WAITING, doctorId: 'doc_c2_1', timeAdded: Date.now(), visitType: 'WALK_IN' },
-      { id: 'p4', name: 'Priya Mehta', phone: '9876543211', tokenNumber: 202, status: PatientStatus.WAITING, doctorId: 'doc_c2_2', timeAdded: Date.now(), visitType: 'WALK_IN' }
+      { 
+        id: 'p3', 
+        name: 'Vikram Singh', 
+        phone: '9876543210', 
+        tokenNumber: 201, 
+        status: PatientStatus.WAITING, 
+        doctorId: 'doc_c2_1', 
+        timeAdded: Date.now() - 1000 * 60 * 30, 
+        visitType: 'WALK_IN',
+        age: '45',
+        gender: 'Male',
+        symptoms: 'Back Pain',
+        isCheckedIn: true
+      },
+      { 
+        id: 'p4', 
+        name: 'Priya Mehta', 
+        phone: '9876543211', 
+        tokenNumber: 202, 
+        status: PatientStatus.WAITING, 
+        doctorId: 'doc_c2_2', 
+        timeAdded: Date.now() - 1000 * 60 * 10, 
+        visitType: 'WALK_IN',
+        age: '6',
+        gender: 'Female',
+        symptoms: 'Stomach Ache',
+        isCheckedIn: true
+      }
     ]
   },
   {
@@ -80,6 +141,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     city: 'Bangalore',
     address: '88, 5th Block, Koramangala',
     pincode: '560034',
+    operatingHours: '10:00 AM - 08:00 PM',
     coordinates: { x: 45, y: 25 },
     geoLocation: { lat: 12.9352, lng: 77.6245 }, // Koramangala
     doctors: [
@@ -92,7 +154,10 @@ export const INITIAL_CLINICS: Clinic[] = [
             status: DoctorStatus.AVAILABLE,
             delayMinutes: 0,
             avatarUrl: `https://picsum.photos/100/100?random=99`,
-            weeklySchedule: createDefaultSchedule()
+            weeklySchedule: createDefaultSchedule(),
+            consultationFee: 400,
+            rating: 4.8,
+            reviewCount: 124
         }
     ],
     patients: []
@@ -105,6 +170,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     city: 'Mumbai',
     address: '101, Bandra West, Near Sea Link',
     pincode: '400050',
+    operatingHours: '09:00 AM - 06:00 PM',
     coordinates: { x: 20, y: 80 },
     geoLocation: { lat: 19.0596, lng: 72.8295 },
     doctors: [
@@ -117,7 +183,10 @@ export const INITIAL_CLINICS: Clinic[] = [
             status: DoctorStatus.AVAILABLE,
             delayMinutes: 0,
             avatarUrl: `https://picsum.photos/100/100?random=102`,
-            weeklySchedule: createDefaultSchedule()
+            weeklySchedule: createDefaultSchedule(),
+            consultationFee: 1200,
+            rating: 4.9,
+            reviewCount: 312
         }
     ],
     patients: []
@@ -130,6 +199,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     city: 'Chennai',
     address: '45, Anna Salai, Guindy',
     pincode: '600032',
+    operatingHours: '24 Hours',
     coordinates: { x: 60, y: 60 },
     geoLocation: { lat: 13.0067, lng: 80.2206 },
     doctors: [
@@ -142,7 +212,10 @@ export const INITIAL_CLINICS: Clinic[] = [
             status: DoctorStatus.AVAILABLE,
             delayMinutes: 0,
             avatarUrl: `https://picsum.photos/100/100?random=108`,
-            weeklySchedule: createDefaultSchedule()
+            weeklySchedule: createDefaultSchedule(),
+            consultationFee: 600,
+            rating: 4.5,
+            reviewCount: 89
         },
         {
             id: 'doc_c5_2',
@@ -153,7 +226,10 @@ export const INITIAL_CLINICS: Clinic[] = [
             status: DoctorStatus.AVAILABLE,
             delayMinutes: 0,
             avatarUrl: `https://picsum.photos/100/100?random=109`,
-            weeklySchedule: createDefaultSchedule()
+            weeklySchedule: createDefaultSchedule(),
+            consultationFee: 700,
+            rating: 4.7,
+            reviewCount: 156
         }
     ],
     patients: []

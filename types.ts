@@ -28,6 +28,18 @@ export enum PlanType {
   PREMIUM = 'Premium'
 }
 
+export enum ClinicType {
+    GENERAL = 'GENERAL',
+    PEDIATRIC = 'PEDIATRIC',
+    GYNECOLOGY = 'GYNECOLOGY',
+    ORTHOPEDIC = 'ORTHOPEDIC',
+    DENTAL = 'DENTAL',
+    CARDIOLOGY = 'CARDIOLOGY',
+    DERMATOLOGY = 'DERMATOLOGY',
+    EMERGENCY = 'EMERGENCY',
+    OTHER = 'OTHER'
+}
+
 export interface DaySchedule {
   day: string; // 'Monday', 'Tuesday', etc.
   startTime: string; // "09:00"
@@ -45,6 +57,9 @@ export interface Doctor {
   delayMinutes: number; // New field for delays
   avatarUrl?: string;
   weeklySchedule: DaySchedule[]; // New: 7-day specific schedule
+  consultationFee: number; // New: Individual fee
+  rating: number; // New: Individual rating
+  reviewCount: number; // New: Individual review count
 }
 
 export interface PainPoint {
@@ -58,6 +73,17 @@ export interface Vitals {
   temp?: string;
   weight?: string;
   pulse?: string;
+  spo2?: string; // Oxygen Saturation
+  height?: string; // cm or ft
+  sugar?: string; // Blood Sugar mg/dL
+  // Specialty Specific
+  headCircumference?: string; // Pediatric
+  fetalHeartRate?: string; // Gynecology
+  lmp?: string; // Gynecology
+  pregnancyWeek?: string; // Gynecology
+  painScale?: string; // Ortho
+  triageColor?: 'RED' | 'YELLOW' | 'GREEN'; // Emergency
+  gcsScore?: string; // Emergency
 }
 
 export interface Patient {
@@ -103,6 +129,7 @@ export interface Clinic {
   name: string;
   slug: string;
   plan: PlanType;
+  type?: ClinicType; 
   doctors: Doctor[];
   patients: Patient[];
   // Location Data
@@ -111,6 +138,10 @@ export interface Clinic {
   pincode: string;
   coordinates?: { x: number, y: number }; // Mock coordinates for map viz (0-100%)
   geoLocation?: { lat: number, lng: number }; // Real GPS coordinates for distance calc
+  operatingHours?: string; // e.g. "09:00 AM - 09:00 PM"
+  // Admin Data
+  subscriptionStatus?: 'ACTIVE' | 'SUSPENDED' | 'PAST_DUE';
+  joinedDate?: number;
 }
 
 // Pricing Types

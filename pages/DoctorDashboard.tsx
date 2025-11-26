@@ -1,10 +1,10 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Doctor, Patient, PatientStatus, DoctorStatus, PainPoint } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { generatePatientSummary } from '../services/geminiService';
-import { Check, Clock, FileText, Sparkles, User, SkipForward, CalendarClock, AlertCircle, Coffee, Clock12, PlayCircle, Zap, Activity, Thermometer, Weight, Heart, Plus, Calendar } from 'lucide-react';
+import { Check, Clock, FileText, Sparkles, User, SkipForward, CalendarClock, AlertCircle, Coffee, Clock12, PlayCircle, Zap, Activity, Thermometer, Weight, Heart, Plus, Calendar, Pill, Trash2, Printer, Droplets, Ruler, Gauge } from 'lucide-react';
 
 interface DoctorProps {
   doctor: Doctor;
@@ -13,6 +13,12 @@ interface DoctorProps {
   onCompletePatient: (id: string, notes: string) => void;
   onUpdateStatus: (id: string, status: DoctorStatus, delay: number) => void;
   onUpdatePatientDetails: (id: string, updates: Partial<Patient>) => void;
+}
+
+interface PrescriptionItem {
+    name: string;
+    dosage: string; // e.g., "1-0-1"
+    duration: string; // e.g., "5 days"
 }
 
 const COMMON_DIAGNOSES = [
@@ -24,23 +30,20 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
   const [isAiLoading, setIsAiLoading] = useState(false);
   
   // Vitals State (Local to current patient session)
-  const [vitals, setVitals] = useState({ bp: '', temp: '', weight: '', pulse: '' });
+  const [vitals, setVitals] = useState({ bp: '', temp: '', weight: '', pulse: '', spo2: '', height: '', sugar: '' });
   const [painPoints, setPainPoints] = useState<PainPoint[]>([]);
 
-  // ------------------------------------------------------------
+  // Prescription State
+  const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>([]);
+  const [rxForm, setRxForm] = useState({ name: '', dosage: '1-0-1', duration: '3 days' });
+
   // SMART HYBRID QUEUE LOGIC
-  // ------------------------------------------------------------
   const { currentPatient, sortedQueue, dueAppointments } = useMemo(() => {
     const current = queue.find(p => p.status === PatientStatus.WITH_DOCTOR);
-    
-    // Get all waiting patients
     const waiting = queue.filter(p => p.status === PatientStatus.WAITING);
-
-    // Get current time
     const now = new Date();
     const currentMins = now.getHours() * 60 + now.getMinutes();
     
-    // Time helper
     const timeToMins = (t?: string) => {
         if (!t) return 0;
         const [h, m] = t.split(':').map(Number);
@@ -50,52 +53,28 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
     const LATE_THRESHOLD_MINS = 15;
 
     const classifyPatient = (p: Patient) => {
-        if (p.isEmergency) return 1; // Highest Priority
-
+        if (p.isEmergency) return 1; 
         if (p.visitType === 'APPOINTMENT' && p.appointmentTime) {
             const apptMins = timeToMins(p.appointmentTime);
             const minsUntilAppt = apptMins - currentMins;
-
-            // Priority 2: Appointment Checked In OR On-Time (within window and not late)
-            // Priority 3: Walk-in
-            // Priority 4: Appointment Not Checked In & Imminent (<15 mins away) or Late
-            // Priority 5: Future (>15 mins away)
-
-            if (minsUntilAppt > LATE_THRESHOLD_MINS) return 5; // Future
-
-            // If Checked In, they maintain Priority 2
+            if (minsUntilAppt > LATE_THRESHOLD_MINS) return 5;
             if (p.isCheckedIn) return 2;
-
-            // If NOT Checked in, and we are within the 15 min window (or late), they drop below walk-ins
             if (minsUntilAppt <= LATE_THRESHOLD_MINS) return 4; 
-
-            return 2; // Default catch-all for appointment
+            return 2; 
         }
-
-        // Walk-in is Priority 3
         return 3;
     };
 
     const sorted = waiting.sort((a, b) => {
         const priorityA = classifyPatient(a);
         const priorityB = classifyPatient(b);
-
-        if (priorityA !== priorityB) {
-            return priorityA - priorityB; // Lower number = higher priority
-        }
-
-        // Tie-breakers
-        
-        // If both are Appointments in the same priority bracket (e.g. both Due), sort by Appt Time
+        if (priorityA !== priorityB) return priorityA - priorityB;
         if (a.visitType === 'APPOINTMENT' && b.visitType === 'APPOINTMENT' && a.appointmentTime && b.appointmentTime) {
              return timeToMins(a.appointmentTime) - timeToMins(b.appointmentTime);
         }
-
-        // Default: FIFO based on Token Number (Arrival order - handles manual reorder timestamps)
         return a.timeAdded - b.timeAdded;
     });
 
-    // Identify strict "Due" appointments for the UI Badge
     const due = waiting.filter(p => {
         if (p.visitType !== 'APPOINTMENT' || !p.appointmentTime) return false;
         const t = timeToMins(p.appointmentTime);
@@ -107,23 +86,27 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
         sortedQueue: sorted,
         dueAppointments: due
     };
-  }, [queue]); // Re-run every time queue changes
+  }, [queue]);
 
-  // Reset local state when patient changes
-  React.useEffect(() => {
+  useEffect(() => {
       if (currentPatient) {
           setNotes(currentPatient.notes || '');
           setVitals({
               bp: currentPatient.vitals?.bp || '',
               temp: currentPatient.vitals?.temp || '',
               weight: currentPatient.vitals?.weight || '',
-              pulse: currentPatient.vitals?.pulse || ''
+              pulse: currentPatient.vitals?.pulse || '',
+              spo2: currentPatient.vitals?.spo2 || '',
+              height: currentPatient.vitals?.height || '',
+              sugar: currentPatient.vitals?.sugar || ''
           });
           setPainPoints(currentPatient.painPoints || []);
+          setPrescriptions([]); // Clear Rx for new patient
       } else {
           setNotes('');
-          setVitals({ bp: '', temp: '', weight: '', pulse: '' });
+          setVitals({ bp: '', temp: '', weight: '', pulse: '', spo2: '', height: '', sugar: '' });
           setPainPoints([]);
+          setPrescriptions([]);
       }
   }, [currentPatient?.id]);
 
@@ -137,9 +120,14 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
 
   const handleComplete = () => {
     if (currentPatient) {
-      // Save vitals/pain points one last time before completing
+      // Build final note with Rx appended
+      let finalNote = notes;
+      if (prescriptions.length > 0) {
+          finalNote += `\n\n--- PRESCRIPTION ---\n` + prescriptions.map(rx => `• ${rx.name} (${rx.dosage}) for ${rx.duration}`).join('\n');
+      }
+
       onUpdatePatientDetails(currentPatient.id, { vitals, painPoints });
-      onCompletePatient(currentPatient.id, notes);
+      onCompletePatient(currentPatient.id, finalNote);
       setNotes('');
     }
   };
@@ -150,7 +138,6 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
   };
 
   const toggleDelay = () => {
-      // Toggle between 0 and 15 mins delay for MVP simplicity
       const newDelay = doctor.delayMinutes === 0 ? 15 : 0;
       onUpdateStatus(doctor.id, doctor.status, newDelay);
   };
@@ -171,6 +158,18 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
       const date = new Date();
       date.setDate(date.getDate() + days);
       setNotes(prev => prev ? `${prev}\n[System]: Follow up in ${days} days (${date.toLocaleDateString()})` : `[System]: Follow up in ${days} days (${date.toLocaleDateString()})`);
+  };
+
+  // Rx Helpers
+  const addPrescription = () => {
+      if (rxForm.name) {
+          setPrescriptions([...prescriptions, { ...rxForm }]);
+          setRxForm({ name: '', dosage: '1-0-1', duration: '3 days' });
+      }
+  };
+
+  const removePrescription = (index: number) => {
+      setPrescriptions(prescriptions.filter((_, i) => i !== index));
   };
 
   return (
@@ -208,7 +207,6 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
                     {doctor.delayMinutes > 0 ? 'Clear Delay' : 'Report 15m Delay'}
                  </Button>
              </div>
-
              {dueAppointments.length > 0 && (
                 <div className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg border border-purple-200 text-sm font-bold flex items-center animate-pulse">
                     <AlertCircle className="h-4 w-4 mr-2" />
@@ -252,150 +250,88 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
                      <span>Token #{currentPatient.tokenNumber}</span>
                      <span>•</span>
                      <span className="uppercase font-semibold tracking-wide">{currentPatient.visitType}</span>
-                     {currentPatient.appointmentTime && <span>({currentPatient.appointmentTime})</span>}
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="bg-white/10 px-3 py-1 rounded-md text-sm backdrop-blur-sm mb-1">
-                    In Consultation
-                  </div>
-                  {currentPatient.symptoms && (
-                      <div className="text-xs text-white/90 italic font-medium">
-                          Reason: {currentPatient.symptoms}
-                      </div>
-                  )}
+                  <div className="bg-white/10 px-3 py-1 rounded-md text-sm backdrop-blur-sm mb-1">In Consultation</div>
+                  {currentPatient.symptoms && (<div className="text-xs text-white/90 italic font-medium">Reason: {currentPatient.symptoms}</div>)}
                 </div>
               </div>
               
               <div className="p-6 flex-1 flex flex-col overflow-y-auto">
                 {/* Vitals Input Section */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1 mb-1">
-                            <Activity className="h-3 w-3" /> BP
-                        </label>
-                        <input 
-                            className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" 
-                            placeholder="120/80" 
-                            value={vitals.bp}
-                            onChange={(e) => setVitals({...vitals, bp: e.target.value})}
-                        />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1 mb-1">
-                            <Thermometer className="h-3 w-3" /> Temp (F)
-                        </label>
-                        <input 
-                            className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" 
-                            placeholder="98.6"
-                            value={vitals.temp}
-                            onChange={(e) => setVitals({...vitals, temp: e.target.value})}
-                        />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1 mb-1">
-                            <Weight className="h-3 w-3" /> Weight (kg)
-                        </label>
-                        <input 
-                            className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" 
-                            placeholder="70"
-                            value={vitals.weight}
-                            onChange={(e) => setVitals({...vitals, weight: e.target.value})}
-                        />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1 mb-1">
-                            <Heart className="h-3 w-3" /> Pulse
-                        </label>
-                        <input 
-                            className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" 
-                            placeholder="72"
-                            value={vitals.pulse}
-                            onChange={(e) => setVitals({...vitals, pulse: e.target.value})}
-                        />
-                    </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div><label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-1"><Activity className="h-3 w-3" /> BP</label><input className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" placeholder="120/80" value={vitals.bp} onChange={(e) => setVitals({...vitals, bp: e.target.value})}/></div>
+                    <div><label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-1"><Thermometer className="h-3 w-3" /> Temp</label><input className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" placeholder="98.6" value={vitals.temp} onChange={(e) => setVitals({...vitals, temp: e.target.value})}/></div>
+                    <div><label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-1"><Weight className="h-3 w-3" /> Wt(kg)</label><input className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" placeholder="70" value={vitals.weight} onChange={(e) => setVitals({...vitals, weight: e.target.value})}/></div>
+                    <div><label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-1"><Heart className="h-3 w-3" /> Pulse</label><input className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" placeholder="72" value={vitals.pulse} onChange={(e) => setVitals({...vitals, pulse: e.target.value})}/></div>
+                    <div><label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-1"><Zap className="h-3 w-3" /> SpO2</label><input className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" placeholder="98%" value={vitals.spo2} onChange={(e) => setVitals({...vitals, spo2: e.target.value})}/></div>
+                    <div><label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-1"><Ruler className="h-3 w-3" /> Ht(cm)</label><input className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" placeholder="175" value={vitals.height} onChange={(e) => setVitals({...vitals, height: e.target.value})}/></div>
+                    <div><label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-1"><Droplets className="h-3 w-3" /> Sugar</label><input className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" placeholder="mg/dL" value={vitals.sugar} onChange={(e) => setVitals({...vitals, sugar: e.target.value})}/></div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 flex-1">
-                    {/* Notes Section */}
+                    {/* Notes & Rx */}
                     <div className="md:col-span-2 flex flex-col">
-                        <div className="flex justify-between items-center mb-2">
-                             <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                                <FileText className="h-4 w-4" />
-                                Consultation Notes
-                             </label>
-                             <Button size="sm" variant="ghost" onClick={handleAiAssist} disabled={!notes || isAiLoading} className="text-purple-600 h-6 text-xs">
-                                <Sparkles className="h-3 w-3 mr-1" />
-                                {isAiLoading ? 'Thinking...' : 'AI Summary'}
-                             </Button>
+                        {/* Tab-like header */}
+                        <div className="flex gap-4 border-b border-slate-100 pb-2 mb-2">
+                             <div className="font-bold text-sm text-primary-600 flex items-center gap-2 border-b-2 border-primary-600 pb-2 -mb-2.5"><FileText className="h-4 w-4"/> Clinical Notes</div>
                         </div>
+
                         <textarea 
-                            className="flex-1 w-full p-4 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none font-mono text-sm leading-relaxed mb-3"
-                            placeholder="Type raw notes here (e.g., 'fever 3 days, cough, lungs clear')..."
+                            className="flex-1 w-full p-4 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none font-mono text-sm leading-relaxed mb-3 min-h-[100px]"
+                            placeholder="Type findings here..."
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                         />
                         
-                        {/* Quick Templates */}
-                        <div className="flex flex-wrap gap-2">
-                            {COMMON_DIAGNOSES.map(d => (
-                                <button 
-                                    key={d}
-                                    onClick={() => addTemplateNote(d)}
-                                    className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded border border-slate-200 transition-colors"
-                                >
-                                    + {d}
-                                </button>
-                            ))}
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            {COMMON_DIAGNOSES.map(d => (<button key={d} onClick={() => addTemplateNote(d)} className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded border border-slate-200 transition-colors">+ {d}</button>))}
+                             <Button size="sm" variant="ghost" onClick={handleAiAssist} disabled={!notes || isAiLoading} className="text-purple-600 h-7 text-xs ml-auto"><Sparkles className="h-3 w-3 mr-1" /> AI Summary</Button>
+                        </div>
+
+                        {/* PRESCRIPTION BUILDER */}
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                             <h4 className="font-bold text-sm text-slate-700 mb-3 flex items-center gap-2"><Pill className="h-4 w-4"/> Rx (Prescription)</h4>
+                             
+                             <div className="flex gap-2 mb-3">
+                                 <input placeholder="Medicine Name (e.g. Dolo 650)" className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm" value={rxForm.name} onChange={e => setRxForm({...rxForm, name: e.target.value})} />
+                                 <select className="rounded border border-slate-300 px-2 py-1 text-sm" value={rxForm.dosage} onChange={e => setRxForm({...rxForm, dosage: e.target.value})}><option>1-0-1</option><option>1-0-0</option><option>0-0-1</option><option>1-1-1</option><option>SOS</option></select>
+                                 <select className="rounded border border-slate-300 px-2 py-1 text-sm" value={rxForm.duration} onChange={e => setRxForm({...rxForm, duration: e.target.value})}><option>3 days</option><option>5 days</option><option>7 days</option><option>15 days</option><option>1 month</option></select>
+                                 <Button size="sm" onClick={addPrescription}>Add</Button>
+                             </div>
+
+                             {prescriptions.length > 0 && (
+                                 <div className="space-y-1">
+                                     {prescriptions.map((rx, idx) => (
+                                         <div key={idx} className="flex justify-between items-center bg-white px-3 py-2 rounded border border-slate-200 shadow-sm">
+                                             <div className="text-sm"><span className="font-bold">{rx.name}</span> <span className="text-slate-500 mx-2">|</span> {rx.dosage} <span className="text-slate-500 mx-2">|</span> {rx.duration}</div>
+                                             <button onClick={() => removePrescription(idx)} className="text-slate-400 hover:text-red-500"><Trash2 className="h-4 w-4"/></button>
+                                         </div>
+                                     ))}
+                                 </div>
+                             )}
                         </div>
                     </div>
 
                     {/* Body Map Canvas */}
                     <div className="border border-slate-200 rounded-lg p-2 bg-slate-50 flex flex-col items-center justify-center relative select-none">
                         <span className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Pain Points</span>
-                        <div 
-                            className="relative h-64 w-32 cursor-crosshair"
-                            onClick={handleBodyClick}
-                        >
-                            {/* Simple Body SVG Silhouette */}
+                        <div className="relative h-64 w-32 cursor-crosshair" onClick={handleBodyClick}>
                             <svg viewBox="0 0 100 200" className="h-full w-full opacity-20 hover:opacity-40 transition-opacity">
                                 <path d="M50,10 C60,10 65,15 65,25 C65,35 60,40 50,40 C40,40 35,35 35,25 C35,15 40,10 50,10 Z M50,40 C70,45 80,50 85,80 L80,110 L70,105 L75,80 C70,60 65,60 65,100 L70,180 L55,180 L50,130 L45,180 L30,180 L35,100 C35,60 30,60 25,80 L20,105 L10,110 L15,80 C20,50 30,45 50,40 Z" fill="currentColor" />
                             </svg>
-                            {/* Render Points */}
-                            {painPoints.map((p, i) => (
-                                <div 
-                                    key={i} 
-                                    className="absolute w-3 h-3 bg-red-500 rounded-full border border-white shadow-sm transform -translate-x-1/2 -translate-y-1/2"
-                                    style={{ left: `${p.x}%`, top: `${p.y}%` }}
-                                ></div>
-                            ))}
+                            {painPoints.map((p, i) => (<div key={i} className="absolute w-3 h-3 bg-red-500 rounded-full border border-white shadow-sm transform -translate-x-1/2 -translate-y-1/2" style={{ left: `${p.x}%`, top: `${p.y}%` }}></div>))}
                         </div>
-                        <button 
-                            className="mt-2 text-xs text-slate-400 hover:text-red-500 underline"
-                            onClick={() => setPainPoints([])}
-                        >
-                            Clear Map
-                        </button>
+                        <button className="mt-2 text-xs text-slate-400 hover:text-red-500 underline" onClick={() => setPainPoints([])}>Clear Map</button>
                     </div>
                 </div>
 
                 <div className="mt-auto border-t border-slate-100 pt-4 grid grid-cols-2 gap-4 items-center">
-                  <div className="flex gap-2">
-                       <Button size="sm" variant="secondary" onClick={() => addFollowUp(3)} className="text-xs">
-                           <Calendar className="h-3 w-3 mr-1" /> +3 Days
-                       </Button>
-                       <Button size="sm" variant="secondary" onClick={() => addFollowUp(7)} className="text-xs">
-                           <Calendar className="h-3 w-3 mr-1" /> +1 Week
-                       </Button>
-                  </div>
+                  <div className="flex gap-2"><Button size="sm" variant="secondary" onClick={() => addFollowUp(3)} className="text-xs"><Calendar className="h-3 w-3 mr-1" /> +3 Days</Button><Button size="sm" variant="secondary" onClick={() => addFollowUp(7)} className="text-xs"><Calendar className="h-3 w-3 mr-1" /> +1 Week</Button></div>
                   <div className="flex justify-end gap-3">
-                      <Button variant="secondary" onClick={() => {/* Skip logic */}}>
-                        Wait / Hold
-                      </Button>
-                      <Button variant="primary" onClick={handleComplete}>
-                        <Check className="h-4 w-4 mr-2" />
-                        Complete Consultation
-                      </Button>
+                      <Button variant="secondary">Hold</Button>
+                      <Button variant="primary" onClick={handleComplete}><Check className="h-4 w-4 mr-2" /> Complete & Print</Button>
                   </div>
                 </div>
               </div>
@@ -404,84 +340,40 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
             <div className="h-full flex flex-col items-center justify-center bg-white rounded-xl border border-dashed border-slate-300 text-slate-400">
               <User className="h-16 w-16 mb-4 opacity-20" />
               <h3 className="text-xl font-medium text-slate-600">Ready for Next Patient</h3>
-              <p className="mb-6">The queue is optimized based on priority, appointment times, and walk-ins.</p>
               {sortedQueue.length > 0 ? (
-                <div className="text-center">
-                    <p className="text-sm text-slate-500 mb-3">
-                        Up Next: <span className="font-bold text-slate-800">{sortedQueue[0].name}</span> 
-                        {sortedQueue[0].isEmergency && <span className="text-orange-600 font-bold ml-1">(EMERGENCY)</span>}
-                        {!sortedQueue[0].isEmergency && sortedQueue[0].visitType === 'APPOINTMENT' && <span className="text-purple-600 font-bold ml-1">(Appt)</span>}
-                    </p>
-                    <Button onClick={onNextPatient} size="lg" className={`shadow-lg ${sortedQueue[0].isEmergency ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-200' : 'shadow-primary-100'}`}>
-                        <PlayCircle className="h-5 w-5 mr-2" />
-                        Call Next Patient (#{sortedQueue[0].tokenNumber})
-                    </Button>
+                <div className="text-center mt-4">
+                    <p className="text-sm text-slate-500 mb-3">Up Next: <span className="font-bold text-slate-800">{sortedQueue[0].name}</span></p>
+                    <Button onClick={onNextPatient} size="lg" className={`shadow-lg ${sortedQueue[0].isEmergency ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-200' : 'shadow-primary-100'}`}><PlayCircle className="h-5 w-5 mr-2" /> Call Next Patient (#{sortedQueue[0].tokenNumber})</Button>
                 </div>
-              ) : (
-                <p className="text-sm">Waiting for patients...</p>
-              )}
+              ) : <p className="text-sm">Waiting for patients...</p>}
             </div>
           )}
         </div>
 
         {/* Sidebar Queue */}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
-          <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-            <h3 className="font-semibold text-slate-700">Smart Queue</h3>
-            <span className="text-xs bg-slate-200 px-2 py-1 rounded text-slate-600">Auto-Sorted</span>
-          </div>
+          <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center"><h3 className="font-semibold text-slate-700">Smart Queue</h3><span className="text-xs bg-slate-200 px-2 py-1 rounded text-slate-600">Auto-Sorted</span></div>
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
-            {sortedQueue.length === 0 ? (
-                <div className="p-8 text-center text-slate-500 text-sm">
-                    Queue is empty.
-                </div>
-            ) : (
-                sortedQueue.map((p, idx) => {
+            {sortedQueue.length === 0 ? <div className="p-8 text-center text-slate-500 text-sm">Queue is empty.</div> : sortedQueue.map((p, idx) => {
                     const isAppt = p.visitType === 'APPOINTMENT';
-                    
-                    // Re-calc specific status for list item view
                     const now = new Date();
                     const currentMins = now.getHours() * 60 + now.getMinutes();
                     const apptMins = p.appointmentTime ? parseInt(p.appointmentTime.split(':')[0]) * 60 + parseInt(p.appointmentTime.split(':')[1]) : 0;
-                    
-                    // Logic check for visual labels
-                    const isDue = isAppt && apptMins <= currentMins && currentMins <= apptMins + 15;
-                    const isLate = isAppt && currentMins > apptMins + 15;
                     const isNotCheckedIn = isAppt && !p.isCheckedIn && (currentMins > apptMins - 15);
 
                     return (
                         <div key={p.id} className={`p-3 rounded-lg border transition-colors flex justify-between items-center group ${idx === 0 ? 'bg-blue-50 border-blue-200' : 'border-slate-100 hover:bg-slate-50'}`}>
                             <div className="flex items-center gap-3">
-                                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${p.isEmergency ? 'bg-orange-100 text-orange-700' : isAppt ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-600'}`}>
-                                    {p.isEmergency ? <Zap className="h-4 w-4 fill-current"/> : p.tokenNumber}
-                                </div>
+                                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${p.isEmergency ? 'bg-orange-100 text-orange-700' : isAppt ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-600'}`}>{p.isEmergency ? <Zap className="h-4 w-4 fill-current"/> : p.tokenNumber}</div>
                                 <div>
-                                    <div className="flex items-center gap-2">
-                                        <p className="font-medium text-slate-900 text-sm">{p.name}</p>
-                                        {(p.age || p.gender) && <span className="text-[10px] text-slate-500">({p.age}, {p.gender?.[0]})</span>}
-                                        {p.isEmergency && <span className="text-[10px] bg-orange-500 text-white font-bold px-1 py-0.5 rounded">URGENT</span>}
-                                        {p.isCheckedIn && <span className="text-[10px] bg-green-500 text-white font-bold px-1 py-0.5 rounded">HERE</span>}
-                                        {isNotCheckedIn && <span className="text-[10px] bg-slate-200 text-slate-500 font-bold px-1 py-0.5 rounded">NO SHOW?</span>}
-                                    </div>
-                                    <p className="text-xs text-slate-500 flex items-center gap-1">
-                                        {isAppt ? (
-                                            <><CalendarClock className="h-3 w-3" /> {p.appointmentTime}</>
-                                        ) : (
-                                            <><User className="h-3 w-3" /> Walk-in</>
-                                        )}
-                                        {p.symptoms && <span className="ml-1 text-slate-400 italic truncate max-w-[80px]">- {p.symptoms}</span>}
-                                    </p>
+                                    <div className="flex items-center gap-2"><p className="font-medium text-slate-900 text-sm">{p.name}</p>{p.isEmergency && <span className="text-[10px] bg-orange-500 text-white font-bold px-1 py-0.5 rounded">URGENT</span>}{p.isCheckedIn && <span className="text-[10px] bg-green-500 text-white font-bold px-1 py-0.5 rounded">HERE</span>}{isNotCheckedIn && <span className="text-[10px] bg-slate-200 text-slate-500 font-bold px-1 py-0.5 rounded">NO SHOW?</span>}</div>
+                                    <p className="text-xs text-slate-500 flex items-center gap-1">{isAppt ? <><CalendarClock className="h-3 w-3" /> {p.appointmentTime}</> : <><User className="h-3 w-3" /> Walk-in</>}</p>
                                 </div>
                             </div>
-                            {idx === 0 && !currentPatient && doctor.status === DoctorStatus.AVAILABLE && (
-                            <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100" onClick={onNextPatient}>
-                                <SkipForward className="h-4 w-4" />
-                            </Button>
-                            )}
+                            {idx === 0 && !currentPatient && doctor.status === DoctorStatus.AVAILABLE && <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100" onClick={onNextPatient}><SkipForward className="h-4 w-4" /></Button>}
                         </div>
                     );
-                })
-            )}
+                })}
           </div>
         </div>
       </div>

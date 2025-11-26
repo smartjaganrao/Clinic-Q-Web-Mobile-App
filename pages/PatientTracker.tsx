@@ -5,7 +5,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Badge } from '../components/Badge';
-import { ArrowLeft, MapPin, Search, Building, Ticket, CalendarCheck, User, Users, Plus, Trash2, Save, History, Clock, ChevronRight, Activity, ChevronLeft, AlertTriangle, QrCode, Map, List, ScanLine, LogOut, Zap, AlertCircle, LocateFixed, Navigation, Heart, Smile, Baby, Stethoscope, Microscope, Brain, Filter, FileText, RefreshCcw, Bell, BellRing, BellOff, Calendar, Star, XCircle, Map as MapIcon, CheckCircle, X, Thermometer, Sparkles, Check, Info, Wallet, ShieldCheck, ThumbsUp, ArrowUpDown, ChevronDown, GraduationCap, Languages, BadgeCheck, Phone } from 'lucide-react';
+import { ArrowLeft, MapPin, Search, Building, Ticket, CalendarCheck, User, Users, Plus, Trash2, Save, History, Clock, ChevronRight, Activity, ChevronLeft, AlertTriangle, QrCode, Map, List, ScanLine, LogOut, Zap, AlertCircle, LocateFixed, Navigation, Heart, Smile, Baby, Stethoscope, Microscope, Brain, Filter, FileText, RefreshCcw, Bell, BellRing, BellOff, Calendar, Star, XCircle, Map as MapIcon, CheckCircle, X, Thermometer, Sparkles, Check, Info, Wallet, ShieldCheck, ThumbsUp, ArrowUpDown, ChevronDown, GraduationCap, Languages, BadgeCheck, Phone, FilterX, Clock12 } from 'lucide-react';
 
 interface PatientTrackerProps {
   clinics: Clinic[];
@@ -109,21 +109,6 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
     return R * c; // Distance in km
 };
 
-// MOCK DATA GENERATORS FOR UI POLISH (Since backend doesn't exist yet)
-const getRandomRating = (id: string) => {
-    const seed = id.charCodeAt(id.length - 1);
-    return (4.0 + (seed % 10) / 10).toFixed(1);
-};
-
-const getRandomReviewCount = (id: string) => {
-    const seed = id.charCodeAt(id.length - 1);
-    return 20 + (seed * 5);
-};
-
-const getRandomFee = (plan: any) => {
-    return plan === 'Premium' ? 800 : plan === 'Small Hospital' ? 500 : 300;
-};
-
 const getFacilities = (clinicName: string) => {
     if (clinicName.includes('Hospital')) return ['Pharmacy', 'X-Ray', 'Parking', '24/7', 'ICU', 'Ambulance'];
     if (clinicName.includes('Dental')) return ['X-Ray', 'Cosmetic', 'Implants', 'Aligners'];
@@ -152,6 +137,25 @@ const getDoctorExtras = (id: string) => {
     };
 };
 
+const getRandomRating = (id: string) => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = id.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    // Map to range 3.8 to 4.9
+    const rating = 3.8 + (Math.abs(hash) % 12) / 10;
+    return rating.toFixed(1);
+};
+
+const getRandomReviewCount = (id: string) => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = id.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    // Map to range 20 to 500
+    return 20 + (Math.abs(hash) % 481);
+};
+
 export const PatientTracker: React.FC<PatientTrackerProps> = ({ 
     clinics, userPhone, userName, onBack, onGetToken, addToast, onUpdateDetails, onCancelVisit, onCheckIn,
     preSelectedClinicId, onClearPendingAction 
@@ -175,6 +179,10 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+
+  // -- DOCTOR FILTER STATE (Clinic Details View) --
+  const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
+  const [doctorSortBy, setDoctorSortBy] = useState<'DEFAULT' | 'RATING' | 'EXPERIENCE' | 'FEE_LOW' | 'FEE_HIGH'>('DEFAULT');
 
   // -- CANCEL CONFIRMATION STATE --
   const [cancelModal, setCancelModal] = useState<{ isOpen: boolean; clinicId: string; visitId: string; patientName: string } | null>(null);
@@ -492,6 +500,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       onGetToken(newName, newPhone, selectedDocId, currentClinic.id, isAppointmentMode ? selectedSlot : undefined, isAppointmentMode ? chosenDateStr : undefined, newAge, newGender, newSymptoms);
       setActiveTab('ACTIVE');
       setBookingView('SEARCH');
+      // Fix: Reset selected clinic so going back to Find Care works
+      setSelectedClinicId('');
       setNewName(''); setNewPhone(''); setNewAge(''); setNewSymptoms(''); setSelectedDocId(''); setSelectedSlot(''); setIsAppointmentMode(false);
   };
 
@@ -563,30 +573,62 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     return days;
   };
 
-  if (showQRScanner) {
-      return (
-          <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center text-white">
-              <button onClick={() => setShowQRScanner(false)} className="absolute top-4 left-4 p-2 bg-black/50 rounded-full"><ArrowLeft className="h-6 w-6" /></button>
-              <div className="w-64 h-64 border-2 border-primary-500 rounded-2xl relative overflow-hidden bg-white/5">
-                  <div className="absolute inset-0 border-t-4 border-primary-500 animate-pulse top-0 h-full w-full bg-gradient-to-b from-primary-500/20 to-transparent"></div>
-              </div>
-              <p className="mt-8 text-center px-6">Scan QR at reception to Check-in</p>
-          </div>
-      );
-  }
+  // SMART BACK BUTTON LOGIC
+  const handleInternalBack = () => {
+      // 1. Deep linking in Find Care (NEW) tab
+      if (activeTab === 'NEW' && selectedClinicId) {
+          if (bookingView === 'BOOKING_FORM') {
+              setBookingView('CLINIC_DETAILS');
+              return;
+          }
+          if (bookingView === 'CLINIC_DETAILS') {
+              setBookingView('SEARCH');
+              setSelectedClinicId('');
+              return;
+          }
+          // Failsafe if state gets stuck
+          setBookingView('SEARCH');
+          setSelectedClinicId('');
+          return;
+      }
 
-  // ------------------------------------------------------------------------------------------------
-  // VIEW: FIND CARE (REDESIGNED)
-  // ------------------------------------------------------------------------------------------------
-  if (!selectedClinicId && activeTab === 'NEW') {
-    const filteredClinics = clinics
+      // 2. Tab Navigation - If not on Home tab, go to Home tab
+      if (activeTab !== 'NEW') {
+          setActiveTab('NEW');
+          // Ensure we go back to root search when switching back
+          if(selectedClinicId) setSelectedClinicId('');
+          return;
+      }
+
+      // 3. Root Level - Exit App
+      onBack();
+  };
+
+  // Determine which icon to show for the Back button
+  // Show ArrowLeft (Back) if:
+  // - We are in the NEW tab but deeper than the root search list (selectedClinicId is set)
+  // - We are in any other tab (Active, History, Profile)
+  const showArrowBack = (activeTab === 'NEW' && !!selectedClinicId) || activeTab !== 'NEW';
+
+  // FILTERED CLINICS LOGIC (For Discovery View)
+  const filteredClinics = useMemo(() => {
+     if (activeTab !== 'NEW' || selectedClinicId) return [];
+     
+     return clinics
         .map(clinic => {
             let distance = null;
             if (userLocation && clinic.geoLocation) distance = calculateDistance(userLocation.lat, userLocation.lng, clinic.geoLocation.lat, clinic.geoLocation.lng);
+            
+            // Calculate Min/Max Fee
+            const fees = clinic.doctors.map(d => d.consultationFee);
+            const minFee = Math.min(...fees);
+            const maxFee = Math.max(...fees);
+            const feeDisplay = minFee === maxFee ? `₹${minFee}` : `₹${minFee} - ₹${maxFee}`;
+
             return { ...clinic, distance, 
                 rating: getRandomRating(clinic.id), 
                 reviews: getRandomReviewCount(clinic.id),
-                fee: getRandomFee(clinic.plan),
+                feeDisplay,
                 facilities: getFacilities(clinic.name),
                 image: getClinicImage(clinic.slug)
             };
@@ -610,13 +652,60 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             }
             return 0; // Default
         });
+  }, [clinics, searchCity, searchQuery, selectedCategory, sortBy, userLocation, activeTab, selectedClinicId]);
 
-    return (
-        <div className="min-h-screen bg-slate-50 flex flex-col">
-            {/* Sticky Header */}
+  if (showQRScanner) {
+      return (
+          <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center text-white">
+              <button onClick={() => setShowQRScanner(false)} className="absolute top-4 left-4 p-2 bg-black/50 rounded-full"><ArrowLeft className="h-6 w-6" /></button>
+              <div className="w-64 h-64 border-2 border-primary-500 rounded-2xl relative overflow-hidden bg-white/5">
+                  <div className="absolute inset-0 border-t-4 border-primary-500 animate-pulse top-0 h-full w-full bg-gradient-to-b from-primary-500/20 to-transparent"></div>
+              </div>
+              <p className="mt-8 text-center px-6">Scan QR at reception to Check-in</p>
+          </div>
+      );
+  }
+
+  // ------------------------------------------------------------------------------------------------
+  // UNIFIED MAIN APP LAYOUT (With Persistent Bottom Nav)
+  // ------------------------------------------------------------------------------------------------
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col relative">
+        {/* CUSTOM CANCEL MODAL */}
+        {cancelModal && (
+            <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 scale-100 animate-in zoom-in-95 duration-200">
+                    <div className="flex flex-col items-center text-center mb-6">
+                        <div className="h-12 w-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                            <AlertTriangle className="h-6 w-6 text-red-600" />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">Cancel Appointment?</h3>
+                        <p className="text-slate-500 text-sm">
+                            Are you sure you want to cancel the visit for <span className="font-bold text-slate-900">{cancelModal.patientName}</span>? 
+                            This action cannot be undone.
+                        </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Button variant="secondary" onClick={() => setCancelModal(null)}>
+                            Go Back
+                        </Button>
+                        <Button 
+                            className="bg-red-600 hover:bg-red-700 text-white border-red-600" 
+                            onClick={confirmCancel}
+                        >
+                            Yes, Cancel
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* DYNAMIC HEADER */}
+        {/* Scenario 1: Discovery Mode (Find Care Root) -> Location + Search Header */}
+        {!selectedClinicId && activeTab === 'NEW' ? (
             <header className="bg-white p-4 shadow-sm flex items-center justify-between sticky top-0 z-40 border-b border-slate-100">
                 <div className="flex items-center gap-3">
-                    <Button variant="ghost" size="sm" onClick={onBack}>
+                    <Button variant="ghost" size="sm" onClick={handleInternalBack}>
                         <LogOut className="h-5 w-5 text-red-500" />
                     </Button>
                     <div>
@@ -635,10 +724,36 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                      </div>
                 </div>
             </header>
+        ) : (
+            /* Scenario 2: Deep Link or Other Tabs -> Back Button Header */
+            <header className={`bg-white p-4 shadow-sm flex items-center justify-between sticky top-0 z-50 ${bookingView === 'CLINIC_DETAILS' ? 'shadow-none border-b-0' : ''}`}>
+                <div className="flex items-center gap-3">
+                    <Button variant="ghost" size="sm" onClick={handleInternalBack}>
+                        <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                    
+                    <div className="flex flex-col">
+                        <h1 className="font-bold text-slate-900 truncate max-w-[200px]">
+                            {selectedClinicId && activeTab === 'NEW' ? (bookingView === 'CLINIC_DETAILS' ? 'Hospital Info' : currentClinic?.name) : (activeTab === 'ACTIVE' ? 'Active Visits' : activeTab === 'HISTORY' ? 'History' : 'Profile')}
+                        </h1>
+                    </div>
+                </div>
+                {bookingView !== 'CLINIC_DETAILS' && (
+                    <button onClick={() => setActiveTab('PROFILE')} className="p-2 hover:bg-slate-100 rounded-full">
+                        <Users className="h-5 w-5 text-slate-600" />
+                    </button>
+                )}
+            </header>
+        )}
+
+        {/* MAIN SCROLLABLE CONTENT AREA */}
+        <main className="flex-1 max-w-md mx-auto w-full pb-24 overflow-x-hidden">
             
-            <main className="flex-1 max-w-md mx-auto w-full flex flex-col relative pb-24 overflow-x-hidden">
+            {/* VIEW: DISCOVERY / FIND CARE (ROOT) */}
+            {!selectedClinicId && activeTab === 'NEW' && (
+                <>
                 {/* Search & Filter Section */}
-                <div className="bg-white p-4 pb-0 z-10">
+                <div className="bg-white p-4 pb-0 z-10 sticky top-[60px] shadow-[0_4px_6px_-1px_rgba(0,0,0,0.02)]">
                     {/* Search Bar */}
                     <div className="relative mb-4 shadow-sm rounded-xl">
                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
@@ -712,7 +827,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 </div>
 
                 {/* RESULTS LIST */}
-                <div className="px-4 space-y-5 pb-6 bg-slate-50 pt-2">
+                <div className="px-4 space-y-5 pb-6 bg-slate-50 pt-4">
                     <div className="flex items-center justify-between px-1">
                          <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wider">Clinics Near You</h3>
                          <span className="text-xs text-slate-500 font-medium">{filteredClinics.length} found</span>
@@ -827,7 +942,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                         <div className="flex flex-col">
                                             <span className="text-[10px] text-slate-400 font-bold uppercase">Consultation</span>
                                             <div className="flex items-center gap-1 text-slate-900 font-bold text-sm">
-                                                <Wallet className="h-3.5 w-3.5 text-slate-400" /> ₹{clinic.fee}
+                                                <Wallet className="h-3.5 w-3.5 text-slate-400" /> {clinic.feeDisplay}
                                             </div>
                                         </div>
                                         <div className="flex gap-2">
@@ -852,125 +967,10 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         </div>
                     )}
                 </div>
-                
-                {/* BOTTOM NAV */}
-                <div className="mt-auto fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 pt-2 pb-6 px-6 flex justify-around max-w-md mx-auto z-50 shadow-[0_-5px_10px_rgba(0,0,0,0.02)]">
-                    <button onClick={() => { setActiveTab('NEW'); setSelectedClinicId(''); setBookingView('SEARCH'); }} className="flex flex-col items-center transition-all text-primary-600 scale-105">
-                        <div className="px-4 py-1 mb-1 rounded-full bg-primary-50">
-                            <Building className="h-6 w-6" />
-                        </div>
-                        <span className="text-[10px] font-bold">Find Care</span>
-                    </button>
-                    <button onClick={() => setActiveTab('ACTIVE')} className="flex flex-col items-center transition-all text-slate-400 hover:text-slate-600">
-                        <div className="px-4 py-1 mb-1 rounded-full">
-                             <Activity className="h-6 w-6" />
-                        </div>
-                        <span className="text-[10px] font-bold">Active</span>
-                    </button>
-                    <button onClick={() => setActiveTab('HISTORY')} className="flex flex-col items-center transition-all text-slate-400 hover:text-slate-600">
-                         <div className="px-4 py-1 mb-1 rounded-full">
-                            <History className="h-6 w-6" />
-                         </div>
-                        <span className="text-[10px] font-bold">History</span>
-                    </button>
-                </div>
-            </main>
-        </div>
-    )
-  }
-
-  // ------------------------------------------------------------------------------------------------
-  // VIEW: MAIN APP LAYOUT (Booking, Active, History, Profile)
-  // ------------------------------------------------------------------------------------------------
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col relative">
-        {/* CUSTOM CANCEL MODAL */}
-        {cancelModal && (
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-                <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 scale-100 animate-in zoom-in-95 duration-200">
-                    <div className="flex flex-col items-center text-center mb-6">
-                        <div className="h-12 w-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                            <AlertTriangle className="h-6 w-6 text-red-600" />
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-900 mb-2">Cancel Appointment?</h3>
-                        <p className="text-slate-500 text-sm">
-                            Are you sure you want to cancel the visit for <span className="font-bold text-slate-900">{cancelModal.patientName}</span>? 
-                            This action cannot be undone.
-                        </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <Button variant="secondary" onClick={() => setCancelModal(null)}>
-                            Go Back
-                        </Button>
-                        <Button 
-                            className="bg-red-600 hover:bg-red-700 text-white border-red-600" 
-                            onClick={confirmCancel}
-                        >
-                            Yes, Cancel
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {/* Dynamic Header */}
-        <header className={`bg-white p-4 shadow-sm flex items-center justify-between sticky top-0 z-50 ${bookingView === 'CLINIC_DETAILS' ? 'shadow-none border-b-0' : ''}`}>
-            <div className="flex items-center gap-3">
-                {selectedClinicId && activeTab === 'NEW' ? (
-                     <Button variant="ghost" size="sm" onClick={() => {
-                        if (bookingView === 'BOOKING_FORM') setBookingView('CLINIC_DETAILS');
-                        else {
-                            setBookingView('SEARCH');
-                            setSelectedClinicId('');
-                        }
-                     }}>
-                        <ArrowLeft className="h-5 w-5" />
-                     </Button>
-                ) : (
-                    <Button variant="ghost" size="sm" onClick={onBack}>
-                        <LogOut className="h-5 w-5 text-red-500" />
-                     </Button>
-                )}
-                
-                <div className="flex flex-col">
-                    <h1 className="font-bold text-slate-900 truncate max-w-[200px]">
-                        {selectedClinicId && activeTab === 'NEW' ? (bookingView === 'CLINIC_DETAILS' ? 'Hospital Info' : currentClinic?.name) : 'My Health'}
-                    </h1>
-                </div>
-            </div>
-            {bookingView !== 'CLINIC_DETAILS' && (
-                <button onClick={() => setActiveTab('PROFILE')} className="p-2 hover:bg-slate-100 rounded-full">
-                    <Users className="h-5 w-5 text-slate-600" />
-                </button>
-            )}
-        </header>
-
-        <main className="flex-1 max-w-md mx-auto w-full pb-24 overflow-x-hidden">
-            {/* Tab Switcher (Hide if in deep booking or clinic details) */}
-            {!selectedClinicId && (
-                <div className="flex bg-white rounded-lg p-1 shadow-sm border border-slate-200 mb-6 z-10 mx-4 mt-4">
-                    <button 
-                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'NEW' ? 'bg-primary-100 text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}
-                        onClick={() => { setActiveTab('NEW'); setSelectedClinicId(''); }}
-                    >
-                        Book
-                    </button>
-                    <button 
-                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'ACTIVE' ? 'bg-primary-100 text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}
-                        onClick={() => setActiveTab('ACTIVE')}
-                    >
-                        Active
-                    </button>
-                    <button 
-                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'HISTORY' ? 'bg-primary-100 text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}
-                        onClick={() => setActiveTab('HISTORY')}
-                    >
-                        History
-                    </button>
-                </div>
+                </>
             )}
 
-            {/* --- CLINIC DETAILS VIEW (The New Feature) --- */}
+            {/* VIEW: CLINIC DETAILS (The New Feature) */}
             {activeTab === 'NEW' && selectedClinicId && bookingView === 'CLINIC_DETAILS' && currentClinic && (
                 <div className="animate-in fade-in slide-in-from-right-4 duration-300 bg-slate-50 min-h-full">
                     
@@ -998,7 +998,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                             <div className="flex items-center justify-center gap-1 text-slate-900 font-bold">
                                 <Clock className="h-4 w-4 text-blue-500" />
                             </div>
-                            <div className="text-[10px] text-slate-500">Open 24/7</div>
+                            <div className="text-[10px] text-slate-500">{currentClinic.operatingHours || 'Open 24/7'}</div>
                         </div>
                         <div className="text-center flex-1">
                             <div className="flex items-center justify-center gap-1 text-slate-900 font-bold">
@@ -1021,16 +1021,57 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         {/* DOCTORS TAB */}
                         {detailsTab === 'DOCTORS' && (
                             <div className="space-y-4 animate-in fade-in">
+                                {/* Doctor Filters */}
+                                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-4">
+                                     <div className="relative mb-3">
+                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                         <input 
+                                             placeholder="Search Specialist..." 
+                                             className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500"
+                                             value={doctorSearchQuery}
+                                             onChange={(e) => setDoctorSearchQuery(e.target.value)}
+                                         />
+                                     </div>
+                                     <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                                         {['DEFAULT', 'RATING', 'EXPERIENCE', 'FEE_LOW', 'FEE_HIGH'].map(sort => (
+                                             <button 
+                                                key={sort}
+                                                onClick={() => setDoctorSortBy(sort as any)}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-medium border flex-shrink-0 whitespace-nowrap transition-colors ${doctorSortBy === sort ? 'bg-primary-50 text-primary-700 border-primary-200' : 'bg-white text-slate-500 border-slate-200'}`}
+                                             >
+                                                 {sort === 'DEFAULT' ? 'Relevance' : sort === 'RATING' ? 'Top Rated' : sort === 'EXPERIENCE' ? 'Experience' : sort === 'FEE_LOW' ? 'Lowest Fee' : 'Highest Fee'}
+                                             </button>
+                                         ))}
+                                     </div>
+                                </div>
+                                
                                 <div className="flex items-center justify-between">
                                     <h3 className="font-bold text-slate-800">Available Specialists</h3>
                                     <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">Live Status Active</span>
                                 </div>
                                 
-                                {currentClinic.doctors.map(doc => {
+                                {currentClinic.doctors
+                                    .filter(d => d.name.toLowerCase().includes(doctorSearchQuery.toLowerCase()) || d.specialty.toLowerCase().includes(doctorSearchQuery.toLowerCase()))
+                                    .sort((a,b) => {
+                                        if (doctorSortBy === 'RATING') return b.rating - a.rating;
+                                        if (doctorSortBy === 'FEE_LOW') return a.consultationFee - b.consultationFee;
+                                        if (doctorSortBy === 'FEE_HIGH') return b.consultationFee - a.consultationFee;
+                                        return 0;
+                                    })
+                                    .map(doc => {
                                     const details = getDoctorExtras(doc.id);
-                                    const fee = getRandomFee(currentClinic.plan);
+                                    // Use specific doctor fee and rating
+                                    const fee = doc.consultationFee;
+                                    const rating = doc.rating;
+                                    const reviewCount = doc.reviewCount;
+                                    
                                     const load = currentClinic.patients.filter(p => p.doctorId === doc.id && p.status === PatientStatus.WAITING).length;
                                     const avgWait = Math.max(5, load * 10);
+                                    
+                                    // Get Doctor's schedule for TODAY
+                                    const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+                                    const schedule = doc.weeklySchedule.find(s => s.day === todayName);
+                                    const timeStr = schedule && !schedule.isOff ? `${schedule.startTime} - ${schedule.endTime}` : 'Off Duty';
                                     
                                     return (
                                         <div key={doc.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1049,9 +1090,18 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                         <div className="bg-primary-50 text-primary-700 text-xs font-bold px-2 py-1 rounded">₹{fee}</div>
                                                     </div>
                                                     <p className="text-sm text-slate-600 mb-1">{doc.specialty}</p>
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <div className="flex items-center gap-0.5 bg-green-500 text-white px-1.5 rounded text-[10px] font-bold">
+                                                            {rating} <Star className="h-2 w-2 fill-current" />
+                                                        </div>
+                                                        <span className="text-[10px] text-slate-400 underline">{reviewCount} Reviews</span>
+                                                    </div>
                                                     <p className="text-xs text-slate-400 mb-2">{details.qualifications} • {details.experience} Yrs Exp</p>
-                                                    <div className="flex items-center gap-3 text-[10px] text-slate-500">
-                                                        <span className="flex items-center gap-1"><Languages className="h-3 w-3" /> {details.languages}</span>
+                                                    
+                                                    {/* Individual Timings */}
+                                                    <div className="flex items-center gap-2 text-xs bg-slate-50 p-1.5 rounded w-fit">
+                                                        <Clock12 className="h-3 w-3 text-slate-400" />
+                                                        <span className="text-slate-600 font-medium">Today: {timeStr}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1078,6 +1128,12 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                         </div>
                                     );
                                 })}
+                                {currentClinic.doctors.filter(d => d.name.toLowerCase().includes(doctorSearchQuery.toLowerCase())).length === 0 && (
+                                    <div className="text-center py-8 text-slate-400">
+                                        <FilterX className="h-8 w-8 mx-auto mb-2 opacity-50"/>
+                                        <p className="text-sm">No doctors match your filters</p>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -1166,7 +1222,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 </div>
             )}
 
-            {/* --- TAB: NEW BOOKING (Logic Handled above for Clinic Select, this is form) --- */}
+            {/* VIEW: BOOKING FORM */}
             {activeTab === 'NEW' && selectedClinicId && bookingView === 'BOOKING_FORM' && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-6 pt-4 px-4">
                     <div className="flex justify-center gap-4 mb-6">
@@ -1350,7 +1406,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 </div>
             )}
 
-            {/* --- TAB: ACTIVE TOKENS --- */}
+            {/* VIEW: ACTIVE TOKENS */}
             {activeTab === 'ACTIVE' && (
                 <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300 px-4 pt-4">
                     {!userPhone && <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4 rounded-r-lg"><p className="text-sm text-yellow-800">Please re-login.</p></div>}
@@ -1430,7 +1486,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 </div>
             )}
 
-            {/* --- TAB: HISTORY --- */}
+            {/* VIEW: HISTORY */}
             {activeTab === 'HISTORY' && (
                  <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-4 px-4 pt-4">
                      {!userPhone && <div className="text-center p-8 text-slate-400">Session error. Please re-login.</div>}
@@ -1450,7 +1506,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                  </div>
             )}
 
-            {/* --- TAB: PROFILE --- */}
+            {/* VIEW: PROFILE */}
             {activeTab === 'PROFILE' && (
                  <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-6 px-4 pt-4">
                      <Card className="p-6"><h3 className="font-bold text-lg mb-4">My Details</h3><div className="space-y-4"><Input label="My Name" value={userProfileName} onChange={(e) => handleUpdateProfile(e.target.value)} /><Input label="Phone" value={userPhone} disabled /></div></Card>
@@ -1460,6 +1516,37 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                  </div>
             )}
         </main>
+        
+        {/* PERSISTENT BOTTOM NAVIGATION (VISIBLE EVERYWHERE) */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 pt-2 pb-6 px-6 flex justify-around max-w-md mx-auto z-50 shadow-[0_-5px_10px_rgba(0,0,0,0.02)]">
+            <button 
+                onClick={() => { setActiveTab('NEW'); if (selectedClinicId) { /* Optional: Reset view on double tap? */ } }} 
+                className={`flex flex-col items-center transition-all ${activeTab === 'NEW' ? 'text-primary-600 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+                <div className={`px-4 py-1 mb-1 rounded-full ${activeTab === 'NEW' ? 'bg-primary-50' : ''}`}>
+                    <Building className="h-6 w-6" />
+                </div>
+                <span className="text-[10px] font-bold">Find Care</span>
+            </button>
+            <button 
+                onClick={() => setActiveTab('ACTIVE')} 
+                className={`flex flex-col items-center transition-all ${activeTab === 'ACTIVE' ? 'text-primary-600 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+                <div className={`px-4 py-1 mb-1 rounded-full ${activeTab === 'ACTIVE' ? 'bg-primary-50' : ''}`}>
+                    <Activity className="h-6 w-6" />
+                </div>
+                <span className="text-[10px] font-bold">Active</span>
+            </button>
+            <button 
+                onClick={() => setActiveTab('HISTORY')} 
+                className={`flex flex-col items-center transition-all ${activeTab === 'HISTORY' ? 'text-primary-600 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+                 <div className={`px-4 py-1 mb-1 rounded-full ${activeTab === 'HISTORY' ? 'bg-primary-50' : ''}`}>
+                    <History className="h-6 w-6" />
+                 </div>
+                <span className="text-[10px] font-bold">History</span>
+            </button>
+        </div>
     </div>
   );
 };

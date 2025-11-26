@@ -1,7 +1,6 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { Doctor, Patient, PatientStatus, DoctorStatus } from '../types';
-import { Coffee, Clock, Zap, AlertTriangle } from 'lucide-react';
+import { Coffee, Clock, Zap, AlertTriangle, PlayCircle } from 'lucide-react';
 
 interface KioskProps {
   doctors: Doctor[];
@@ -10,6 +9,9 @@ interface KioskProps {
 }
 
 export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName }) => {
+  // Browser Audio Policy State
+  const [audioEnabled, setAudioEnabled] = useState(false);
+
   // Track previous serving tokens to trigger TTS only on change
   const lastServingRef = useRef<Record<string, number>>({});
   
@@ -21,6 +23,8 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName 
 
   useEffect(() => {
     // Check for changes and Emergency
+    if (!audioEnabled) return;
+
     let foundEmergency = false;
 
     doctors.forEach(doc => {
@@ -54,7 +58,7 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName 
         setEmergencyAlert(null); // Clear alert if no longer active
     }
 
-  }, [patients, doctors, emergencyAlert]);
+  }, [patients, doctors, emergencyAlert, audioEnabled]);
 
   // Auto-Scroll Logic
   useEffect(() => {
@@ -77,6 +81,26 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName 
 
       return () => clearInterval(interval);
   }, [doctors.length]);
+
+  if (!audioEnabled) {
+      return (
+          <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white p-8">
+              <div className="text-center max-w-lg">
+                  <PlayCircle className="h-24 w-24 mx-auto mb-6 text-primary-500 animate-pulse" />
+                  <h1 className="text-4xl font-bold mb-4">Start Kiosk Display</h1>
+                  <p className="text-slate-400 mb-8 text-lg">
+                      Browser security requires you to click once to enable voice announcements (Text-to-Speech).
+                  </p>
+                  <button 
+                    onClick={() => setAudioEnabled(true)}
+                    className="bg-primary-600 hover:bg-primary-500 text-white font-bold py-4 px-12 rounded-full text-xl shadow-lg transition-all transform hover:scale-105"
+                  >
+                      Activate Audio & Display
+                  </button>
+              </div>
+          </div>
+      );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 text-white p-4 md:p-8 flex flex-col relative overflow-hidden">
