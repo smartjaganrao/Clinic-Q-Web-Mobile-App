@@ -1,5 +1,7 @@
 {
-  "name": "ClinicQ App",
+  "name": "SmartQFlow",
   "description": "A smart queue and appointment SaaS for clinics and small hospitals. Features receptionist dashboards, doctor interfaces with AI assistance, and live patient tracking.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "geolocation"
+  ]
 }

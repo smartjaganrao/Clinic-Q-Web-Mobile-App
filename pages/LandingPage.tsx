@@ -6,10 +6,11 @@ import {
   Check, Activity, Users, Monitor, 
   Smartphone, Star, LayoutDashboard, Stethoscope, 
   ArrowRight, Menu, X, Zap, BarChart3, Lock, ShieldCheck, Globe,
-  Baby, Heart, Syringe, UserPlus, MessageCircle, Clock, Smile, AlertTriangle, Tv, Laptop, Wifi, MapPin, QrCode, TrendingUp, ArrowDown, XCircle, CheckCircle, PlayCircle, Brain, Sparkles, FileText, Bell
+  Baby, Heart, Syringe, UserPlus, MessageCircle, Clock, Smile, AlertTriangle, Tv, Laptop, Wifi, MapPin, QrCode, TrendingUp, ArrowDown, XCircle, CheckCircle, PlayCircle, Brain, Sparkles, FileText, Bell, Workflow
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { Logo } from '../components/Logo';
 
 interface LandingPageProps {
   onPatientEnter: () => void;
@@ -36,11 +37,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
       <nav className="fixed w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
-            <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-              <div className="bg-primary-600 p-2 rounded-lg shadow-lg shadow-primary-200">
-                <Activity className="h-6 w-6 text-white" />
+            <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+              <Logo className="h-10 w-10 shadow-lg shadow-primary-200 rounded-xl" />
+              <div className="flex flex-col">
+                  <span className="text-xl font-bold tracking-tight text-slate-900 leading-none">Smart<span className="text-primary-600">QFlow</span></span>
+                  <span className="text-[10px] text-slate-500 font-medium tracking-wider uppercase">Clinic OS</span>
               </div>
-              <span className="text-2xl font-bold tracking-tight text-slate-900">Clinic<span className="text-primary-600">Q</span></span>
             </div>
 
             <div className="hidden md:flex items-center space-x-8">
@@ -196,7 +198,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
       <section id="solution" className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
-                <h2 className="text-4xl font-extrabold text-slate-900 mb-4">The ClinicQ Difference</h2>
+                <h2 className="text-4xl font-extrabold text-slate-900 mb-4">The SmartQFlow Difference</h2>
                 <p className="text-xl text-slate-600">See how we fix the workflow instantly.</p>
             </div>
 
@@ -237,7 +239,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
                     <div className="p-10 bg-green-50/50">
                         <div className="flex items-center gap-3 mb-8">
                             <div className="bg-green-100 p-2 rounded-lg"><CheckCircle className="h-6 w-6 text-green-600" /></div>
-                            <h3 className="text-2xl font-bold text-green-900">The ClinicQ Way</h3>
+                            <h3 className="text-2xl font-bold text-green-900">The SmartQFlow Way</h3>
                         </div>
                         <ul className="space-y-6">
                             <li className="flex gap-4 items-start">
@@ -353,7 +355,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
                 <h2 className="text-3xl md:text-4xl font-bold text-slate-900">Perfect for High-Volume Clinics</h2>
-                <p className="text-slate-500 mt-2">If you have a crowd, you need ClinicQ.</p>
+                <p className="text-slate-500 mt-2">If you have a crowd, you need SmartQFlow.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -476,7 +478,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
       <footer className="bg-white border-t border-slate-200 pt-16 pb-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center text-sm text-slate-400">
-            <p>© 2024 ClinicQ SaaS Inc. All rights reserved.</p>
+            <p>© 2024 SmartQFlow Inc. All rights reserved.</p>
             <div className="flex gap-6 mt-4 md:mt-0">
               <a href="#" className="hover:text-slate-600">Privacy</a>
               <a href="#" className="hover:text-slate-600">Terms</a>

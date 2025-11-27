@@ -1,5 +1,5 @@
 
-import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType } from './types';
+import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient } from './types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -12,6 +12,33 @@ const createDefaultSchedule = (): DaySchedule[] => {
   }));
 };
 
+// --- DATA GENERATORS ---
+
+const PATIENT_NAMES = [
+  "Aarav", "Vivaan", "Aditya", "Vihaan", "Arjun", "Sai", "Reyansh", "Ayan",
+  "Krishna", "Ishaan", "Shaurya", "Atharva", "Dhruv", "Kabir",
+  "Ananya", "Diya", "Gauri", "Isha", "Kavya", "Khushi", "Kiara", "Myra",
+  "Nandini", "Pari", "Prisha", "Riya", "Saanvi", "Samaira", "Sara",
+  "Rahul", "Priya", "Amit", "Sneha", "Vikram", "Anjali", "Suresh", "Lakshmi",
+  "Rohan", "Meera", "Karthik", "Swathi", "Deepak", "Pooja", "Arun", "Divya"
+];
+
+const SURNAMES = [
+  "Sharma", "Verma", "Gupta", "Malhotra", "Iyer", "Reddy", "Nair", "Patel",
+  "Singh", "Kumar", "Das", "Rao", "Jain", "Mehta", "Desai", "Joshi", "Krishnan", "Raman"
+];
+
+const SYMPTOMS_BY_TYPE: Record<string, string[]> = {
+  GENERAL: ["Fever and chills", "Severe headache", "Stomach ache", "Viral infection", "Body pain", "Food poisoning", "Cough and cold", "Typhoid follow-up", "Low BP"],
+  PEDIATRIC: ["High fever", "Vaccination", "Stomach infection", "Persistent cough", "Ear pain", "Skin rash", "General checkup", "Colic pain", "Growth monitoring"],
+  GYNECOLOGY: ["Pregnancy checkup", "Irregular periods", "PCOS consultation", "Lower back pain", "Prenatal vitamin check", "Trimester scan review"],
+  ORTHOPEDIC: ["Knee pain", "Fracture follow-up", "Back ache", "Shoulder stiffness", "Arthritis checkup", "Sports injury", "Ankle sprain"],
+  DENTAL: ["Tooth ache", "Root canal", "Cavity filling", "Gum bleeding", "Dental cleaning", "Braces adjustment", "Wisdom tooth pain"],
+  CARDIOLOGY: ["Chest pain", "High BP check", "Palpitations", "Routine ECG", "Breathlessness", "Post-surgery checkup", "Cholesterol review"],
+  DERMATOLOGY: ["Acne treatment", "Skin allergy", "Hair fall", "Eczema flare-up", "Mole removal", "Laser treatment", "Pigmentation"],
+  OTHER: ["General consultation", "Follow up", "Routine checkup"]
+};
+
 // Helper to create doctors with realistic profiles
 const createRealDoctors = (startId: number, count: number, specialty: string, feeRange: [number, number]): Doctor[] => {
   const names = [
@@ -21,18 +48,6 @@ const createRealDoctors = (startId: number, count: number, specialty: string, fe
     'Dr. Karthik Raja', 'Dr. Swathi Balaji', 'Dr. Arjun Das', 'Dr. Nithya Ram'
   ];
   
-  const qualMap: Record<string, string> = {
-      'Cardiologist': 'MD, DM (Cardio)',
-      'Dermatologist': 'MD (DVL)',
-      'Dentist': 'BDS, MDS',
-      'Orthopedic': 'MS (Ortho)',
-      'Gynecologist': 'MBBS, DGO',
-      'Pediatrician': 'MD (Pediatrics)',
-      'General Physician': 'MBBS, MD (Gen Med)',
-      'Ophthalmologist': 'MBBS, MS (Ophth)',
-      'ENT Specialist': 'MBBS, MS (ENT)'
-  };
-
   return Array.from({ length: count }).map((_, i) => {
     const idVal = startId + i;
     // Deterministic random for consistency across reloads
@@ -57,6 +72,102 @@ const createRealDoctors = (startId: number, count: number, specialty: string, fe
   });
 };
 
+// Helper to generate realistic patient queue
+const createRealisticPatients = (doctors: Doctor[], clinicType: ClinicType | string, city: string): Patient[] => {
+  const patients: Patient[] = [];
+  const symptomsList = SYMPTOMS_BY_TYPE[clinicType] || SYMPTOMS_BY_TYPE.GENERAL;
+  const now = Date.now();
+  
+  // Create a mix of patients for each doctor
+  doctors.forEach((doc, docIdx) => {
+    // Generate 3-8 patients per doctor
+    const count = 3 + Math.floor(Math.random() * 6);
+    
+    for (let i = 0; i < count; i++) {
+      // States: First 1-2 completed, next 1 with doctor, rest waiting
+      const isCompleted = i < Math.floor(count * 0.3); 
+      const isWithDoctor = !isCompleted && i === Math.floor(count * 0.3);
+      
+      const name = `${PATIENT_NAMES[Math.floor(Math.random() * PATIENT_NAMES.length)]} ${SURNAMES[Math.floor(Math.random() * SURNAMES.length)]}`;
+      const age = (clinicType === 'PEDIATRIC' ? 1 + Math.floor(Math.random() * 12) : 18 + Math.floor(Math.random() * 60)).toString();
+      const gender = Math.random() > 0.5 ? 'Male' : 'Female';
+      const symptom = symptomsList[Math.floor(Math.random() * symptomsList.length)];
+      
+      const status = isCompleted ? PatientStatus.COMPLETED : 
+                     isWithDoctor ? PatientStatus.WITH_DOCTOR : 
+                     PatientStatus.WAITING;
+
+      // Time staggering (mock times relative to now)
+      // Completed were 30-60 mins ago
+      // With doctor started 5 mins ago
+      // Waiting added 5-30 mins ago
+      const timeOffset = (count - i) * 12 * 60 * 1000; 
+      
+      const visitType = Math.random() > 0.4 ? 'WALK_IN' : 'APPOINTMENT';
+      let appointmentTime;
+      let appointmentDate;
+      
+      if (visitType === 'APPOINTMENT') {
+          // Today's date
+          const d = new Date();
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          appointmentDate = `${year}-${month}-${day}`;
+
+          const hour = 9 + Math.floor(i/2); // 9:00, 9:30, 10:00...
+          const min = (i%2) * 30;
+          appointmentTime = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}`;
+      }
+
+      patients.push({
+        id: `pat_${doc.id}_${i}`,
+        tokenNumber: (docIdx + 1) * 100 + (i + 1),
+        name,
+        phone: `9${Math.floor(Math.random()*900000000 + 100000000)}`, // Random 10 digit
+        status,
+        doctorId: doc.id,
+        timeAdded: now - timeOffset,
+        timeCompleted: isCompleted ? now - timeOffset + (15 * 60 * 1000) : undefined,
+        visitType,
+        appointmentDate,
+        appointmentTime,
+        isEmergency: !isCompleted && !isWithDoctor && Math.random() > 0.95, // Rare emergency
+        isCheckedIn: visitType === 'APPOINTMENT' ? Math.random() > 0.3 : false,
+        vitals: (isWithDoctor || isCompleted) ? {
+            bp: `${110 + Math.floor(Math.random()*30)}/${70 + Math.floor(Math.random()*20)}`,
+            temp: '98.6',
+            weight: `${(clinicType === 'PEDIATRIC' ? 10 : 50) + Math.floor(Math.random()*30)}`,
+            pulse: `${70 + Math.floor(Math.random()*20)}`,
+            spo2: '98'
+        } : {},
+        age,
+        gender,
+        symptoms: symptom
+      });
+    }
+  });
+
+  return patients;
+};
+
+// --- INITIAL DATA ---
+
+const chennaiDocs1 = [...createRealDoctors(100, 2, 'General Physician', [500, 700]), ...createRealDoctors(102, 1, 'Diabetologist', [700, 900])];
+const chennaiDocs2 = createRealDoctors(200, 4, 'Ophthalmologist', [600, 1000]);
+const chennaiDocs3 = [...createRealDoctors(300, 3, 'Gynecologist', [800, 1200]), ...createRealDoctors(303, 2, 'Pediatrician', [700, 1000])];
+const chennaiDocs4 = createRealDoctors(400, 3, 'Orthopedic', [900, 1500]);
+const chennaiDocs5 = createRealDoctors(500, 2, 'Dentist', [400, 800]);
+const chennaiDocs6 = [...createRealDoctors(600, 2, 'Cardiologist', [1000, 1800]), ...createRealDoctors(602, 1, 'General Physician', [600, 800])];
+const chennaiDocs7 = createRealDoctors(700, 2, 'Dermatologist', [700, 1200]);
+const chennaiDocs8 = createRealDoctors(800, 3, 'ENT Specialist', [600, 900]);
+const chennaiDocs9 = createRealDoctors(900, 4, 'Pediatrician', [600, 1000]);
+const chennaiDocs10 = [...createRealDoctors(1500, 3, 'General Physician', [400, 600]), ...createRealDoctors(1503, 2, 'Cardiologist', [800, 1200])];
+
+const blrDocs1 = [...createRealDoctors(1000, 2, 'Cardiologist', [1000, 1500]), ...createRealDoctors(1002, 2, 'Orthopedic', [900, 1400])];
+const blrDocs2 = [...createRealDoctors(1100, 2, 'Pediatrician', [600, 900]), ...createRealDoctors(1102, 2, 'Gynecologist', [700, 1000])];
+const blrDocs3 = createRealDoctors(1200, 1, 'Dentist', [400, 800]);
+
 export const INITIAL_CLINICS: Clinic[] = [
   // --- CHENNAI CLINICS ---
   {
@@ -70,25 +181,22 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600040',
     operatingHours: '08:00 AM - 09:00 PM',
     geoLocation: { lat: 13.0850, lng: 80.2100 },
-    doctors: [
-        ...createRealDoctors(100, 2, 'General Physician', [500, 700]),
-        ...createRealDoctors(102, 1, 'Diabetologist', [700, 900])
-    ],
-    patients: []
+    doctors: chennaiDocs1,
+    patients: createRealisticPatients(chennaiDocs1, ClinicType.GENERAL, 'Chennai')
   },
   {
     id: 'clinic_chn_2',
     name: 'Sankara Nethralaya',
     slug: 'sankara-nethralaya',
     plan: PlanType.PREMIUM,
-    type: ClinicType.OTHER,
+    type: ClinicType.OTHER, // Maps to Ophthalmologist in symptoms
     city: 'Chennai',
     address: '41, College Road, Nungambakkam',
     pincode: '600006',
     operatingHours: '08:00 AM - 06:00 PM',
     geoLocation: { lat: 13.0629, lng: 80.2495 },
-    doctors: createRealDoctors(200, 4, 'Ophthalmologist', [600, 1000]),
-    patients: []
+    doctors: chennaiDocs2,
+    patients: createRealisticPatients(chennaiDocs2, 'OPHTHALMOLOGY', 'Chennai')
   },
   {
     id: 'clinic_chn_3',
@@ -101,11 +209,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600017',
     operatingHours: '24 Hours',
     geoLocation: { lat: 13.0350, lng: 80.2350 },
-    doctors: [
-        ...createRealDoctors(300, 3, 'Gynecologist', [800, 1200]),
-        ...createRealDoctors(303, 2, 'Pediatrician', [700, 1000])
-    ],
-    patients: []
+    doctors: chennaiDocs3,
+    patients: createRealisticPatients(chennaiDocs3, ClinicType.GYNECOLOGY, 'Chennai')
   },
   {
     id: 'clinic_chn_4',
@@ -118,8 +223,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600089',
     operatingHours: '24 Hours',
     geoLocation: { lat: 13.0280, lng: 80.1850 },
-    doctors: createRealDoctors(400, 3, 'Orthopedic', [900, 1500]),
-    patients: []
+    doctors: chennaiDocs4,
+    patients: createRealisticPatients(chennaiDocs4, ClinicType.ORTHOPEDIC, 'Chennai')
   },
   {
     id: 'clinic_chn_5',
@@ -132,8 +237,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600020',
     operatingHours: '10:00 AM - 08:00 PM',
     geoLocation: { lat: 13.0012, lng: 80.2565 },
-    doctors: createRealDoctors(500, 2, 'Dentist', [400, 800]),
-    patients: []
+    doctors: chennaiDocs5,
+    patients: createRealisticPatients(chennaiDocs5, ClinicType.DENTAL, 'Chennai')
   },
   {
     id: 'clinic_chn_6',
@@ -146,11 +251,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600020',
     operatingHours: '24 Hours',
     geoLocation: { lat: 13.0060, lng: 80.2580 },
-    doctors: [
-        ...createRealDoctors(600, 2, 'Cardiologist', [1000, 1800]),
-        ...createRealDoctors(602, 1, 'General Physician', [600, 800])
-    ],
-    patients: []
+    doctors: chennaiDocs6,
+    patients: createRealisticPatients(chennaiDocs6, ClinicType.CARDIOLOGY, 'Chennai')
   },
   {
     id: 'clinic_chn_7',
@@ -163,8 +265,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600018',
     operatingHours: '10:00 AM - 08:00 PM',
     geoLocation: { lat: 13.0330, lng: 80.2550 },
-    doctors: createRealDoctors(700, 2, 'Dermatologist', [700, 1200]),
-    patients: []
+    doctors: chennaiDocs7,
+    patients: createRealisticPatients(chennaiDocs7, ClinicType.DERMATOLOGY, 'Chennai')
   },
   {
     id: 'clinic_chn_8',
@@ -177,8 +279,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600010',
     operatingHours: '09:00 AM - 07:00 PM',
     geoLocation: { lat: 13.0780, lng: 80.2400 },
-    doctors: createRealDoctors(800, 3, 'ENT Specialist', [600, 900]),
-    patients: []
+    doctors: chennaiDocs8,
+    patients: createRealisticPatients(chennaiDocs8, 'ENT', 'Chennai')
   },
   {
     id: 'clinic_chn_9',
@@ -191,8 +293,22 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600031',
     operatingHours: '24 Hours',
     geoLocation: { lat: 13.0700, lng: 80.2380 },
-    doctors: createRealDoctors(900, 4, 'Pediatrician', [600, 1000]),
-    patients: []
+    doctors: chennaiDocs9,
+    patients: createRealisticPatients(chennaiDocs9, ClinicType.PEDIATRIC, 'Chennai')
+  },
+  {
+    id: 'clinic_chn_10',
+    name: 'City General Hospital',
+    slug: 'city-general-chennai',
+    plan: PlanType.SMALL,
+    type: ClinicType.GENERAL,
+    city: 'Chennai',
+    address: '123 Main Street',
+    pincode: '600001',
+    operatingHours: '24 Hours',
+    geoLocation: { lat: 13.0827, lng: 80.2707 },
+    doctors: chennaiDocs10,
+    patients: createRealisticPatients(chennaiDocs10, ClinicType.GENERAL, 'Chennai')
   },
 
   // --- BANGALORE CLINICS (Legacy + Enhanced) ---
@@ -207,11 +323,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '560017',
     operatingHours: '24 Hours',
     geoLocation: { lat: 12.9592, lng: 77.6475 },
-    doctors: [
-        ...createRealDoctors(1000, 2, 'Cardiologist', [1000, 1500]),
-        ...createRealDoctors(1002, 2, 'Orthopedic', [900, 1400])
-    ],
-    patients: []
+    doctors: blrDocs1,
+    patients: createRealisticPatients(blrDocs1, ClinicType.GENERAL, 'Bangalore')
   },
   {
     id: 'clinic_blr_2',
@@ -224,11 +337,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '560043',
     operatingHours: '24 Hours',
     geoLocation: { lat: 13.0285, lng: 77.6400 },
-    doctors: [
-        ...createRealDoctors(1100, 2, 'Pediatrician', [600, 900]),
-        ...createRealDoctors(1102, 2, 'Gynecologist', [700, 1000])
-    ],
-    patients: []
+    doctors: blrDocs2,
+    patients: createRealisticPatients(blrDocs2, ClinicType.PEDIATRIC, 'Bangalore')
   },
   {
     id: 'clinic_blr_3',
@@ -241,8 +351,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '560038',
     operatingHours: '10:00 AM - 08:00 PM',
     geoLocation: { lat: 12.9716, lng: 77.6412 },
-    doctors: createRealDoctors(1200, 1, 'Dentist', [400, 800]),
-    patients: []
+    doctors: blrDocs3,
+    patients: createRealisticPatients(blrDocs3, ClinicType.DENTAL, 'Bangalore')
   }
 ];
 
@@ -251,7 +361,7 @@ export const INITIAL_DOCTORS: Doctor[] = INITIAL_CLINICS[0].doctors; // Fallback
 export const PRICING_PLANS: PricingPlan[] = [
   {
     name: 'Solo Clinic',
-    price: '₹799',
+    price: '₹999',
     features: [
       '1 Doctor',
       'Unlimited Patients',
@@ -261,7 +371,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   },
   {
     name: 'Small Hospital',
-    price: '₹1,999',
+    price: '₹2,499',
     features: [
       'Up to 5 Doctors',
       'Multi-queue Management',
@@ -272,7 +382,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   },
   {
     name: 'Premium',
-    price: '₹3,999',
+    price: '₹4,499',
     features: [
       '10+ Doctors',
       'Advanced Analytics',
@@ -283,4 +393,4 @@ export const PRICING_PLANS: PricingPlan[] = [
   }
 ];
 
-export const APP_NAME = "ClinicQ";
+export const APP_NAME = "SmartQFlow";

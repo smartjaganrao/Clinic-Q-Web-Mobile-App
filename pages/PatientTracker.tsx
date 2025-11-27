@@ -5,7 +5,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Badge } from '../components/Badge';
-import { ArrowLeft, MapPin, Search, Building, Ticket, CalendarCheck, User, Users, Plus, Trash2, Save, History, Clock, ChevronRight, Activity, ChevronLeft, AlertTriangle, QrCode, Map, List, ScanLine, LogOut, Zap, AlertCircle, LocateFixed, Navigation, Heart, Smile, Baby, Stethoscope, Microscope, Brain, Filter, FileText, RefreshCcw, Bell, BellRing, BellOff, Calendar, Star, XCircle, Map as MapIcon, CheckCircle, X, Thermometer, Sparkles, Check, Info, Wallet, ShieldCheck, ThumbsUp, ArrowUpDown, ChevronDown, GraduationCap, Languages, BadgeCheck, Phone, FilterX, Clock12, Eye, Ear } from 'lucide-react';
+import { ArrowLeft, MapPin, Search, Building, Ticket, CalendarCheck, User, Users, Plus, Trash2, Save, History, Clock, ChevronRight, Activity, ChevronLeft, AlertTriangle, QrCode, Map, List, ScanLine, LogOut, Zap, AlertCircle, LocateFixed, Navigation, Heart, Smile, Baby, Stethoscope, Microscope, Brain, Filter, FileText, RefreshCcw, Bell, BellRing, BellOff, Calendar, Star, XCircle, Map as MapIcon, CheckCircle, X, Thermometer, Sparkles, Check, Info, Wallet, ShieldCheck, ThumbsUp, ArrowUpDown, ChevronDown, GraduationCap, Languages, BadgeCheck, Phone, FilterX, Clock12, Eye, Ear, Car } from 'lucide-react';
 
 interface PatientTrackerProps {
   clinics: Clinic[];
@@ -417,6 +417,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [selectedMemberId, setSelectedMemberId] = useState<string>('myself');
   const [selectedDate, setSelectedDate] = useState(new Date()); 
   const [chosenDateStr, setChosenDateStr] = useState(getLocalYYYYMMDD(new Date()));
+  
+  // Smart Travel Time Logic
+  const [travelTime, setTravelTime] = useState<string>('15'); // Default 15 mins
 
   const currentClinic = clinics.find(c => c.id === selectedClinicId);
 
@@ -450,6 +453,19 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     }
     return () => clearTimeout(timer);
   }, [showQRScanner, clinics, activeVisits, selectedClinicId, onCheckIn]);
+
+  // Calculate Waiting Time for Smart Warning
+  const currentQueueWaitTime = useMemo(() => {
+      if (!currentClinic || !selectedDocId) return 0;
+      const waitingCount = currentClinic.patients.filter(p => p.doctorId === selectedDocId && p.status === PatientStatus.WAITING).length;
+      return (waitingCount + 1) * 10; // Approx 10 mins per patient
+  }, [currentClinic, selectedDocId]);
+
+  const showLateWarning = useMemo(() => {
+      if (isAppointmentMode) return false; // Doesn't apply to future appointments
+      const travel = parseInt(travelTime);
+      return travel > currentQueueWaitTime;
+  }, [isAppointmentMode, travelTime, currentQueueWaitTime]);
 
   const { availableSlots, scheduleStatus } = useMemo(() => {
       const result = { availableSlots: [] as string[], scheduleStatus: { isOff: false, shiftStarted: false, workingHours: '' } };
@@ -520,6 +536,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       
       if (selectedMemberId === 'myself' && newName !== userProfileName) { handleUpdateProfile(newName); }
 
+      // Logic: If user is forcing a Walk-in despite being late, they will be auto-processed by the system later.
+      // The frontend role is to warn them (which we do with the alert).
+      
       onGetToken(newName, newPhone, selectedDocId, currentClinic.id, isAppointmentMode ? selectedSlot : undefined, isAppointmentMode ? chosenDateStr : undefined, newAge, newGender, newSymptoms);
       setActiveTab('ACTIVE');
       setBookingView('SEARCH');
@@ -546,7 +565,42 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             if (diffMins < -15 && !visit.isCheckedIn) return { position: '-', estWait: 0, doctorDelay: 0, statusMsg: `LATE! Check-in immediately.` };
         }
     }
-    const sortedQueue = queue; // Simplified for display, real sort in Reception
+    
+    // Sort logic to match Doctor Dashboard (Smart Hybrid Queue)
+    // 1. Emergency
+    // 2. Appointments (Checked In + On Time)
+    // 3. Walk-in / Late Appts
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const timeToMins = (t?: string) => {
+        if (!t) return 0;
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+    };
+    const LATE_THRESHOLD_MINS = 15;
+
+    const classifyPatient = (p: Patient) => {
+        if (p.isEmergency) return 1; 
+        if (p.visitType === 'APPOINTMENT' && p.appointmentTime) {
+            const apptMins = timeToMins(p.appointmentTime);
+            const minsUntilAppt = apptMins - currentMins;
+            if (minsUntilAppt > LATE_THRESHOLD_MINS) return 5;
+            if (p.isCheckedIn) return 2;
+            if (minsUntilAppt <= LATE_THRESHOLD_MINS) return 4; 
+            return 2; 
+        }
+        return 3;
+    };
+
+    const sortedQueue = queue.sort((a, b) => {
+        const priorityA = classifyPatient(a);
+        const priorityB = classifyPatient(b);
+        if (priorityA !== priorityB) return priorityA - priorityB;
+        if (a.visitType === 'APPOINTMENT' && b.visitType === 'APPOINTMENT' && a.appointmentTime && b.appointmentTime) {
+             return timeToMins(a.appointmentTime) - timeToMins(b.appointmentTime);
+        }
+        return a.timeAdded - b.timeAdded;
+    });
+
     const position = sortedQueue.findIndex(p => p.id === visit.id);
     if (position === -1) return null;
     const doctorDelay = visit.doctorDelay || 0;
@@ -1266,6 +1320,31 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         </button>
                     </div>
 
+                    {/* SMART LATE WARNING BANNER */}
+                    {!isAppointmentMode && showLateWarning && (
+                        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 animate-in fade-in slide-in-from-top-2">
+                            <div className="flex items-start gap-3">
+                                <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                                <div>
+                                    <h4 className="font-bold text-orange-800 text-sm">Late Arrival Risk!</h4>
+                                    <p className="text-xs text-orange-700 mt-1 leading-relaxed">
+                                        The current queue wait is only <strong>{currentQueueWaitTime} mins</strong>, but you will take <strong>{travelTime} mins</strong> to reach.
+                                    </p>
+                                    <p className="text-xs text-orange-700 mt-2">
+                                        <strong>Recommendation:</strong> Book an Appointment or be prepared to be put <strong>ON HOLD</strong>.
+                                    </p>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setIsAppointmentMode(true)}
+                                        className="mt-3 text-xs bg-white text-orange-700 px-3 py-1.5 rounded-lg border border-orange-200 font-bold shadow-sm"
+                                    >
+                                        Switch to Appointment
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <Card className="p-6">
                         <form onSubmit={handleGetToken} className="space-y-5">
                              
@@ -1362,6 +1441,29 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 </select>
                             </div>
 
+                            {/* TRAVEL TIME INPUT (For Walk-in) */}
+                            {!isAppointmentMode && selectedDocId && (
+                                <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl">
+                                    <label className="block text-xs font-bold text-blue-800 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                        <Car className="h-4 w-4" /> Time to Reach Clinic?
+                                    </label>
+                                    <select 
+                                        className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm bg-white"
+                                        value={travelTime}
+                                        onChange={(e) => setTravelTime(e.target.value)}
+                                    >
+                                        <option value="5">Less than 10 mins</option>
+                                        <option value="15">15 mins</option>
+                                        <option value="30">30 mins</option>
+                                        <option value="45">45 mins</option>
+                                        <option value="60">1 Hour+</option>
+                                    </select>
+                                    <p className="text-[10px] text-blue-600 mt-2">
+                                        Current Queue Wait: <strong>{currentQueueWaitTime} mins</strong>
+                                    </p>
+                                </div>
+                            )}
+
                             {/* CALENDAR & SLOTS */}
                             {isAppointmentMode && selectedDocId && (
                                 <div className="animate-in fade-in space-y-4">
@@ -1420,10 +1522,10 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
                             <Button 
                                 type="submit" 
-                                className={`w-full mt-4 h-12 text-lg shadow-lg ${isAppointmentMode ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-200' : 'shadow-primary-200'}`} 
+                                className={`w-full mt-4 h-12 text-lg shadow-lg ${isAppointmentMode ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-200' : showLateWarning ? 'bg-orange-600 hover:bg-orange-700 shadow-orange-200' : 'shadow-primary-200'}`} 
                                 disabled={isAppointmentMode && (!selectedSlot || !selectedDocId)}
                             >
-                                {isAppointmentMode ? 'Confirm Appointment' : 'Get Token Now'}
+                                {isAppointmentMode ? 'Confirm Appointment' : showLateWarning ? 'Get Token Anyway' : 'Get Token Now'}
                             </Button>
                         </form>
                     </Card>

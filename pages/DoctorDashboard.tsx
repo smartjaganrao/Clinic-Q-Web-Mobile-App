@@ -1,10 +1,15 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Doctor, Patient, PatientStatus, DoctorStatus, PainPoint } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { generatePatientSummary } from '../services/geminiService';
-import { Check, Clock, FileText, Sparkles, User, SkipForward, CalendarClock, AlertCircle, Coffee, Clock12, PlayCircle, Zap, Activity, Thermometer, Weight, Heart, Plus, Calendar, Pill, Trash2, Printer, Droplets, Ruler, Gauge } from 'lucide-react';
+import { 
+    Check, Clock, FileText, Sparkles, User, SkipForward, 
+    CalendarClock, AlertCircle, Coffee, Clock12, PlayCircle, 
+    Zap, Activity, Thermometer, Weight, Heart, Plus, Calendar, 
+    Pill, Trash2, Droplets, Ruler, PauseCircle, Play, Timer,
+    MoreHorizontal, ChevronRight, ClipboardList, List
+} from 'lucide-react';
 
 interface DoctorProps {
   doctor: Doctor;
@@ -13,23 +18,29 @@ interface DoctorProps {
   onCompletePatient: (id: string, notes: string) => void;
   onUpdateStatus: (id: string, status: DoctorStatus, delay: number) => void;
   onUpdatePatientDetails: (id: string, updates: Partial<Patient>) => void;
+  onHoldPatient: (id: string) => void;
+  onResumePatient: (id: string) => void;
 }
 
 interface PrescriptionItem {
     name: string;
-    dosage: string; // e.g., "1-0-1"
-    duration: string; // e.g., "5 days"
+    dosage: string;
+    duration: string;
 }
 
 const COMMON_DIAGNOSES = [
     "Viral Fever", "Common Cold", "Migraine", "Hypertension", "Diabetes T2", "Gastritis", "Allergy", "Back Pain"
 ];
 
-export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPatient, onCompletePatient, onUpdateStatus, onUpdatePatientDetails }) => {
+export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPatient, onCompletePatient, onUpdateStatus, onUpdatePatientDetails, onHoldPatient, onResumePatient }) => {
   const [notes, setNotes] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'NOTES' | 'VITALS' | 'RX' | 'BODY'>('NOTES');
   
-  // Vitals State (Local to current patient session)
+  // Timers State
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // Vitals State
   const [vitals, setVitals] = useState({ bp: '', temp: '', weight: '', pulse: '', spo2: '', height: '', sugar: '' });
   const [painPoints, setPainPoints] = useState<PainPoint[]>([]);
 
@@ -37,10 +48,26 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
   const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>([]);
   const [rxForm, setRxForm] = useState({ name: '', dosage: '1-0-1', duration: '3 days' });
 
+  // Update timer every second for UI
+  useEffect(() => {
+      const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
+      return () => clearInterval(interval);
+  }, []);
+
+  // Format Seconds to MM:SS
+  const formatTime = (ms: number) => {
+      const totalSeconds = Math.floor(Math.max(0, ms) / 1000);
+      const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+      const s = (totalSeconds % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+  };
+
   // SMART HYBRID QUEUE LOGIC
-  const { currentPatient, sortedQueue, dueAppointments } = useMemo(() => {
+  const { currentPatient, sortedQueue, dueAppointments, heldPatients } = useMemo(() => {
     const current = queue.find(p => p.status === PatientStatus.WITH_DOCTOR);
     const waiting = queue.filter(p => p.status === PatientStatus.WAITING);
+    const held = queue.filter(p => p.status === PatientStatus.ON_HOLD).sort((a, b) => a.timeAdded - b.timeAdded);
+    
     const now = new Date();
     const currentMins = now.getHours() * 60 + now.getMinutes();
     
@@ -84,7 +111,8 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
     return { 
         currentPatient: current, 
         sortedQueue: sorted,
-        dueAppointments: due
+        dueAppointments: due,
+        heldPatients: held
     };
   }, [queue]);
 
@@ -102,13 +130,20 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
           });
           setPainPoints(currentPatient.painPoints || []);
           setPrescriptions([]); // Clear Rx for new patient
-      } else {
-          setNotes('');
-          setVitals({ bp: '', temp: '', weight: '', pulse: '', spo2: '', height: '', sugar: '' });
-          setPainPoints([]);
-          setPrescriptions([]);
       }
   }, [currentPatient?.id]);
+
+  // Check for Delay Expiry
+  useEffect(() => {
+      if (doctor.delayMinutes > 0 && doctor.delayStartTime) {
+          const elapsed = Date.now() - doctor.delayStartTime;
+          const delayMs = doctor.delayMinutes * 60 * 1000;
+          if (elapsed >= delayMs) {
+              // Timer finished, clear delay automatically
+              onUpdateStatus(doctor.id, doctor.status, 0);
+          }
+      }
+  }, [currentTime, doctor.delayMinutes, doctor.delayStartTime]);
 
   const handleAiAssist = async () => {
     if (!currentPatient || !notes) return;
@@ -120,12 +155,10 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
 
   const handleComplete = () => {
     if (currentPatient) {
-      // Build final note with Rx appended
       let finalNote = notes;
       if (prescriptions.length > 0) {
           finalNote += `\n\n--- PRESCRIPTION ---\n` + prescriptions.map(rx => `• ${rx.name} (${rx.dosage}) for ${rx.duration}`).join('\n');
       }
-
       onUpdatePatientDetails(currentPatient.id, { vitals, painPoints });
       onCompletePatient(currentPatient.id, finalNote);
       setNotes('');
@@ -138,7 +171,8 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
   };
 
   const toggleDelay = () => {
-      const newDelay = doctor.delayMinutes === 0 ? 15 : 0;
+      // Toggle between 15m delay and 0
+      const newDelay = doctor.delayMinutes > 0 ? 0 : 15;
       onUpdateStatus(doctor.id, doctor.status, newDelay);
   };
 
@@ -146,21 +180,6 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
       setNotes(prev => prev ? `${prev}\n- Diagnosis: ${text}` : `- Diagnosis: ${text}`);
   };
 
-  const handleBodyClick = (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!currentPatient) return;
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      setPainPoints([...painPoints, { x, y }]);
-  };
-
-  const addFollowUp = (days: number) => {
-      const date = new Date();
-      date.setDate(date.getDate() + days);
-      setNotes(prev => prev ? `${prev}\n[System]: Follow up in ${days} days (${date.toLocaleDateString()})` : `[System]: Follow up in ${days} days (${date.toLocaleDateString()})`);
-  };
-
-  // Rx Helpers
   const addPrescription = () => {
       if (rxForm.name) {
           setPrescriptions([...prescriptions, { ...rxForm }]);
@@ -168,214 +187,343 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
       }
   };
 
-  const removePrescription = (index: number) => {
-      setPrescriptions(prescriptions.filter((_, i) => i !== index));
-  };
+  // Timer Calculation
+  const breakDuration = doctor.status === DoctorStatus.ON_BREAK && doctor.statusUpdateTime 
+      ? currentTime - doctor.statusUpdateTime 
+      : 0;
+  
+  const delayRemaining = doctor.delayMinutes > 0 && doctor.delayStartTime
+      ? (doctor.delayMinutes * 60 * 1000) - (currentTime - doctor.delayStartTime)
+      : 0;
 
   return (
-    <div className="p-6 h-full overflow-y-auto bg-slate-50">
-      <div className="flex items-center justify-between mb-8 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-4">
-          <img src={doctor.avatarUrl} alt={doctor.name} className="w-12 h-12 rounded-full border-2 border-white shadow-sm" />
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                {doctor.name}
-                {doctor.status === DoctorStatus.ON_BREAK && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full font-bold">ON BREAK</span>}
-                {doctor.delayMinutes > 0 && <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-bold">DELAYED {doctor.delayMinutes}m</span>}
-            </h1>
-            <p className="text-slate-500">{doctor.specialty} • Room {doctor.roomNumber}</p>
+    <div className="h-full flex flex-col bg-slate-50 overflow-hidden">
+      
+      {/* 1. STATUS & CONTROLS BAR */}
+      <div className="bg-white border-b border-slate-200 p-4 shadow-sm flex items-center justify-between flex-shrink-0 z-10">
+          <div className="flex items-center gap-4">
+              <div className="relative">
+                  <img src={doctor.avatarUrl} className="w-12 h-12 rounded-full border border-slate-100 object-cover" />
+                  <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 border-2 border-white rounded-full ${doctor.status === DoctorStatus.AVAILABLE ? 'bg-green-500' : doctor.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-400'}`}></div>
+              </div>
+              <div>
+                  <h1 className="text-xl font-bold text-slate-900 leading-none">{doctor.name}</h1>
+                  <p className="text-xs text-slate-500 mt-1">{doctor.specialty} • Room {doctor.roomNumber}</p>
+              </div>
           </div>
-        </div>
-        <div className="flex gap-3 items-center">
-             <div className="flex gap-2 mr-4 border-r border-slate-200 pr-4">
-                 <Button 
-                    size="sm" 
-                    variant={doctor.status === DoctorStatus.ON_BREAK ? 'primary' : 'secondary'}
-                    onClick={toggleBreak}
-                    className={doctor.status === DoctorStatus.ON_BREAK ? 'bg-orange-500 hover:bg-orange-600' : ''}
-                >
-                    <Coffee className="h-4 w-4 mr-2" />
-                    {doctor.status === DoctorStatus.ON_BREAK ? 'Resume Work' : 'Take Break'}
-                 </Button>
-                 <Button 
-                    size="sm" 
-                    variant={doctor.delayMinutes > 0 ? 'primary' : 'secondary'}
-                    onClick={toggleDelay}
-                    className={doctor.delayMinutes > 0 ? 'bg-red-500 hover:bg-red-600' : ''}
-                >
-                    <Clock12 className="h-4 w-4 mr-2" />
-                    {doctor.delayMinutes > 0 ? 'Clear Delay' : 'Report 15m Delay'}
-                 </Button>
-             </div>
-             {dueAppointments.length > 0 && (
-                <div className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg border border-purple-200 text-sm font-bold flex items-center animate-pulse">
-                    <AlertCircle className="h-4 w-4 mr-2" />
-                    {dueAppointments.length} Appt Due
-                </div>
-             )}
-            <div className="px-4 py-2 bg-slate-100 rounded-lg border border-slate-200 text-sm font-medium text-slate-600">
-             Total Waiting: {sortedQueue.length}
-            </div>
-        </div>
+
+          <div className="flex items-center gap-3">
+              {/* Break Button with Count UP Timer */}
+              <button 
+                  onClick={toggleBreak}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all ${doctor.status === DoctorStatus.ON_BREAK ? 'bg-orange-500 text-white border-orange-600 shadow-lg shadow-orange-200' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+              >
+                  <Coffee className="h-5 w-5" />
+                  <div className="text-left leading-none">
+                      <div className="text-xs font-semibold opacity-80 uppercase tracking-wide">
+                          {doctor.status === DoctorStatus.ON_BREAK ? 'On Break' : 'Take Break'}
+                      </div>
+                      {doctor.status === DoctorStatus.ON_BREAK && (
+                          <div className="font-mono text-lg font-bold">{formatTime(breakDuration)}</div>
+                      )}
+                  </div>
+              </button>
+
+              {/* Delay Button with Count DOWN Timer */}
+              <button 
+                  onClick={toggleDelay}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all ${doctor.delayMinutes > 0 ? 'bg-red-500 text-white border-red-600 shadow-lg shadow-red-200' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+              >
+                  <Clock12 className="h-5 w-5" />
+                  <div className="text-left leading-none">
+                      <div className="text-xs font-semibold opacity-80 uppercase tracking-wide">
+                          {doctor.delayMinutes > 0 ? 'Delayed' : 'Report Delay'}
+                      </div>
+                      {doctor.delayMinutes > 0 ? (
+                          <div className="font-mono text-lg font-bold">{formatTime(delayRemaining)}</div>
+                      ) : (
+                          <div className="text-sm font-bold mt-0.5">15 mins</div>
+                      )}
+                  </div>
+              </button>
+          </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100vh-160px)]">
-        {/* Main Consultation Area */}
-        <div className="lg:col-span-2 space-y-6">
-          {doctor.status === DoctorStatus.ON_BREAK ? (
-              <div className="h-full flex flex-col items-center justify-center bg-orange-50 rounded-xl border border-dashed border-orange-200 text-orange-800">
-                  <Coffee className="h-20 w-20 mb-6 opacity-20" />
-                  <h2 className="text-3xl font-bold mb-2">You are on break</h2>
-                  <p className="text-orange-600 mb-8">The queue is paused. Click 'Resume Work' when you are ready.</p>
-                  <Button onClick={toggleBreak} className="bg-orange-600 hover:bg-orange-700 text-white">
-                      Resume Work
-                  </Button>
-              </div>
-          ) : currentPatient ? (
-            <Card className="p-0 overflow-hidden h-full flex flex-col">
-              <div className={`px-6 py-4 flex justify-between items-center text-white ${currentPatient.isEmergency ? 'bg-orange-500' : currentPatient.visitType === 'APPOINTMENT' ? 'bg-purple-600' : 'bg-primary-600'}`}>
-                <div>
-                  <div className="flex items-baseline gap-2">
-                    <h2 className="text-xl font-bold flex items-center gap-2">
-                        {currentPatient.name}
-                    </h2>
-                    {(currentPatient.age || currentPatient.gender) && (
-                        <span className="text-sm font-medium text-white/80">
-                            ({currentPatient.age || '?'}, {currentPatient.gender || '?'})
-                        </span>
-                    )}
-                    {currentPatient.isEmergency && <span className="text-xs bg-white text-orange-600 px-2 py-0.5 rounded font-bold uppercase">Emergency</span>}
+      {/* 2. MAIN WORKSPACE */}
+      <div className="flex-1 flex overflow-hidden">
+          
+          {/* LEFT: PATIENT CONSULTATION */}
+          <div className="flex-1 p-6 overflow-y-auto flex flex-col">
+              {currentPatient ? (
+                  <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col">
+                      {/* Patient Header Card */}
+                      <div className={`rounded-2xl p-6 text-white shadow-lg mb-6 flex justify-between items-start transition-colors ${currentPatient.isEmergency ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-slate-800 to-slate-900'}`}>
+                          <div>
+                              <div className="flex items-center gap-3 mb-1">
+                                  <h2 className="text-3xl font-bold">{currentPatient.name}</h2>
+                                  <span className="bg-white/20 px-3 py-1 rounded-lg text-sm font-bold backdrop-blur-sm">#{currentPatient.tokenNumber}</span>
+                                  {currentPatient.isEmergency && <span className="bg-white text-orange-600 px-3 py-1 rounded-lg text-sm font-bold uppercase">Emergency</span>}
+                              </div>
+                              <div className="text-white/80 flex gap-4 text-sm">
+                                  <span>{currentPatient.age || '--'} Yrs, {currentPatient.gender || '--'}</span>
+                                  {currentPatient.visitType === 'APPOINTMENT' && <span>• Appointment {currentPatient.appointmentTime}</span>}
+                              </div>
+                              {currentPatient.symptoms && (
+                                  <div className="mt-4 bg-white/10 p-3 rounded-lg backdrop-blur-sm inline-block text-sm">
+                                      <span className="opacity-70">Chief Complaint:</span> <span className="font-bold">{currentPatient.symptoms}</span>
+                                  </div>
+                              )}
+                          </div>
+                          <div className="text-right">
+                              <div className="text-4xl font-mono opacity-20"><Timer /></div>
+                          </div>
+                      </div>
+
+                      {/* Work Tabs */}
+                      <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar">
+                          {[
+                              { id: 'NOTES', icon: FileText, label: 'Notes & Diagnosis' },
+                              { id: 'VITALS', icon: Activity, label: 'Vitals Check' },
+                              { id: 'RX', icon: Pill, label: 'Prescription' },
+                              { id: 'BODY', icon: User, label: 'Body Map' },
+                          ].map(tab => (
+                              <button
+                                  key={tab.id}
+                                  onClick={() => setActiveTab(tab.id as any)}
+                                  className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all border ${activeTab === tab.id ? 'bg-white border-primary-500 text-primary-600 shadow-sm ring-1 ring-primary-100' : 'bg-slate-100 border-transparent text-slate-500 hover:bg-white hover:border-slate-200'}`}
+                              >
+                                  <tab.icon className="h-4 w-4" /> {tab.label}
+                              </button>
+                          ))}
+                      </div>
+
+                      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex-1 flex flex-col overflow-hidden">
+                          {/* TAB CONTENT */}
+                          <div className="flex-1 overflow-y-auto p-6">
+                              
+                              {/* 1. NOTES */}
+                              {activeTab === 'NOTES' && (
+                                  <div className="h-full flex flex-col">
+                                      <div className="mb-4">
+                                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Quick Diagnosis</label>
+                                          <div className="flex flex-wrap gap-2">
+                                              {COMMON_DIAGNOSES.map(d => (
+                                                  <button key={d} onClick={() => addTemplateNote(d)} className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 transition-colors">
+                                                      + {d}
+                                                  </button>
+                                              ))}
+                                          </div>
+                                      </div>
+                                      <textarea 
+                                          className="flex-1 w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none font-medium text-slate-700 leading-relaxed"
+                                          placeholder="Type clinical observations here..."
+                                          value={notes}
+                                          onChange={(e) => setNotes(e.target.value)}
+                                      />
+                                      <div className="flex justify-end mt-2">
+                                          <Button size="sm" variant="ghost" onClick={handleAiAssist} disabled={isAiLoading || !notes} className="text-purple-600">
+                                              <Sparkles className="h-4 w-4 mr-2" /> AI Summarize
+                                          </Button>
+                                      </div>
+                                  </div>
+                              )}
+
+                              {/* 2. VITALS */}
+                              {activeTab === 'VITALS' && (
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                                      {Object.entries({
+                                          bp: { label: 'Blood Pressure', unit: 'mmHg', icon: Activity },
+                                          temp: { label: 'Temperature', unit: '°F', icon: Thermometer },
+                                          pulse: { label: 'Pulse Rate', unit: 'bpm', icon: Heart },
+                                          weight: { label: 'Weight', unit: 'kg', icon: Weight },
+                                          spo2: { label: 'SpO2', unit: '%', icon: Zap },
+                                          sugar: { label: 'Blood Sugar', unit: 'mg/dL', icon: Droplets },
+                                      }).map(([key, config]) => (
+                                          <div key={key} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                              <div className="flex items-center gap-2 text-slate-500 mb-2">
+                                                  <config.icon className="h-4 w-4" />
+                                                  <span className="text-xs font-bold uppercase">{config.label}</span>
+                                              </div>
+                                              <div className="flex items-baseline gap-2">
+                                                  <input 
+                                                      className="flex-1 bg-transparent border-b-2 border-slate-200 focus:border-primary-500 outline-none text-xl font-bold text-slate-900 pb-1"
+                                                      placeholder="--"
+                                                      value={(vitals as any)[key]}
+                                                      onChange={(e) => setVitals({ ...vitals, [key]: e.target.value })}
+                                                  />
+                                                  <span className="text-xs text-slate-400 font-medium">{config.unit}</span>
+                                              </div>
+                                          </div>
+                                      ))}
+                                  </div>
+                              )}
+
+                              {/* 3. PRESCRIPTION */}
+                              {activeTab === 'RX' && (
+                                  <div>
+                                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
+                                          <div className="grid grid-cols-12 gap-3 items-end">
+                                              <div className="col-span-5">
+                                                  <label className="text-[10px] font-bold text-slate-400 uppercase">Medicine</label>
+                                                  <input placeholder="e.g. Dolo 650" className="w-full p-2 rounded-lg border border-slate-300 text-sm" value={rxForm.name} onChange={e => setRxForm({...rxForm, name: e.target.value})} />
+                                              </div>
+                                              <div className="col-span-3">
+                                                  <label className="text-[10px] font-bold text-slate-400 uppercase">Dosage</label>
+                                                  <select className="w-full p-2 rounded-lg border border-slate-300 text-sm" value={rxForm.dosage} onChange={e => setRxForm({...rxForm, dosage: e.target.value})}><option>1-0-1</option><option>1-0-0</option><option>0-0-1</option><option>1-1-1</option><option>SOS</option></select>
+                                              </div>
+                                              <div className="col-span-3">
+                                                  <label className="text-[10px] font-bold text-slate-400 uppercase">Duration</label>
+                                                  <select className="w-full p-2 rounded-lg border border-slate-300 text-sm" value={rxForm.duration} onChange={e => setRxForm({...rxForm, duration: e.target.value})}><option>3 days</option><option>5 days</option><option>7 days</option><option>15 days</option><option>1 month</option></select>
+                                              </div>
+                                              <div className="col-span-1">
+                                                  <Button onClick={addPrescription} className="w-full justify-center"><Plus className="h-5 w-5" /></Button>
+                                              </div>
+                                          </div>
+                                      </div>
+                                      
+                                      <div className="space-y-2">
+                                          {prescriptions.map((rx, idx) => (
+                                              <div key={idx} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-lg shadow-sm">
+                                                  <div className="flex items-center gap-3">
+                                                      <div className="bg-green-100 p-2 rounded-full text-green-600"><Pill className="h-4 w-4" /></div>
+                                                      <div>
+                                                          <div className="font-bold text-slate-900">{rx.name}</div>
+                                                          <div className="text-xs text-slate-500">{rx.dosage} for {rx.duration}</div>
+                                                      </div>
+                                                  </div>
+                                                  <button onClick={() => setPrescriptions(prescriptions.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
+                                              </div>
+                                          ))}
+                                          {prescriptions.length === 0 && <div className="text-center py-8 text-slate-400 text-sm">No medicines added yet.</div>}
+                                      </div>
+                                  </div>
+                              )}
+
+                              {/* 4. BODY MAP */}
+                              {activeTab === 'BODY' && (
+                                  <div className="h-full flex flex-col items-center justify-center">
+                                      <p className="text-sm text-slate-500 mb-4">Click to mark pain areas</p>
+                                      <div className="relative h-96 w-48 bg-slate-100 rounded-full border-2 border-slate-200 cursor-crosshair shadow-inner" onClick={(e) => {
+                                          const rect = e.currentTarget.getBoundingClientRect();
+                                          const x = ((e.clientX - rect.left) / rect.width) * 100;
+                                          const y = ((e.clientY - rect.top) / rect.height) * 100;
+                                          setPainPoints([...painPoints, { x, y }]);
+                                      }}>
+                                          {/* Simple Abstract Body Shape */}
+                                          <div className="absolute top-4 left-1/2 -translate-x-1/2 w-16 h-16 rounded-full border-2 border-slate-300"></div>
+                                          <div className="absolute top-20 left-1/2 -translate-x-1/2 w-24 h-32 rounded-3xl border-2 border-slate-300"></div>
+                                          <div className="absolute top-52 left-1/2 -translate-x-1/2 w-24 h-40 rounded-b-3xl border-2 border-slate-300"></div>
+                                          
+                                          {painPoints.map((p, i) => (
+                                              <div key={i} className="absolute w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-sm transform -translate-x-1/2 -translate-y-1/2 animate-in zoom-in" style={{ left: `${p.x}%`, top: `${p.y}%` }}></div>
+                                          ))}
+                                      </div>
+                                      <button className="mt-4 text-xs text-red-500 hover:underline" onClick={() => setPainPoints([])}>Clear All Points</button>
+                                  </div>
+                              )}
+                          </div>
+
+                          {/* FOOTER ACTIONS */}
+                          <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+                              <Button variant="secondary" onClick={() => onHoldPatient(currentPatient.id)}>
+                                  <PauseCircle className="h-4 w-4 mr-2" /> Hold Patient
+                              </Button>
+                              <Button onClick={handleComplete} className="px-8 shadow-lg shadow-primary-200">
+                                  <Check className="h-5 w-5 mr-2" /> Complete Visit
+                              </Button>
+                          </div>
+                      </div>
                   </div>
-                  <div className="flex items-center gap-2 text-white/90 text-sm mt-1">
-                     <span>Token #{currentPatient.tokenNumber}</span>
-                     <span>•</span>
-                     <span className="uppercase font-semibold tracking-wide">{currentPatient.visitType}</span>
+              ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+                      <div className="bg-slate-100 p-6 rounded-full mb-4">
+                          <User className="h-12 w-12 opacity-50" />
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-600">No Active Consultation</h3>
+                      <p className="text-sm">Select a patient from the queue to start.</p>
+                      {sortedQueue.length > 0 && doctor.status === DoctorStatus.AVAILABLE && (
+                          <Button onClick={onNextPatient} className="mt-6 shadow-xl" size="lg">
+                              <PlayCircle className="h-5 w-5 mr-2" /> Call Next Patient
+                          </Button>
+                      )}
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="bg-white/10 px-3 py-1 rounded-md text-sm backdrop-blur-sm mb-1">In Consultation</div>
-                  {currentPatient.symptoms && (<div className="text-xs text-white/90 italic font-medium">Reason: {currentPatient.symptoms}</div>)}
-                </div>
+              )}
+          </div>
+
+          {/* RIGHT: QUEUE SIDEBAR */}
+          <div className="w-80 bg-white border-l border-slate-200 flex flex-col z-20 shadow-xl">
+              <div className="p-4 border-b border-slate-100 bg-slate-50">
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                      <List className="h-4 w-4" /> Patient Queue
+                      <span className="bg-primary-100 text-primary-700 text-xs px-2 py-0.5 rounded-full">{sortedQueue.length}</span>
+                  </h3>
               </div>
               
-              <div className="p-6 flex-1 flex flex-col overflow-y-auto">
-                {/* Vitals Input Section */}
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <div><label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-1"><Activity className="h-3 w-3" /> BP</label><input className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" placeholder="120/80" value={vitals.bp} onChange={(e) => setVitals({...vitals, bp: e.target.value})}/></div>
-                    <div><label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-1"><Thermometer className="h-3 w-3" /> Temp</label><input className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" placeholder="98.6" value={vitals.temp} onChange={(e) => setVitals({...vitals, temp: e.target.value})}/></div>
-                    <div><label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-1"><Weight className="h-3 w-3" /> Wt(kg)</label><input className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" placeholder="70" value={vitals.weight} onChange={(e) => setVitals({...vitals, weight: e.target.value})}/></div>
-                    <div><label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-1"><Heart className="h-3 w-3" /> Pulse</label><input className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" placeholder="72" value={vitals.pulse} onChange={(e) => setVitals({...vitals, pulse: e.target.value})}/></div>
-                    <div><label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-1"><Zap className="h-3 w-3" /> SpO2</label><input className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" placeholder="98%" value={vitals.spo2} onChange={(e) => setVitals({...vitals, spo2: e.target.value})}/></div>
-                    <div><label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-1"><Ruler className="h-3 w-3" /> Ht(cm)</label><input className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" placeholder="175" value={vitals.height} onChange={(e) => setVitals({...vitals, height: e.target.value})}/></div>
-                    <div><label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-1"><Droplets className="h-3 w-3" /> Sugar</label><input className="w-full text-sm font-medium border-b border-slate-300 bg-transparent focus:outline-none focus:border-primary-500" placeholder="mg/dL" value={vitals.sugar} onChange={(e) => setVitals({...vitals, sugar: e.target.value})}/></div>
-                </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                  {/* HELD PATIENTS SECTION */}
+                  {heldPatients.length > 0 && (
+                      <div className="bg-orange-50 rounded-xl p-3 border border-orange-100">
+                          <h4 className="text-[10px] font-bold text-orange-700 uppercase mb-2 flex items-center gap-1">
+                              <PauseCircle className="h-3 w-3" /> On Hold ({heldPatients.length})
+                          </h4>
+                          <div className="space-y-2">
+                              {heldPatients.map(p => (
+                                  <div key={p.id} className="bg-white p-2 rounded-lg border border-orange-200 shadow-sm flex justify-between items-center">
+                                      <div>
+                                          <div className="font-bold text-sm text-slate-800">{p.name}</div>
+                                          <div className="text-[10px] text-slate-500">#{p.tokenNumber} • {p.symptoms || 'No reason'}</div>
+                                      </div>
+                                      <button 
+                                          onClick={() => onResumePatient(p.id)}
+                                          disabled={!!currentPatient}
+                                          className={`p-1.5 rounded-md transition-colors ${currentPatient ? 'bg-slate-100 text-slate-400' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                                      >
+                                          <Play className="h-4 w-4" />
+                                      </button>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                  )}
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 flex-1">
-                    {/* Notes & Rx */}
-                    <div className="md:col-span-2 flex flex-col">
-                        {/* Tab-like header */}
-                        <div className="flex gap-4 border-b border-slate-100 pb-2 mb-2">
-                             <div className="font-bold text-sm text-primary-600 flex items-center gap-2 border-b-2 border-primary-600 pb-2 -mb-2.5"><FileText className="h-4 w-4"/> Clinical Notes</div>
-                        </div>
+                  {/* ACTIVE QUEUE */}
+                  {sortedQueue.map((p, i) => (
+                      <div key={p.id} className={`p-3 rounded-xl border relative transition-all group ${i === 0 ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-100 hover:border-slate-300'}`}>
+                          {i === 0 && <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">NEXT</div>}
+                          
+                          <div className="flex justify-between items-start mb-1">
+                              <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${p.isEmergency ? 'bg-red-100 text-red-600' : p.visitType === 'APPOINTMENT' ? 'bg-purple-100 text-purple-600' : 'bg-slate-100 text-slate-600'}`}>
+                                  {p.isEmergency ? 'URGENT' : p.visitType === 'APPOINTMENT' ? 'APPT' : 'WALK-IN'}
+                              </span>
+                              <span className="font-mono text-sm font-bold text-slate-400">#{p.tokenNumber}</span>
+                          </div>
+                          
+                          <div className="font-bold text-slate-900 mb-0.5">{p.name}</div>
+                          {p.symptoms && <div className="text-xs text-slate-500 truncate italic">{p.symptoms}</div>}
+                          
+                          {p.visitType === 'APPOINTMENT' && (
+                              <div className="mt-2 flex items-center gap-1 text-[10px] font-medium text-slate-500 bg-slate-50 p-1 rounded w-fit">
+                                  <Clock className="h-3 w-3" /> {p.appointmentTime}
+                                  {p.isCheckedIn ? <span className="text-green-600 ml-1 font-bold">✓ Arrived</span> : <span className="text-red-400 ml-1">Not Here</span>}
+                              </div>
+                          )}
 
-                        <textarea 
-                            className="flex-1 w-full p-4 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none font-mono text-sm leading-relaxed mb-3 min-h-[100px]"
-                            placeholder="Type findings here..."
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                        />
-                        
-                        <div className="flex flex-wrap gap-2 mb-4">
-                            {COMMON_DIAGNOSES.map(d => (<button key={d} onClick={() => addTemplateNote(d)} className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded border border-slate-200 transition-colors">+ {d}</button>))}
-                             <Button size="sm" variant="ghost" onClick={handleAiAssist} disabled={!notes || isAiLoading} className="text-purple-600 h-7 text-xs ml-auto"><Sparkles className="h-3 w-3 mr-1" /> AI Summary</Button>
-                        </div>
-
-                        {/* PRESCRIPTION BUILDER */}
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                             <h4 className="font-bold text-sm text-slate-700 mb-3 flex items-center gap-2"><Pill className="h-4 w-4"/> Rx (Prescription)</h4>
-                             
-                             <div className="flex gap-2 mb-3">
-                                 <input placeholder="Medicine Name (e.g. Dolo 650)" className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm" value={rxForm.name} onChange={e => setRxForm({...rxForm, name: e.target.value})} />
-                                 <select className="rounded border border-slate-300 px-2 py-1 text-sm" value={rxForm.dosage} onChange={e => setRxForm({...rxForm, dosage: e.target.value})}><option>1-0-1</option><option>1-0-0</option><option>0-0-1</option><option>1-1-1</option><option>SOS</option></select>
-                                 <select className="rounded border border-slate-300 px-2 py-1 text-sm" value={rxForm.duration} onChange={e => setRxForm({...rxForm, duration: e.target.value})}><option>3 days</option><option>5 days</option><option>7 days</option><option>15 days</option><option>1 month</option></select>
-                                 <Button size="sm" onClick={addPrescription}>Add</Button>
-                             </div>
-
-                             {prescriptions.length > 0 && (
-                                 <div className="space-y-1">
-                                     {prescriptions.map((rx, idx) => (
-                                         <div key={idx} className="flex justify-between items-center bg-white px-3 py-2 rounded border border-slate-200 shadow-sm">
-                                             <div className="text-sm"><span className="font-bold">{rx.name}</span> <span className="text-slate-500 mx-2">|</span> {rx.dosage} <span className="text-slate-500 mx-2">|</span> {rx.duration}</div>
-                                             <button onClick={() => removePrescription(idx)} className="text-slate-400 hover:text-red-500"><Trash2 className="h-4 w-4"/></button>
-                                         </div>
-                                     ))}
-                                 </div>
-                             )}
-                        </div>
-                    </div>
-
-                    {/* Body Map Canvas */}
-                    <div className="border border-slate-200 rounded-lg p-2 bg-slate-50 flex flex-col items-center justify-center relative select-none">
-                        <span className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Pain Points</span>
-                        <div className="relative h-64 w-32 cursor-crosshair" onClick={handleBodyClick}>
-                            <svg viewBox="0 0 100 200" className="h-full w-full opacity-20 hover:opacity-40 transition-opacity">
-                                <path d="M50,10 C60,10 65,15 65,25 C65,35 60,40 50,40 C40,40 35,35 35,25 C35,15 40,10 50,10 Z M50,40 C70,45 80,50 85,80 L80,110 L70,105 L75,80 C70,60 65,60 65,100 L70,180 L55,180 L50,130 L45,180 L30,180 L35,100 C35,60 30,60 25,80 L20,105 L10,110 L15,80 C20,50 30,45 50,40 Z" fill="currentColor" />
-                            </svg>
-                            {painPoints.map((p, i) => (<div key={i} className="absolute w-3 h-3 bg-red-500 rounded-full border border-white shadow-sm transform -translate-x-1/2 -translate-y-1/2" style={{ left: `${p.x}%`, top: `${p.y}%` }}></div>))}
-                        </div>
-                        <button className="mt-2 text-xs text-slate-400 hover:text-red-500 underline" onClick={() => setPainPoints([])}>Clear Map</button>
-                    </div>
-                </div>
-
-                <div className="mt-auto border-t border-slate-100 pt-4 grid grid-cols-2 gap-4 items-center">
-                  <div className="flex gap-2"><Button size="sm" variant="secondary" onClick={() => addFollowUp(3)} className="text-xs"><Calendar className="h-3 w-3 mr-1" /> +3 Days</Button><Button size="sm" variant="secondary" onClick={() => addFollowUp(7)} className="text-xs"><Calendar className="h-3 w-3 mr-1" /> +1 Week</Button></div>
-                  <div className="flex justify-end gap-3">
-                      <Button variant="secondary">Hold</Button>
-                      <Button variant="primary" onClick={handleComplete}><Check className="h-4 w-4 mr-2" /> Complete & Print</Button>
-                  </div>
-                </div>
+                          {i === 0 && !currentPatient && doctor.status === DoctorStatus.AVAILABLE && (
+                              <Button size="sm" className="w-full mt-3 h-8 text-xs" onClick={onNextPatient}>
+                                  Call In <ChevronRight className="h-3 w-3 ml-1" />
+                              </Button>
+                          )}
+                      </div>
+                  ))}
+                  
+                  {sortedQueue.length === 0 && heldPatients.length === 0 && (
+                      <div className="text-center py-10 opacity-50">
+                          <Coffee className="h-12 w-12 mx-auto mb-2 text-slate-300" />
+                          <p className="text-sm text-slate-500">Queue is empty</p>
+                      </div>
+                  )}
               </div>
-            </Card>
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center bg-white rounded-xl border border-dashed border-slate-300 text-slate-400">
-              <User className="h-16 w-16 mb-4 opacity-20" />
-              <h3 className="text-xl font-medium text-slate-600">Ready for Next Patient</h3>
-              {sortedQueue.length > 0 ? (
-                <div className="text-center mt-4">
-                    <p className="text-sm text-slate-500 mb-3">Up Next: <span className="font-bold text-slate-800">{sortedQueue[0].name}</span></p>
-                    <Button onClick={onNextPatient} size="lg" className={`shadow-lg ${sortedQueue[0].isEmergency ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-200' : 'shadow-primary-100'}`}><PlayCircle className="h-5 w-5 mr-2" /> Call Next Patient (#{sortedQueue[0].tokenNumber})</Button>
-                </div>
-              ) : <p className="text-sm">Waiting for patients...</p>}
-            </div>
-          )}
-        </div>
-
-        {/* Sidebar Queue */}
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
-          <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center"><h3 className="font-semibold text-slate-700">Smart Queue</h3><span className="text-xs bg-slate-200 px-2 py-1 rounded text-slate-600">Auto-Sorted</span></div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-2">
-            {sortedQueue.length === 0 ? <div className="p-8 text-center text-slate-500 text-sm">Queue is empty.</div> : sortedQueue.map((p, idx) => {
-                    const isAppt = p.visitType === 'APPOINTMENT';
-                    const now = new Date();
-                    const currentMins = now.getHours() * 60 + now.getMinutes();
-                    const apptMins = p.appointmentTime ? parseInt(p.appointmentTime.split(':')[0]) * 60 + parseInt(p.appointmentTime.split(':')[1]) : 0;
-                    const isNotCheckedIn = isAppt && !p.isCheckedIn && (currentMins > apptMins - 15);
-
-                    return (
-                        <div key={p.id} className={`p-3 rounded-lg border transition-colors flex justify-between items-center group ${idx === 0 ? 'bg-blue-50 border-blue-200' : 'border-slate-100 hover:bg-slate-50'}`}>
-                            <div className="flex items-center gap-3">
-                                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${p.isEmergency ? 'bg-orange-100 text-orange-700' : isAppt ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-600'}`}>{p.isEmergency ? <Zap className="h-4 w-4 fill-current"/> : p.tokenNumber}</div>
-                                <div>
-                                    <div className="flex items-center gap-2"><p className="font-medium text-slate-900 text-sm">{p.name}</p>{p.isEmergency && <span className="text-[10px] bg-orange-500 text-white font-bold px-1 py-0.5 rounded">URGENT</span>}{p.isCheckedIn && <span className="text-[10px] bg-green-500 text-white font-bold px-1 py-0.5 rounded">HERE</span>}{isNotCheckedIn && <span className="text-[10px] bg-slate-200 text-slate-500 font-bold px-1 py-0.5 rounded">NO SHOW?</span>}</div>
-                                    <p className="text-xs text-slate-500 flex items-center gap-1">{isAppt ? <><CalendarClock className="h-3 w-3" /> {p.appointmentTime}</> : <><User className="h-3 w-3" /> Walk-in</>}</p>
-                                </div>
-                            </div>
-                            {idx === 0 && !currentPatient && doctor.status === DoctorStatus.AVAILABLE && <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100" onClick={onNextPatient}><SkipForward className="h-4 w-4" /></Button>}
-                        </div>
-                    );
-                })}
           </div>
-        </div>
       </div>
     </div>
   );

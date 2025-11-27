@@ -4,6 +4,7 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 import { Building2, Plus, LogIn, Activity, CheckCircle } from 'lucide-react';
+import { Logo } from '../components/Logo';
 
 interface ClinicAuthProps {
   clinics: Clinic[];
@@ -28,10 +29,8 @@ export const ClinicAuth: React.FC<ClinicAuthProps> = ({ clinics, onSelectClinic,
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
       <div className="mb-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="bg-primary-600 p-3 rounded-2xl inline-flex mb-4 shadow-lg shadow-primary-200">
-          <Activity className="h-8 w-8 text-white" />
-        </div>
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">Welcome to ClinicQ</h1>
+        <Logo className="h-16 w-16 mx-auto mb-4 shadow-xl shadow-primary-200 rounded-2xl" />
+        <h1 className="text-3xl font-bold text-slate-900 mb-2">Welcome to SmartQFlow</h1>
         <p className="text-slate-500">SaaS Platform for Hospitals & Clinics</p>
       </div>
 
@@ -98,8 +97,8 @@ export const ClinicAuth: React.FC<ClinicAuthProps> = ({ clinics, onSelectClinic,
               <label className="block text-sm font-medium text-slate-700 mb-2">Select Plan</label>
               <div className="grid grid-cols-1 gap-3">
                 {[
-                  { id: PlanType.SOLO, name: 'Solo Clinic', price: '₹799' },
-                  { id: PlanType.SMALL, name: 'Small Hospital', price: '₹1,999' },
+                  { id: PlanType.SOLO, name: 'Solo Clinic', price: '₹999' },
+                  { id: PlanType.SMALL, name: 'Small Hospital', price: '₹2,499' },
                 ].map(plan => (
                   <div 
                     key={plan.id}

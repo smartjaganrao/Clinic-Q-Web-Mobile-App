@@ -31,7 +31,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     // Derived Stats
     const totalRevenue = clinics.reduce((acc, c) => {
-        const price = c.plan === PlanType.PREMIUM ? 3999 : c.plan === PlanType.SMALL ? 1999 : 799;
+        const price = c.plan === PlanType.PREMIUM ? 4499 : c.plan === PlanType.SMALL ? 2499 : 999;
         return acc + price;
     }, 0);
     

@@ -1,4 +1,3 @@
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   DOCTOR = 'DOCTOR',
@@ -13,7 +12,8 @@ export enum PatientStatus {
   WITH_DOCTOR = 'WITH_DOCTOR',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
-  SKIPPED = 'SKIPPED' // For No-Shows / Absent
+  SKIPPED = 'SKIPPED', // For No-Shows / Absent
+  ON_HOLD = 'ON_HOLD'  // New status for paused consultations
 }
 
 export enum DoctorStatus {
@@ -54,6 +54,8 @@ export interface Doctor {
   roomNumber: string;
   isAvailable: boolean;
   status: DoctorStatus; // New field for detailed status
+  statusUpdateTime?: number; // New: Timestamp when status changed (for timers)
+  delayStartTime?: number; // New: Timestamp when delay started (separate from status)
   delayMinutes: number; // New field for delays
   avatarUrl?: string;
   weeklySchedule: DaySchedule[]; // New: 7-day specific schedule
