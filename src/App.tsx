@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, Notification, ClinicStats } from '../types';
-import { INITIAL_CLINICS } from '../constants';
+import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, Notification, ClinicStats } from '.././types';
+import { INITIAL_CLINICS } from '.././constants';
 import { LandingPage } from './pages/LandingPage';
 import { StaffLogin } from './pages/StaffLogin';
 import { PatientLogin } from './pages/PatientLogin';
@@ -790,15 +790,13 @@ export default function App() {
           addToast={addToast}
           onUpdateDetails={handleEditPatient}
           onCancelVisit={(clinicId, pId) => {
-              const c = clinics.find(cl => cl.id === clinicId);
-              if (c) {
-                  // Must use handleUpdateStatus logic but cross-component
-                  setClinics(prev => prev.map(cl => 
-                      cl.id === clinicId 
-                      ? { ...cl, patients: cl.patients.map(p => p.id === pId ? { ...p, status: PatientStatus.CANCELLED } : p) } 
-                      : cl
-                  ));
-              }
+              // Safer implementation: Don't rely on closure 'clinics' variable check.
+              // Directly use functional update to find and modify the target.
+              setClinics(prev => prev.map(cl => 
+                  cl.id === clinicId 
+                  ? { ...cl, patients: cl.patients.map(p => p.id === pId ? { ...p, status: PatientStatus.CANCELLED } : p) } 
+                  : cl
+              ));
           }}
           onCheckIn={(clinicId, pId) => {
               setClinics(prev => prev.map(cl => 
