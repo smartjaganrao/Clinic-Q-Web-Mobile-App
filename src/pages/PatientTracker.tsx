@@ -1314,8 +1314,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                         title={canBook ? (activeNow ? 'Book now' : `Book • ${formatShort(next!.start)}`) : 'No available slots' }
                                                                     >
                                                                         {canBook ? (
-                                                                            <span className="inline-flex items-center gap-2">
-                                                                                {activeNow ? <Timer className="h-4 w-4" /> : <Clock className="h-4 w-4 p-2" />}
+                                                                            <span className="inline-flex items-center ">
                                                                                 <span className="font-semibold text-sm">{activeNow ? 'Book Now' : `Book • ${formatShort(next!.start)}`}</span>
                                                                             </span>
                                                                         ) : (
