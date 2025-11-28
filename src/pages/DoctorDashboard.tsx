@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Doctor, Patient, PatientStatus, DoctorStatus, PainPoint } from '../types';
+import { Doctor, Patient, PatientStatus, DoctorStatus, PainPoint } from '../../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { generatePatientSummary } from '../services/geminiService';

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { PRICING_PLANS } from '../constants';
-import { Clinic } from '../types';
+import { PRICING_PLANS } from '../../constants';
+import { Clinic } from '../../types';
 import { 
   Check, Activity, Users, Monitor, 
   Smartphone, Star, LayoutDashboard, Stethoscope, 
@@ -260,7 +260,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
                                 <Brain className="h-6 w-6 text-green-600 flex-shrink-0 mt-1" />
                                 <div>
                                     <h4 className="font-bold text-slate-900">Smart Hybrid Logic</h4>
-                                    <p className="text-slate-600 text-sm">System automatically sorts Emergencies > Appointments > Walk-ins fairly.</p>
+                                    <p className="text-slate-600 text-sm">System automatically sorts Emergencies Appointments Walk-ins fairly.</p>
                                 </div>
                             </li>
                         </ul>

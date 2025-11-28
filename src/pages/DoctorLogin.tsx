@@ -1,5 +1,5 @@
 import React from 'react';
-import { Doctor, Clinic } from '../types';
+import { Doctor, Clinic } from '../../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { User, Stethoscope, ArrowLeft } from 'lucide-react';

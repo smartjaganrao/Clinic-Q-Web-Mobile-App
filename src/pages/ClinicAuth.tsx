@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clinic, PlanType, UserRole } from '../types';
+import { Clinic, PlanType, UserRole } from '../../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';

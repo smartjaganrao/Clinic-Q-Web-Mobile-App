@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { PatientStatus } from '../types';
+import { PatientStatus } from '../../types';
 
 interface BadgeProps {
   status: PatientStatus;

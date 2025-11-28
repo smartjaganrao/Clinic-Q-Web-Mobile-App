@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Doctor, Patient, PatientStatus, DoctorStatus } from '../types';
+import { Doctor, Patient, PatientStatus, DoctorStatus } from '../../types';
 import { Coffee, Clock, Zap, AlertTriangle, PlayCircle, LogOut } from 'lucide-react';
 
 interface KioskProps {

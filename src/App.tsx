@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, Notification, ClinicStats } from './types';
-import { INITIAL_CLINICS } from './constants';
+import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, Notification, ClinicStats } from '../types';
+import { INITIAL_CLINICS } from '../constants';
 import { LandingPage } from './pages/LandingPage';
 import { StaffLogin } from './pages/StaffLogin';
 import { PatientLogin } from './pages/PatientLogin';

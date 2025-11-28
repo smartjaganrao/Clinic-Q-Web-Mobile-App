@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Clinic, Patient, PatientStatus, ClinicType } from '../types';
+import { Clinic, Patient, PatientStatus, ClinicType } from '../../types';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
