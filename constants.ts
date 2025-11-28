@@ -5,9 +5,9 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
 const createDefaultSchedule = (): DaySchedule[] => {
   return DAYS.map(day => ({
     day,
-    startTime: '09:00',
-    endTime: '17:00',
-    isOff: day === 'Sunday' // Default Sunday off
+    // Default single slot 09:00-17:00, empty slots means OFF
+    slots: day === 'Sunday' ? [] : [{ startTime: '09:00', endTime: '17:00', active: true }],
+    isOff: day === 'Sunday'
   }));
 };
 

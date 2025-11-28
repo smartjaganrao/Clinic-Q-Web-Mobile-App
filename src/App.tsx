@@ -208,6 +208,75 @@ export default function App() {
     
     const visitType = date && time ? 'APPOINTMENT' : 'WALK_IN';
 
+    // Validate appointment time against doctor's slots (if appointment requested)
+    if (visitType === 'APPOINTMENT') {
+      if (!doctor) {
+        addToast('Doctor not found for appointment', 'error');
+        return;
+      }
+      // find day name for date
+      try {
+        const d = new Date(date! + 'T00:00:00');
+        const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+        const prevDate = (() => { const dd = new Date(date! + 'T00:00:00'); dd.setDate(dd.getDate() - 1); return dd.toLocaleDateString('en-US', { weekday: 'long' }); })();
+
+        const schedule = doctor.weeklySchedule.find((s: any) => s.day === dayName);
+        const prevSchedule = doctor.weeklySchedule.find((s: any) => s.day === prevDate);
+        if ((!schedule || schedule.isOff || !schedule.slots || schedule.slots.length === 0) && (!prevSchedule || prevSchedule.isOff || !prevSchedule.slots || prevSchedule.slots.length === 0)) {
+          addToast('Doctor is not available on the selected date', 'error');
+          return;
+        }
+
+        const [hStr, mStr] = (time || '').split(':');
+        const apptM = Number(hStr) * 60 + Number(mStr);
+
+        const slotMatchesForDate = (slotStart: string, slotEnd: string) => {
+          const [sh, sm] = slotStart.split(':').map(Number);
+          const [eh, em] = slotEnd.split(':').map(Number);
+          let s = sh * 60 + sm;
+          let e = eh * 60 + em;
+          if (e <= s) e += 24 * 60; // overnight
+          const cand1 = apptM;
+          const cand2 = apptM + 24 * 60;
+          return (cand1 >= s && cand1 < e) || (cand2 >= s && cand2 < e);
+        };
+
+        let matches = false;
+        if (schedule && schedule.slots) {
+          matches = schedule.slots.some((sl:any) => sl.active !== false && slotMatchesForDate(sl.startTime, sl.endTime));
+        }
+        if (!matches && prevSchedule && prevSchedule.slots) {
+          matches = prevSchedule.slots.some((sl:any) => {
+            const s = sl.startTime.split(':').map(Number);
+            const e = sl.endTime.split(':').map(Number);
+            const sM = s[0]*60 + s[1];
+            const eM = e[0]*60 + e[1];
+            if (eM <= sM) {
+              return sl.active !== false && slotMatchesForDate(sl.startTime, sl.endTime);
+            }
+            return false;
+          });
+        }
+        if (!matches) {
+          addToast('Selected appointment time is outside doctor\'s slots', 'error');
+          return;
+        }
+
+        // Prevent booking past times for today
+        const today = new Date();
+        const isoToday = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        if (date === isoToday) {
+          const nowM = today.getHours() * 60 + today.getMinutes();
+          if (apptM <= nowM) {
+            addToast('Selected time has already passed today', 'error');
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Appointment validation error', e);
+      }
+    }
+
     const newPatient: Patient = {
       id: generateId(),
       tokenNumber: (currentClinic.patients.length > 0 ? Math.max(...currentClinic.patients.map(p => p.tokenNumber)) : 0) + 1,
@@ -257,7 +326,92 @@ export default function App() {
           return;
       }
 
-      const visitType = date && time ? 'APPOINTMENT' : 'WALK_IN';
+        const visitType = date && time ? 'APPOINTMENT' : 'WALK_IN';
+
+        // If this is an appointment - validate the requested time falls inside a configured slot for that doctor on that day
+        if (visitType === 'APPOINTMENT') {
+          const doctor = targetClinic.doctors.find(d => d.id === doctorId);
+          if (!doctor) {
+            addToast('Doctor not found for booking', 'error');
+            return;
+          }
+
+          // helper: return day name for dateStr
+          const getDayName = (dateStr: string) => {
+            try {
+              const d = new Date(dateStr + 'T00:00:00');
+              return d.toLocaleDateString('en-US', { weekday: 'long' });
+            } catch { return null; }
+          };
+
+
+          // Find both schedule for the selected date and the previous date to support overnight slots
+          const dayName = getDayName(date!);
+          const prevDate = (() => { const d = new Date(date! + 'T00:00:00'); d.setDate(d.getDate() - 1); return d.toLocaleDateString('en-US', { weekday: 'long' }); })();
+
+          const schedule = doctor.weeklySchedule.find((s: any) => s.day === dayName);
+          const prevSchedule = doctor.weeklySchedule.find((s: any) => s.day === prevDate);
+
+          if ((!schedule || schedule.isOff || !schedule.slots || schedule.slots.length === 0) && (!prevSchedule || prevSchedule.isOff || !prevSchedule.slots || prevSchedule.slots.length === 0)) {
+            addToast('Doctor is not available on the selected date', 'error');
+            return;
+          }
+
+          // Check if the requested time lies within any active slot for this date.
+          // For schedule slots that are overnight (start > end), the tail portion may belong to next day (this date).
+          const [hStr, mStr] = (time || '').split(':');
+          const apptM = Number(hStr) * 60 + Number(mStr);
+
+          const slotMatchesForDate = (slotStart: string, slotEnd: string, belongsToPrevDay:boolean=false) => {
+            const [sh, sm] = slotStart.split(':').map(Number);
+            const [eh, em] = slotEnd.split(':').map(Number);
+            let s = sh * 60 + sm;
+            let e = eh * 60 + em;
+            if (e <= s) e += 24 * 60; // overnight
+
+            // For slots that belong to prev day, we need to test the early-morning tail on this date
+            // We'll check apptM against the slot range, and also allow apptM+24h for wrap comparisons
+            const cand1 = apptM;
+            const cand2 = apptM + 24 * 60;
+            return (cand1 >= s && cand1 < e) || (cand2 >= s && cand2 < e);
+          };
+
+          let matches = false;
+          if (schedule && schedule.slots) {
+            matches = schedule.slots.some((sl:any) => sl.active !== false && slotMatchesForDate(sl.startTime, sl.endTime, false));
+          }
+
+          // Also check previous day's overnight slots (that wrap into this date)
+          if (!matches && prevSchedule && prevSchedule.slots) {
+            matches = prevSchedule.slots.some((sl:any) => {
+              // slot is overnight when end <= start and the tail applies to this date
+              const s = sl.startTime.split(':').map(Number);
+              const e = sl.endTime.split(':').map(Number);
+              const sM = s[0]*60 + s[1];
+              const eM = e[0]*60 + e[1];
+              if (eM <= sM) {
+                return sl.active !== false && slotMatchesForDate(sl.startTime, sl.endTime, true);
+              }
+              return false;
+            });
+          }
+
+          if (!matches) {
+            addToast('Selected time is outside doctor\'s available slots. Pick a valid time.', 'error');
+            return;
+          }
+
+          // If booking for today ensure chosen time is still in future
+          const today = new Date();
+          const isoToday = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+          if (date === isoToday) {
+            const nowM = today.getHours() * 60 + today.getMinutes();
+            if (apptM <= nowM) {
+              addToast('Selected time has already passed today. Choose a later slot.', 'error');
+              return;
+            }
+          }
+        }
 
       const newPatient: Patient = {
         id: generateId(),

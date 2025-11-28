@@ -10,7 +10,7 @@ import {
     AlertTriangle, Star, Clock, Filter, Stethoscope, Smile, 
     Baby, Heart, Activity, Sparkles, LayoutGrid, Eye, Ear, 
     ArrowUpRight, Navigation, Timer, ChevronDown, Building2, 
-    ShieldCheck, ThumbsUp, Map, CheckCircle2, Info, Lock, History, X, AlertCircle, Sun, Moon,
+    ShieldCheck, ThumbsUp, CheckCircle2, Info, Lock, History, X, AlertCircle, Sun, Moon,
     GraduationCap, Globe, BadgeCheck, User, Users, Plus, FileHeart, LogOut, Layout, Edit2, Trash2, Coffee, Hourglass
 } from 'lucide-react';
 
@@ -526,25 +526,34 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const selectedClinic = clinics.find(c => c.id === selectedClinicId);
   const selectedDoctor = selectedClinic?.doctors.find(d => d.id === selectedDoctorId);
 
-  // LOGIC: Check if doctor is currently available for Walk-ins
+    // LOGIC: Check if doctor is currently available for Walk-ins
   const isWalkInAllowed = useMemo(() => {
       if (!selectedDoctor) return false;
       const now = new Date();
       const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const today = days[now.getDay()];
       
-      const schedule = selectedDoctor.weeklySchedule.find(s => s.day === today);
-      if (!schedule || schedule.isOff) return false;
+      const schedule = selectedDoctor.weeklySchedule.find(s => s.day === today as any);
+      if (!schedule || schedule.isOff || !schedule.slots || schedule.slots.length === 0) return false;
 
-      // Parse times
-      const [startH, startM] = schedule.startTime.split(':').map(Number);
-      const [endH, endM] = schedule.endTime.split(':').map(Number);
-      
       const currentMins = now.getHours() * 60 + now.getMinutes();
-      const startMins = startH * 60 + startM;
-      const endMins = endH * 60 + endM;
 
-      return currentMins >= startMins && currentMins < endMins;
+      // Check if any slot contains the current time (handles overnight slots)
+      const isInsideSlot = (slotStart: string, slotEnd: string) => {
+          const [sh, sm] = slotStart.split(':').map(Number);
+          const [eh, em] = slotEnd.split(':').map(Number);
+          let start = sh * 60 + sm;
+          let end = eh * 60 + em;
+          if (end <= start) end += 24 * 60; // overnight
+
+          // If currentMins might be in the wrapped part, also consider +24h
+          const cur = currentMins;
+          const curAlt = currentMins + 24 * 60;
+
+          return (cur >= start && cur < end) || (curAlt >= start && curAlt < end);
+      };
+
+      return schedule.slots.some((slot: any) => slot.active !== false && isInsideSlot(slot.startTime, slot.endTime));
   }, [selectedDoctor]);
 
   // If walk-in is not allowed, default to Appointment
@@ -589,47 +598,151 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
   const availableTimeSlots = useMemo(() => {
       if (!selectedDoctor || !apptDate) return [];
-      
+
       const selectedDayObj = bookingDates.find(d => d.dateStr === apptDate);
-      if (!selectedDayObj || selectedDayObj.isOff || !selectedDayObj.schedule) return [];
+      if (!selectedDayObj || selectedDayObj.isOff || !selectedDayObj.schedule || !selectedDayObj.schedule.slots) return [];
 
-      const { startTime, endTime } = selectedDayObj.schedule;
-      const slots = [];
-      const [startH, startM] = startTime.split(':').map(Number);
-      const [endH, endM] = endTime.split(':').map(Number);
-      
-      let currentMins = startH * 60 + startM;
-      const endMins = endH * 60 + endM;
+      const slots: { value: string; label: string }[] = [];
 
-      // If today, filter past slots
       const now = new Date();
       const isToday = apptDate === now.toISOString().split('T')[0];
       const nowMins = now.getHours() * 60 + now.getMinutes();
 
-      while (currentMins + 15 <= endMins) {
-          if (!isToday || currentMins > nowMins) {
-              const h = Math.floor(currentMins / 60);
-              const m = currentMins % 60;
-              const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-              
-              // Display format 12h
-              const suffix = h >= 12 ? 'PM' : 'AM';
-              const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h;
-              const displayStr = `${displayH}:${m.toString().padStart(2, '0')} ${suffix}`;
+      const timeToMins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 
-              slots.push({ value: timeStr, label: displayStr });
+      // Build ranges that belong to the selected date only.
+      // For each slot in the day's schedule:
+      //  - if not overnight (start <= end) -> include [start,end)
+      //  - if overnight (start > end) -> include [start,24:00) for this date
+      // Additionally include tail parts from previous day's overnight slots (00:00 -> end)
+
+      const ranges: {start:string,end:string}[] = [];
+
+      // ranges from today's schedule
+      const addTodayRange = (start: string, end: string) => {
+          const s = timeToMins(start);
+          const e = timeToMins(end);
+          if (e <= s) {
+              // overnight -> for the schedule's date we include start..24:00
+              ranges.push({ start, end: '24:00' });
+          } else {
+              ranges.push({ start, end });
           }
-          currentMins += 15; 
+      };
+
+      selectedDayObj.schedule.slots.forEach((slot: any) => {
+          if (slot.active === false) return;
+          addTodayRange(slot.startTime, slot.endTime);
+      });
+
+      // also consider previous day's overnight slots that spill into this date
+      const prevIndex = bookingDates.findIndex(d => d.dateStr === apptDate) - 1;
+      if (prevIndex >= 0) {
+          const prevSched = bookingDates[prevIndex].schedule;
+          if (prevSched && prevSched.slots) {
+              prevSched.slots.forEach((slot: any) => {
+                  const s = timeToMins(slot.startTime);
+                  const e = timeToMins(slot.endTime);
+                  if (slot.active === false) return;
+                  if (e <= s) {
+                      // Overnight slot from previous day contributes 00:00..end to this date
+                      ranges.push({ start: '00:00', end: slot.endTime });
+                  }
+              });
+          }
       }
-      return slots;
+
+      const genForRange = (start: string, end: string) => {
+          let startM = timeToMins(start === '24:00' ? '00:00' : start);
+          let endM = timeToMins(end === '24:00' ? '00:00' : end);
+          // Special-case '24:00' meaning end of the day -> treat as 1440
+          if (end === '24:00') endM = 24 * 60;
+          // If end is earlier than start (shouldn't happen here) adjust
+          if (endM <= startM) endM += 24 * 60;
+
+          let cur = startM;
+          while (cur + 15 <= endM) {
+              // For today's date skip times already passed
+              if (!isToday || cur > nowMins) {
+                  const minutesOfDay = cur % (24*60);
+                  const h = Math.floor(minutesOfDay / 60);
+                  const m = minutesOfDay % 60;
+                  const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+
+                  const suffix = h >= 12 ? 'PM' : 'AM';
+                  const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h;
+                  const displayStr = `${displayH}:${m.toString().padStart(2,'0')} ${suffix}`;
+                  slots.push({ value: timeStr, label: displayStr });
+              }
+              cur += 15;
+          }
+      };
+
+      // iterate each range (today's + previous overnight fragments)
+      ranges.forEach(r => genForRange(r.start, r.end));
+
+      // remove duplicates and sort
+      const uniq = new Map<string, string>();
+      slots.forEach(s => uniq.set(s.value, s.label));
+      return Array.from(uniq.entries()).map(([value,label]) => ({ value, label }));
   }, [selectedDoctor, apptDate, bookingDates]);
 
   const getDoctorTodaySchedule = (doc: any) => {
       const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const today = days[new Date().getDay()];
       const schedule = doc.weeklySchedule.find((s: any) => s.day === today);
-      if (!schedule || schedule.isOff) return <span className="text-red-500 font-bold text-[10px]">OFF Today</span>;
-      return <span className="text-green-700 font-bold text-[10px]">{schedule.startTime} - {schedule.endTime}</span>;
+    if (!schedule || schedule.isOff || !schedule.slots || schedule.slots.length === 0) return <span className="text-red-500 font-bold text-[10px]">OFF Today</span>;
+    const ranges = schedule.slots.map((sl: any) => `${sl.startTime} - ${sl.endTime}`);
+    return <span className="text-green-700 font-bold text-[10px]">{ranges.join(', ')}</span>;
+  };
+
+  // Returns next availability object for a doctor within next `maxDays` days.
+  const getNextAvailability = (doc: any, maxDays = 14) => {
+      if (!doc || !doc.weeklySchedule) return null;
+      const now = new Date();
+
+      // Helper to build Date from day (Date) and time string 'HH:MM'
+      const buildDateTime = (dateObj: Date, timeStr: string) => {
+          const [hh, mm] = timeStr.split(':').map(Number);
+          const dt = new Date(dateObj);
+          dt.setHours(hh, mm, 0, 0);
+          return dt;
+      };
+
+      let nextCandidate: { start: Date; end: Date; status: 'now' | 'upcoming' } | null = null;
+
+      for (let i = 0; i < maxDays; i++) {
+          const d = new Date(now);
+          d.setDate(now.getDate() + i);
+          const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+          const schedule = doc.weeklySchedule.find((s: any) => s.day === dayName);
+          if (!schedule || schedule.isOff || !schedule.slots) continue;
+
+          for (const sl of schedule.slots) {
+              if (!sl.active) continue;
+
+              const startDt = buildDateTime(d, sl.startTime);
+              let endDt = buildDateTime(d, sl.endTime);
+              // overnight: end <= start -> end next day
+              if (endDt <= startDt) {
+                  endDt = new Date(endDt);
+                  endDt.setDate(endDt.getDate() + 1);
+              }
+
+              if (now >= startDt && now < endDt) {
+                  // available now
+                  return { start: startDt, end: endDt, status: 'now' as const };
+              }
+
+              if (startDt > now) {
+                  if (!nextCandidate || startDt < nextCandidate.start) {
+                      nextCandidate = { start: startDt, end: endDt, status: 'upcoming' };
+                  }
+              }
+          }
+      }
+
+      return nextCandidate;
   };
 
   // Navigation Items for Sidebar
@@ -1141,49 +1254,81 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     <div className="border-t border-slate-200 pt-8">
                                         <h3 className="font-bold text-slate-900 mb-6 text-xl">Available Doctors</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {selectedClinic.doctors.map(doc => (
-                                                <div key={doc.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all hover:border-primary-200 group">
-                                                    <div className="flex gap-4 mb-4">
-                                                        <div className="relative flex-shrink-0">
-                                                            <img src={doc.avatarUrl} className="h-20 w-20 rounded-2xl object-cover bg-slate-100 border border-slate-100 shadow-inner" />
-                                                            <div className={`absolute -bottom-1 -right-1 w-5 h-5 border-2 border-white rounded-full ${doc.isAvailable ? 'bg-green-500' : 'bg-slate-300'}`}></div>
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex justify-between items-start">
-                                                                <h4 className="font-bold text-slate-900 text-lg truncate">{doc.name}</h4>
-                                                                <div className="flex items-center gap-1 bg-green-50 px-1.5 py-0.5 rounded text-xs font-bold text-green-700 border border-green-100">
-                                                                    <Star className="h-3 w-3 fill-current" /> {doc.rating || '4.5'}
+                                            {selectedClinic.doctors.map(doc => {
+                                                    const next = getNextAvailability(doc, 14);
+                                                    const activeNow = next?.status === 'now' || doc.isAvailable;
+                                                    const canBook = !!next;
+                                                    const formatShort = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                                                    const availLabel = next ? (next.status === 'now' ? 'Available now' : `Next ${formatShort(next.start)}`) : 'No slots';
+
+                                                    return (
+                                                        <div key={doc.id} className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm hover:shadow-lg transition-all hover:border-primary-200 group">
+                                                            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start">
+                                                                <div className="relative flex-shrink-0">
+                                                                    <img src={doc.avatarUrl} alt={`Dr. ${doc.name}`} className="h-20 w-20 rounded-2xl object-cover bg-slate-100 border border-slate-100 shadow-inner" />
+                                                                    <span className={`absolute -bottom-1 -right-1 w-5 h-5 border-2 border-white rounded-full ${activeNow ? 'bg-emerald-500' : (canBook ? 'bg-yellow-400' : 'bg-slate-300')}`} title={availLabel}></span>
+                                                                </div>
+
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex items-start justify-between gap-2">
+                                                                        <div className="min-w-0">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <h4 className="font-bold text-slate-900 text-lg truncate">Dr. {doc.name}</h4>
+                                                                                {/* degree intentionally omitted for brevity */}
+                                                                            </div>
+
+                                                                            <div className="mt-1 text-sm text-slate-700 truncate">{doc.specialty}</div>
+                                                                        </div>
+
+                                                                        <div className="flex items-center gap-3 ml-2 sm:ml-0">
+                                                                            <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-50 border border-slate-100 text-sm font-semibold text-slate-700">
+                                                                                <Star className="h-4 w-4 fill-current text-yellow-500" /> {doc.rating ?? '4.5'}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="mt-2 flex items-center gap-4 text-xs text-slate-500">
+                                                                        <div className="flex items-center gap-1"><Clock className="h-3 w-3" /> {doc.yearsExperience ?? '10'} yrs</div>
+                                                                        <div className="flex items-center gap-1"><Globe className="h-3 w-3" /> {doc.languages?.join(', ') || 'Eng, Hindi'}</div>
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                            <p className="text-sm font-medium text-primary-600 mb-2">{doc.specialty}</p>
-                                                            <div className="flex flex-wrap gap-y-1 gap-x-3 text-xs text-slate-500">
-                                                                <span className="flex items-center gap-1"><GraduationCap className="h-3 w-3" /> MBBS, MD</span>
-                                                                <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> 12 Yrs Exp</span>
-                                                                <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> Eng, Hindi</span>
+
+                                                            <div className="mt-4 sm:mt-6 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                                                                <div className="flex flex-col text-xs text-slate-500">
+                                                                    <div className="uppercase font-bold text-[10px] tracking-wide text-slate-400">Availability & Fees</div>
+                                                                    <div className="mt-1 flex items-center gap-2 text-sm text-slate-700">
+                                                                        {getDoctorTodaySchedule(doc)}
+                                                                        <span className="text-xs text-slate-400">·</span>
+                                                                        <span className="font-bold text-sm text-slate-900">₹{doc.consultationFee}</span>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex items-center gap-3">
+                                                                    <Button
+                                                                        onClick={() => { setSelectedDoctorId(doc.id); setBookingView('FORM'); }}
+                                                                        disabled={!canBook}
+                                                                        variant={canBook ? 'primary' : 'ghost'}
+                                                                        size="sm"
+                                                                        className={`h-10 px-4 ${canBook ? 'shadow-md hover:shadow-lg' : 'opacity-60 cursor-not-allowed border-slate-200'}`}
+                                                                        title={canBook ? (activeNow ? 'Book now' : `Book • ${formatShort(next!.start)}`) : 'No available slots' }
+                                                                    >
+                                                                        {canBook ? (
+                                                                            <span className="inline-flex items-center gap-2">
+                                                                                {activeNow ? <Timer className="h-4 w-4" /> : <Clock className="h-4 w-4 p-2" />}
+                                                                                <span className="font-semibold text-sm">{activeNow ? 'Book Now' : `Book • ${formatShort(next!.start)}`}</span>
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-xs font-semibold uppercase">No slots</span>
+                                                                        )}
+                                                                    </Button>
+
+  
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                    
-                                                    <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                                                        <div className="flex flex-col gap-0.5">
-                                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Today's Availability</div>
-                                                            <div className="flex items-center gap-2">
-                                                                {getDoctorTodaySchedule(doc)}
-                                                                <span className="text-xs text-slate-300">|</span>
-                                                                <span className="text-slate-900 font-bold text-sm">₹{doc.consultationFee}</span>
-                                                            </div>
-                                                        </div>
-                                                        <Button 
-                                                            onClick={() => { setSelectedDoctorId(doc.id); setBookingView('FORM'); }}
-                                                            disabled={!doc.isAvailable}
-                                                            className="shadow-md px-6"
-                                                            size="sm"
-                                                        >
-                                                            Book Visit
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                    );
+                                                })}
                                         </div>
                                     </div>
                                 </div>
@@ -1311,8 +1456,12 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             Select Time {apptDate ? '' : '(Pick a date first)'}
                                                         </label>
                                                         {apptDate && (
-                                                            <span className="text-[10px] font-bold text-primary-600 bg-primary-50 px-2 py-1 rounded">
-                                                                Shift: {bookingDates.find(d => d.dateStr === apptDate)?.schedule?.startTime} - {bookingDates.find(d => d.dateStr === apptDate)?.schedule?.endTime}
+                                                            <span className="text-[10px] font-bold text-primary-600 bg-primary-50 px-2 py-1 rounded max-w-[360px] block truncate" title={bookingDates.find(d => d.dateStr === apptDate)?.schedule?.slots?.map((sl: any) => `${sl.startTime} - ${sl.endTime}`)?.join(', ') || ''}>
+                                                                Shift: {(() => {
+                                                                    const s = bookingDates.find(d => d.dateStr === apptDate)?.schedule?.slots || [];
+                                                                    if (!s || s.length === 0) return 'OFF';
+                                                                    return s.map((sl: any) => `${sl.startTime} - ${sl.endTime}`).join(', ');
+                                                                })()}
                                                             </span>
                                                         )}
                                                     </div>
@@ -1387,8 +1536,35 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     </div>
 
                                     <div className="p-6 bg-white border-t border-slate-200 flex-shrink-0">
-                                        <Button className="w-full h-12 text-lg shadow-xl shadow-primary-100" onClick={handleBookToken}>
-                                            Confirm Booking
+                                        {/* Booking CTA: disabled when selections are incomplete or no slots available */}
+                                        <Button
+                                            className="w-full h-12 text-lg shadow-xl shadow-primary-100"
+                                            onClick={handleBookToken}
+                                            disabled={(() => {
+                                                // No clinic/doctor selected
+                                                if (!selectedClinicId || !selectedDoctorId) return true;
+                                                // Walk-ins blocked
+                                                if (visitType === 'WALK_IN' && !isWalkInAllowed) return true;
+                                                // Appointments require a date and available slots and a picked time
+                                                if (visitType === 'APPOINTMENT') {
+                                                    if (!apptDate) return true;
+                                                    if (!availableTimeSlots || availableTimeSlots.length === 0) return true;
+                                                    if (!apptTime) return true;
+                                                }
+                                                return false;
+                                            })()}
+                                        >
+                                            {(() => {
+                                                if (!selectedClinicId || !selectedDoctorId) return 'Select Clinic & Doctor';
+                                                if (visitType === 'WALK_IN') {
+                                                    return isWalkInAllowed ? 'Confirm Booking' : 'Walk-in not allowed';
+                                                }
+                                                // APPOINTMENT
+                                                if (!apptDate) return 'Select a date';
+                                                if (!availableTimeSlots || availableTimeSlots.length === 0) return 'No slots available';
+                                                if (!apptTime) return 'Choose a time';
+                                                return 'Confirm Booking';
+                                            })()}
                                         </Button>
                                     </div>
                                 </div>

@@ -273,21 +273,33 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
       if (doctor) {
           setDoctorModalMode('EDIT');
           setEditingDoctorId(doctor.id);
+          // Normalize weeklySchedule to new slots shape (backwards compatible)
+          const normalized = doctor.weeklySchedule.map((d: any) => {
+              // If already has slots, keep
+              if (d.slots && Array.isArray(d.slots)) return { ...d, isOff: !!d.isOff };
+              // Legacy: startTime/endTime -> convert to single slot
+              if (d.startTime && d.endTime) {
+                  return { day: d.day, slots: [{ startTime: d.startTime, endTime: d.endTime, active: true }], isOff: !!d.isOff };
+              }
+              // Fallback -> empty slots (OFF)
+              return { day: d.day, slots: [], isOff: !!d.isOff };
+          });
+
           setDocForm({
               name: doctor.name,
               specialty: doctor.specialty,
               room: doctor.roomNumber,
               fee: doctor.consultationFee.toString(),
-              schedule: doctor.weeklySchedule
+              schedule: normalized
           });
       } else {
           setDoctorModalMode('ADD');
           setEditingDoctorId(null);
           // Default Schedule
+          // Default Schedule (single slot or OFF)
           const defaultSchedule = DAYS_OF_WEEK.map(d => ({
               day: d,
-              startTime: '09:00',
-              endTime: '17:00',
+              slots: d === 'Sunday' ? [] : [{ startTime: '09:00', endTime: '17:00', active: true }],
               isOff: d === 'Sunday'
           }));
           setDocForm({ name: '', specialty: '', room: '', fee: '500', schedule: defaultSchedule });
@@ -314,9 +326,66 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
       setIsDoctorModalOpen(false);
   };
 
-  const updateScheduleDay = (dayIndex: number, field: keyof DaySchedule, value: any) => {
+  // Schedule helpers for multi-slot architecture
+  const toggleDayOff = (dayIndex: number) => {
       const newSchedule = [...docForm.schedule];
-      newSchedule[dayIndex] = { ...newSchedule[dayIndex], [field]: value };
+      const cur = newSchedule[dayIndex];
+      const isOff = !cur.isOff;
+      // If turning on and no slots exist, add a default slot
+      newSchedule[dayIndex] = { ...cur, isOff, slots: isOff ? [] : (cur.slots && cur.slots.length ? cur.slots : [{ startTime: '09:00', endTime: '17:00', active: true }]) };
+      setDocForm({ ...docForm, schedule: newSchedule });
+  };
+
+  const addSlot = (dayIndex: number) => {
+      const newSchedule = [...docForm.schedule];
+      const cur = newSchedule[dayIndex];
+      // Ensure existing legacy start/end are considered
+      const existing = cur.slots && cur.slots.length ? [...cur.slots] : (cur.startTime && cur.endTime ? [{ startTime: cur.startTime, endTime: cur.endTime, active: true }] : []);
+
+      // Helper to add minutes to HH:MM string, wraps at 24h
+      const addMinutes = (time: string, mins: number) => {
+          const [h, m] = time.split(':').map(Number);
+          let total = h * 60 + m + mins;
+          total = ((total % (24 * 60)) + (24 * 60)) % (24 * 60);
+          const hh = Math.floor(total / 60).toString().padStart(2, '0');
+          const mm = (total % 60).toString().padStart(2, '0');
+          return `${hh}:${mm}`;
+      };
+
+      // Choose start as end of last slot or 09:00 if none
+      const last = existing.length ? existing[existing.length - 1] : null;
+      let defaultStart = last ? last.endTime : '09:00';
+      let defaultEnd = addMinutes(defaultStart, 240); // +4 hours by default
+
+      // Avoid exact duplicate start times - bump by 15 mins until unique
+      const starts = new Set(existing.map((s: any) => s.startTime));
+      let attempts = 0;
+      while (starts.has(defaultStart) && attempts < 48) {
+          defaultStart = addMinutes(defaultStart, 15);
+          defaultEnd = addMinutes(defaultStart, 240);
+          attempts++;
+      }
+
+      const slots = [...existing, { startTime: defaultStart, endTime: defaultEnd, active: true }];
+      newSchedule[dayIndex] = { ...cur, slots, isOff: false };
+      setDocForm({ ...docForm, schedule: newSchedule });
+  };
+
+  const removeSlot = (dayIndex: number, slotIndex: number) => {
+      const newSchedule = [...docForm.schedule];
+      const cur = newSchedule[dayIndex];
+      const slots = [...(cur.slots || [])];
+      slots.splice(slotIndex, 1);
+      newSchedule[dayIndex] = { ...cur, slots, isOff: slots.length === 0 };
+      setDocForm({ ...docForm, schedule: newSchedule });
+  };
+
+  const updateSlot = (dayIndex: number, slotIndex: number, field: string, value: any) => {
+      const newSchedule = [...docForm.schedule];
+      const cur = newSchedule[dayIndex];
+      const slots = [...(cur.slots || [])];
+      slots[slotIndex] = { ...slots[slotIndex], [field]: value } as any;
+      newSchedule[dayIndex] = { ...cur, slots, isOff: slots.length === 0 };
       setDocForm({ ...docForm, schedule: newSchedule });
   };
 
@@ -324,12 +393,81 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
       const source = docForm.schedule[sourceDayIndex];
       const newSchedule = docForm.schedule.map(d => ({
           ...d,
-          startTime: source.startTime,
-          endTime: source.endTime,
+          slots: source.slots ? JSON.parse(JSON.stringify(source.slots)) : [],
           isOff: source.isOff
       }));
       setDocForm({ ...docForm, schedule: newSchedule });
       addToast('Schedule copied to all days', 'info');
+  };
+
+  const applyPreset = (dayIndex: number, preset: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT') => {
+      const PRESETS: Record<string, any[]> = {
+          MORNING: [{ startTime: '08:00', endTime: '13:00', active: true, label: 'Morning' }],
+          AFTERNOON: [{ startTime: '13:00', endTime: '17:00', active: true, label: 'Afternoon' }],
+          EVENING: [{ startTime: '17:00', endTime: '21:00', active: true, label: 'Evening' }],
+          NIGHT: [{ startTime: '21:00', endTime: '08:00', active: true, label: 'Night' }]
+      };
+      const newSchedule = [...docForm.schedule];
+      newSchedule[dayIndex] = { ...newSchedule[dayIndex], slots: JSON.parse(JSON.stringify(PRESETS[preset])), isOff: false };
+      setDocForm({ ...docForm, schedule: newSchedule });
+  };
+
+  // Quick action from the weekly grid: add a preset to a specific doctor's day by name
+  const addPresetButton = (docId: string, dayName: string) => {
+      const doc = doctors.find(d => d.id === docId);
+      if (!doc) return;
+
+      const PRESETS: Record<string, any[]> = {
+          MORNING: [{ startTime: '08:00', endTime: '13:00', active: true, label: 'Morning' }],
+          AFTERNOON: [{ startTime: '13:00', endTime: '17:00', active: true, label: 'Afternoon' }],
+          EVENING: [{ startTime: '17:00', endTime: '21:00', active: true, label: 'Evening' }],
+          NIGHT: [{ startTime: '21:00', endTime: '08:00', active: true, label: 'Night' }]
+      };
+
+      // find day index
+      const idx = doc.weeklySchedule.findIndex((s: any) => s.day === dayName);
+      if (idx === -1) return;
+
+      const src = doc.weeklySchedule[idx];
+      const existing = (src.slots && src.slots.length) ? [...src.slots] : [];
+      // choose morning if possible
+      const toAdd = PRESETS['MORNING'].filter(p => !existing.some((s: any) => s.startTime === p.startTime && s.endTime === p.endTime));
+      if (toAdd.length === 0) {
+          addToast('Morning preset already exists for this day', 'info');
+          return;
+      }
+
+      const updatedSlots = [...existing, ...toAdd];
+      const updatedSchedule = doc.weeklySchedule.map((s: any, i: number) => i === idx ? { ...s, slots: updatedSlots, isOff: false } : s);
+
+      onEditDoctor(docId, {
+          weeklySchedule: updatedSchedule
+      });
+      addToast('Morning preset added to the day', 'success');
+  };
+
+  // Append preset slots to existing day's slots (don't overwrite)
+  const addPreset = (dayIndex: number, preset: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT') => {
+      const PRESETS: Record<string, any[]> = {
+          MORNING: [{ startTime: '08:00', endTime: '13:00', active: true, label: 'Morning' }],
+          AFTERNOON: [{ startTime: '13:00', endTime: '17:00', active: true, label: 'Afternoon' }],
+          EVENING: [{ startTime: '17:00', endTime: '21:00', active: true, label: 'Evening' }],
+          NIGHT: [{ startTime: '21:00', endTime: '08:00', active: true, label: 'Night' }]
+      };
+
+      const newSchedule = [...docForm.schedule];
+      const cur = newSchedule[dayIndex];
+      const existing = cur.slots && cur.slots.length ? [...cur.slots] : [];
+
+      const toAdd = PRESETS[preset].filter(p => !existing.some((s: any) => s.startTime === p.startTime && s.endTime === p.endTime));
+      if (toAdd.length === 0) {
+          addToast('Preset already present', 'info');
+          return;
+      }
+
+      newSchedule[dayIndex] = { ...cur, slots: [...existing, ...toAdd], isOff: false };
+      setDocForm({ ...docForm, schedule: newSchedule });
+      addToast(`${preset.charAt(0) + preset.slice(1).toLowerCase()} preset added`, 'success');
   };
 
   const handleEditPatientSubmit = (e: React.FormEvent) => {
@@ -479,7 +617,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             {activeTab === 'QUEUE' && (
                 <div className="flex-1 overflow-auto bg-slate-50/30">
                     {/* Add overflow-x-auto for responsive tables */}
-                    <div className="min-w-[800px]"> 
+                        <div className="min-w-[1200px]">
                         <table className="w-full text-sm text-left border-separate border-spacing-y-1 p-2">
                             <thead className="bg-slate-50 text-slate-500 font-bold sticky top-0 z-20 shadow-sm text-xs uppercase tracking-wider">
                                 <tr>
@@ -916,15 +1054,20 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             ))}
                         </div>
                     ) : (
-                        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden flex-1 overflow-auto">
+                        <div className="bg-white border border-slate-200 rounded-xl flex-1 overflow-auto">
                             <div className="min-w-[800px]">
                                 <table className="w-full text-xs text-left">
                                     <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
                                         <tr>
                                             <th className="px-4 py-3 min-w-[150px]">Doctor</th>
                                             {DAYS_OF_WEEK.map(day => (
-                                                <th key={day} className="px-4 py-3">{day.substring(0,3)}</th>
-                                            ))}
+                                                    <th key={day} className="px-4 py-3 text-left min-w-[140px]">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="font-semibold text-sm text-slate-700">{day.substring(0,3)}</div>
+                                                            <div className="text-xs text-slate-400">Slots</div>
+                                                        </div>
+                                                    </th>
+                                                ))}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
@@ -940,12 +1083,28 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                                     return (
                                                         <td key={day} className="px-4 py-3">
                                                             {isOff ? (
-                                                                <span className="text-slate-300 font-medium">OFF</span>
-                                                            ) : (
-                                                                <div className="bg-green-50 text-green-700 px-2 py-1 rounded inline-block text-[10px] font-bold border border-green-100">
-                                                                    {schedule?.startTime} - {schedule?.endTime}
-                                                                </div>
-                                                            )}
+                                                                        <span className="text-slate-300 font-medium">OFF</span>
+                                                                    ) : (
+                                                                        <div className="flex flex-col gap-2 max-w-[220px]">
+                                                                            {(schedule?.slots || []).length > 0 ? (
+                                                                                schedule.slots.map((sl:any, i:number) => (
+                                                                                    <div key={i} className="inline-flex items-center justify-between gap-2 bg-white border border-slate-100 rounded-md px-2 py-1 text-[11px] text-slate-700 shadow-sm min-w-0">
+                                                                                        <div className="flex items-center gap-2 min-w-0">
+                                                                                            <div className="h-2 w-2 rounded-full bg-green-400 flex-shrink-0" />
+                                                                                            <div className="font-semibold truncate max-w-[160px]">{sl.label ? sl.label : `${sl.startTime} - ${sl.endTime}`}</div>
+                                                                                        </div>
+                                                                                        <div className="text-xs text-slate-400 flex-shrink-0 ml-2">{sl.startTime}</div>
+                                                                                    </div>
+                                                                                ))
+                                                                            ) : (
+                                                                                <div className="text-xs text-slate-400 italic">No slots</div>
+                                                                            )}
+                                                                            <div className="flex items-center gap-2 mt-1">
+                                                                                <button title="Add Slot" onClick={() => openDoctorModal(doctors.find(d => d.id === doc.id))} className="text-xs px-2 py-1 rounded border border-dashed text-slate-500 hover:bg-slate-50">Edit</button>
+                                                                                <button title="Quick add morning" onClick={() => addPresetButton(doc.id, day)} className="text-xs px-2 py-1 rounded bg-amber-50 text-amber-700 border border-amber-100">+ Morning</button>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
                                                         </td>
                                                     );
                                                 })}
@@ -1056,7 +1215,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         {/* ADD/EDIT DOCTOR MODAL */}
         {isDoctorModalOpen && (
             <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-xl w-[95%] sm:max-w-2xl p-6 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+                <div className="bg-white rounded-xl shadow-xl w-[95%] sm:max-w-4xl lg:max-w-6xl p-6 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="text-xl font-bold">{doctorModalMode === 'ADD' ? 'Add Medical Staff' : 'Edit Doctor Details'}</h3>
                         <button onClick={() => setIsDoctorModalOpen(false)}><X className="h-5 w-5 text-slate-400" /></button>
@@ -1104,35 +1263,70 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                     <div className="col-span-3 text-center">End</div>
                                 </div>
                                 {docForm.schedule.map((daySchedule, idx) => (
-                                    <div key={daySchedule.day} className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                        <div className="col-span-3 font-medium text-sm text-slate-700">{daySchedule.day}</div>
-                                        <div className="col-span-2 flex justify-center">
-                                            <button 
-                                                type="button"
-                                                onClick={() => updateScheduleDay(idx, 'isOff', !daySchedule.isOff)}
-                                                className={`px-2 py-1 rounded text-xs font-bold w-16 transition-colors ${daySchedule.isOff ? 'bg-slate-200 text-slate-500' : 'bg-green-100 text-green-700'}`}
-                                            >
-                                                {daySchedule.isOff ? 'OFF' : 'ON'}
-                                            </button>
+                                    <div key={daySchedule.day} className="bg-slate-50 p-3 rounded-lg border border-slate-100 space-y-2">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="font-medium text-sm text-slate-700 w-36">{daySchedule.day}</div>
+                                                <div className="flex gap-2 text-xs">
+                                                    <div className="inline-flex items-center gap-1">
+                                                        <button type="button" onClick={() => applyPreset(idx, 'MORNING')} className="px-2 py-1 rounded bg-amber-50 text-amber-700 border border-amber-100">🌅 Morning</button>
+                                                        <button type="button" title="Add Morning" onClick={() => addPreset(idx, 'MORNING')} className="px-2 py-1 rounded bg-amber-100 text-amber-900 border border-amber-200"><Plus className="h-3 w-3" /></button>
+                                                    </div>
+                                                    <div className="inline-flex items-center gap-1">
+                                                        <button type="button" onClick={() => applyPreset(idx, 'AFTERNOON')} className="px-2 py-1 rounded bg-yellow-50 text-yellow-700 border border-yellow-100">☀️ Afternoon</button>
+                                                        <button type="button" title="Add Afternoon" onClick={() => addPreset(idx, 'AFTERNOON')} className="px-2 py-1 rounded bg-yellow-100 text-yellow-900 border border-yellow-200"><Plus className="h-3 w-3" /></button>
+                                                    </div>
+                                                    <div className="inline-flex items-center gap-1">
+                                                        <button type="button" onClick={() => applyPreset(idx, 'EVENING')} className="px-2 py-1 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">🌆 Evening</button>
+                                                        <button type="button" title="Add Evening" onClick={() => addPreset(idx, 'EVENING')} className="px-2 py-1 rounded bg-indigo-100 text-indigo-900 border border-indigo-200"><Plus className="h-3 w-3" /></button>
+                                                    </div>
+                                                    <div className="inline-flex items-center gap-1">
+                                                        <button type="button" onClick={() => applyPreset(idx, 'NIGHT')} className="px-2 py-1 rounded bg-slate-200 text-slate-700 border border-slate-100">🌙 Night</button>
+                                                        <button type="button" title="Add Night" onClick={() => addPreset(idx, 'NIGHT')} className="px-2 py-1 rounded bg-slate-300 text-slate-800 border border-slate-200"><Plus className="h-3 w-3" /></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => toggleDayOff(idx)}
+                                                    className={`px-3 py-1 rounded text-xs font-bold transition-colors ${daySchedule.isOff ? 'bg-slate-200 text-slate-500' : 'bg-green-100 text-green-700'}`}
+                                                >
+                                                    {daySchedule.isOff ? 'OFF' : 'ON'}
+                                                </button>
+                                                <div className="text-xs text-slate-400">{(daySchedule.slots || []).length} slot(s)</div>
+                                            </div>
                                         </div>
-                                        <div className="col-span-3">
-                                            <input 
-                                                type="time" 
-                                                className="w-full text-center bg-white border border-slate-300 rounded px-1 py-1 text-sm disabled:opacity-50"
-                                                value={daySchedule.startTime}
-                                                disabled={daySchedule.isOff}
-                                                onChange={(e) => updateScheduleDay(idx, 'startTime', e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="col-span-1 text-center text-slate-400">-</div>
-                                        <div className="col-span-3">
-                                            <input 
-                                                type="time" 
-                                                className="w-full text-center bg-white border border-slate-300 rounded px-1 py-1 text-sm disabled:opacity-50"
-                                                value={daySchedule.endTime}
-                                                disabled={daySchedule.isOff}
-                                                onChange={(e) => updateScheduleDay(idx, 'endTime', e.target.value)}
-                                            />
+
+                                        {/* Slots list */}
+                                        <div className="grid grid-cols-12 gap-2 items-center">
+                                            {(daySchedule.slots && daySchedule.slots.length > 0) ? (
+                                                daySchedule.slots.map((slot, sIdx) => (
+                                                    <React.Fragment key={`${daySchedule.day}_${sIdx}`}>
+                                                        <div className="col-span-3"></div>
+                                                        <div className="col-span-2 text-xs text-slate-500 text-center">Slot #{sIdx + 1}</div>
+                                                        <div className="col-span-3">
+                                                            <input type="time" className="w-full text-center bg-white border border-slate-300 rounded px-1 py-1 text-sm" value={slot.startTime}
+                                                                onChange={(e) => updateSlot(idx, sIdx, 'startTime', e.target.value)} />
+                                                        </div>
+                                                        <div className="col-span-1 text-center text-slate-400">-</div>
+                                                        <div className="col-span-2">
+                                                            <input type="time" className="w-full text-center bg-white border border-slate-300 rounded px-1 py-1 text-sm" value={slot.endTime}
+                                                                onChange={(e) => updateSlot(idx, sIdx, 'endTime', e.target.value)} />
+                                                        </div>
+                                                        <div className="col-span-1 flex justify-end">
+                                                            <button type="button" onClick={() => removeSlot(idx, sIdx)} className="text-red-500 p-2 rounded hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
+                                                        </div>
+                                                    </React.Fragment>
+                                                ))
+                                            ) : (
+                                                <div className="col-span-12 text-xs text-slate-400 italic px-8">No active slots configured</div>
+                                            )}
+
+                                            {/* Add slot button */}
+                                            <div className="col-span-12 flex justify-center mt-2">
+                                                <button type="button" onClick={() => addSlot(idx)} className="px-3 py-1 text-xs rounded bg-white border border-slate-200 hover:bg-slate-50 flex items-center gap-2"><Plus className="h-3 w-3" /> Add Slot</button>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -1193,7 +1387,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         {/* HISTORY MODAL */}
         {historyModalPatient && (
             <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-xl w-[95%] sm:max-w-2xl p-6 h-[80vh] flex flex-col">
+                <div className="bg-white rounded-xl shadow-xl w-[95%] sm:max-w-4xl lg:max-w-6xl p-6 h-[80vh] flex flex-col">
                     <div className="flex justify-between items-center mb-6 flex-shrink-0">
                         <div>
                             <h3 className="text-xl font-bold flex items-center gap-2">Patient History</h3>

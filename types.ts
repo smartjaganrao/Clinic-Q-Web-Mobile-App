@@ -40,11 +40,18 @@ export enum ClinicType {
     OTHER = 'OTHER'
 }
 
-export interface DaySchedule {
-  day: string; // 'Monday', 'Tuesday', etc.
+export interface TimeSlot {
   startTime: string; // "09:00"
   endTime: string;   // "17:00"
-  isOff: boolean;
+  active?: boolean;  // allow marking slot active/inactive
+  label?: string;    // optional human label for presets
+}
+
+export interface DaySchedule {
+  day: string; // 'Monday', 'Tuesday', etc.
+  // A list of time slots for the day. Empty array means OFF.
+  slots: TimeSlot[];
+  isOff?: boolean; // optional convenience flag (keeps backward compat where used)
 }
 
 export interface Doctor {
