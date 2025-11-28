@@ -1,4 +1,3 @@
-
 import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient } from './types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -181,6 +180,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600040',
     operatingHours: '08:00 AM - 09:00 PM',
     geoLocation: { lat: 13.0850, lng: 80.2100 },
+    about: 'A multi-specialty clinic providing comprehensive healthcare services with state-of-the-art diagnostic facilities and expert doctors.',
+    amenities: ['Pharmacy', 'Pathology Lab', 'X-Ray', 'Parking', 'Wheelchair Access'],
     doctors: chennaiDocs1,
     patients: createRealisticPatients(chennaiDocs1, ClinicType.GENERAL, 'Chennai')
   },
@@ -189,12 +190,14 @@ export const INITIAL_CLINICS: Clinic[] = [
     name: 'Sankara Nethralaya',
     slug: 'sankara-nethralaya',
     plan: PlanType.PREMIUM,
-    type: ClinicType.OTHER, // Maps to Ophthalmologist in symptoms
+    type: ClinicType.OTHER,
     city: 'Chennai',
     address: '41, College Road, Nungambakkam',
     pincode: '600006',
     operatingHours: '08:00 AM - 06:00 PM',
     geoLocation: { lat: 13.0629, lng: 80.2495 },
+    about: 'World-class eye care hospital dedicated to providing equitable and efficient eye care to all sections of society.',
+    amenities: ['Optical Shop', 'Cafeteria', 'Emergency Eye Care', 'Pharmacy', 'Prayer Room'],
     doctors: chennaiDocs2,
     patients: createRealisticPatients(chennaiDocs2, 'OPHTHALMOLOGY', 'Chennai')
   },
@@ -209,6 +212,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600017',
     operatingHours: '24 Hours',
     geoLocation: { lat: 13.0350, lng: 80.2350 },
+    about: 'India’s premier birthing, woman, and child care hospital celebrating the journey of maternity and beyond.',
+    amenities: ['NICU', 'Labor Suites', 'Valet Parking', 'Baby Shop', '24x7 Pharmacy'],
     doctors: chennaiDocs3,
     patients: createRealisticPatients(chennaiDocs3, ClinicType.GYNECOLOGY, 'Chennai')
   },
@@ -223,6 +228,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600089',
     operatingHours: '24 Hours',
     geoLocation: { lat: 13.0280, lng: 80.1850 },
+    about: 'A 1000-bed quaternary care hospital offering best-in-class treatment for Orthopedics, Trauma, and Joint Replacement.',
+    amenities: ['Ambulance', 'Blood Bank', 'Cafeteria', 'Rehab Center', 'International Patient Care'],
     doctors: chennaiDocs4,
     patients: createRealisticPatients(chennaiDocs4, ClinicType.ORTHOPEDIC, 'Chennai')
   },
@@ -237,6 +244,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600020',
     operatingHours: '10:00 AM - 08:00 PM',
     geoLocation: { lat: 13.0012, lng: 80.2565 },
+    about: 'Advanced dental care center specializing in implants, root canals, and cosmetic dentistry with modern equipment.',
+    amenities: ['Digital X-Ray', 'Waiting Lounge', 'Parking', 'Card Payment'],
     doctors: chennaiDocs5,
     patients: createRealisticPatients(chennaiDocs5, ClinicType.DENTAL, 'Chennai')
   },
@@ -251,6 +260,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600020',
     operatingHours: '24 Hours',
     geoLocation: { lat: 13.0060, lng: 80.2580 },
+    about: 'Leading multi-specialty hospital known for its excellence in Cardiology, Cardiac Surgery, and Neurology.',
+    amenities: ['ICU/CCU', 'Emergency', 'Diagnostics', 'Pharmacy', 'Wifi'],
     doctors: chennaiDocs6,
     patients: createRealisticPatients(chennaiDocs6, ClinicType.CARDIOLOGY, 'Chennai')
   },
@@ -265,6 +276,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600018',
     operatingHours: '10:00 AM - 08:00 PM',
     geoLocation: { lat: 13.0330, lng: 80.2550 },
+    about: 'Expert dermatologists providing advanced skin and hair treatments including laser hair removal and acne treatment.',
+    amenities: ['Laser Suite', 'Private Consultation', 'Valet Parking', 'Wifi'],
     doctors: chennaiDocs7,
     patients: createRealisticPatients(chennaiDocs7, ClinicType.DERMATOLOGY, 'Chennai')
   },
@@ -279,6 +292,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600010',
     operatingHours: '09:00 AM - 07:00 PM',
     geoLocation: { lat: 13.0780, lng: 80.2400 },
+    about: 'Specialized ENT care hospital known for Micro Ear Surgery, Endoscopic Sinus Surgery, and Cochlear Implants.',
+    amenities: ['Audiology Lab', 'Speech Therapy', 'Pharmacy', 'In-patient Rooms'],
     doctors: chennaiDocs8,
     patients: createRealisticPatients(chennaiDocs8, 'ENT', 'Chennai')
   },
@@ -293,6 +308,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600031',
     operatingHours: '24 Hours',
     geoLocation: { lat: 13.0700, lng: 80.2380 },
+    about: 'A heritage hospital with a strong focus on Pediatric care, General Medicine, and Surgery since 1933.',
+    amenities: ['Pediatric ICU', 'Play Area', 'Vaccination Center', 'Emergency', 'Lab'],
     doctors: chennaiDocs9,
     patients: createRealisticPatients(chennaiDocs9, ClinicType.PEDIATRIC, 'Chennai')
   },
@@ -307,6 +324,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '600001',
     operatingHours: '24 Hours',
     geoLocation: { lat: 13.0827, lng: 80.2707 },
+    about: 'Affordable and accessible general healthcare services for the community with round-the-clock emergency support.',
+    amenities: ['Emergency', 'Pharmacy', 'General Ward', 'Basic Lab'],
     doctors: chennaiDocs10,
     patients: createRealisticPatients(chennaiDocs10, ClinicType.GENERAL, 'Chennai')
   },
@@ -323,6 +342,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '560017',
     operatingHours: '24 Hours',
     geoLocation: { lat: 12.9592, lng: 77.6475 },
+    about: 'One of India’s foremost multi-specialty healthcare providers offering comprehensive care.',
+    amenities: ['Advanced ICU', 'Robotic Surgery', 'Cafeteria', 'Valet Parking', 'Pharmacy'],
     doctors: blrDocs1,
     patients: createRealisticPatients(blrDocs1, ClinicType.GENERAL, 'Bangalore')
   },
@@ -337,6 +358,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '560043',
     operatingHours: '24 Hours',
     geoLocation: { lat: 13.0285, lng: 77.6400 },
+    about: 'Specialized hospital for women and children, providing maternity, gynecology, and pediatric services.',
+    amenities: ['NICU', 'Labor Rooms', 'Lactation Consulting', 'Ultrasound'],
     doctors: blrDocs2,
     patients: createRealisticPatients(blrDocs2, ClinicType.PEDIATRIC, 'Bangalore')
   },
@@ -351,6 +374,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     pincode: '560038',
     operatingHours: '10:00 AM - 08:00 PM',
     geoLocation: { lat: 12.9716, lng: 77.6412 },
+    about: 'India’s largest dental chain offering quality dental care with modern technology and hygiene standards.',
+    amenities: ['X-Ray', 'Sterilization Zone', 'Wifi', 'Card Payment'],
     doctors: blrDocs3,
     patients: createRealisticPatients(blrDocs3, ClinicType.DENTAL, 'Bangalore')
   }

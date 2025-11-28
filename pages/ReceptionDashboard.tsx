@@ -115,8 +115,45 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null);
 
+  // Timer to force re-render for live queue updates every minute
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  useEffect(() => {
+      const interval = setInterval(() => setCurrentTime(Date.now()), 60000); // Update minutely for sorting logic
+      return () => clearInterval(interval);
+  }, []);
+
   // Filter Logic for Queue
   const filteredPatients = useMemo(() => {
+    
+    // Sort logic synchronization with Doctor Dashboard
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    
+    const timeToMins = (t?: string) => {
+        if (!t) return 0;
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+    };
+
+    const UPCOMING_THRESHOLD_MINS = 10;
+
+    const classifyPatient = (p: Patient) => {
+        if (p.isEmergency) return 1; 
+        
+        if (p.visitType === 'APPOINTMENT' && p.appointmentTime) {
+            const apptMins = timeToMins(p.appointmentTime);
+            const minsUntilAppt = apptMins - currentMins;
+            // Late or Due Soon (within 10 mins) -> Priority 2
+            if (minsUntilAppt <= UPCOMING_THRESHOLD_MINS) {
+                return 2; 
+            }
+            // Future Appointment (> 10 mins away) -> Priority 4 (After Walk-ins)
+            return 4;
+        }
+        // Walk-ins
+        return 3;
+    };
+
     return patients
       .filter(p => {
         const matchDoc = filterDoctorId === 'ALL' || p.doctorId === filterDoctorId;
@@ -128,13 +165,22 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         return matchDoc && matchSearch && isActiveStatus;
       })
       .sort((a, b) => {
-          // Priority: Emergency > Status(Waiting) > Time
-          if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
+          // Status Priority: With Doctor is ALWAYS top visually
           if (a.status === PatientStatus.WITH_DOCTOR && b.status !== PatientStatus.WITH_DOCTOR) return -1;
           if (a.status !== PatientStatus.WITH_DOCTOR && b.status === PatientStatus.WITH_DOCTOR) return 1;
+
+          // Waiting Queue Logic
+          const priorityA = classifyPatient(a);
+          const priorityB = classifyPatient(b);
+          
+          if (priorityA !== priorityB) return priorityA - priorityB;
+          
+          if (a.visitType === 'APPOINTMENT' && b.visitType === 'APPOINTMENT' && a.appointmentTime && b.appointmentTime) {
+               return timeToMins(a.appointmentTime) - timeToMins(b.appointmentTime);
+          }
           return a.timeAdded - b.timeAdded;
       });
-  }, [patients, filterDoctorId, searchQuery]);
+  }, [patients, filterDoctorId, searchQuery, currentTime]);
 
   // Unique Patients Logic for Database (Name + Phone Grouping)
   const uniquePatients = useMemo(() => {
@@ -362,30 +408,32 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col p-6 overflow-hidden">
+    <div className="h-full flex flex-col p-4 sm:p-6 overflow-hidden">
         {/* Header Section */}
-        <div className="flex justify-between items-center mb-6 flex-shrink-0">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 flex-shrink-0 gap-4">
             <div>
                 <div className="flex items-center gap-2">
-                    <h1 className="text-2xl font-bold text-slate-900">{clinicName}</h1>
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900">{clinicName}</h1>
                     <button onClick={() => { const n = prompt('Edit Clinic Name:', clinicName); if(n) onUpdateClinicName(n); }} className="text-slate-400 hover:text-primary-600"><Edit2 className="h-4 w-4" /></button>
                 </div>
-                <div className="flex gap-4 mt-1 text-sm text-slate-500">
+                <div className="flex flex-wrap gap-4 mt-1 text-sm text-slate-500">
                     <span className="flex items-center gap-1"><User className="h-4 w-4" /> {patients.filter(p => p.status === PatientStatus.WAITING).length} Waiting</span>
                     <span className="flex items-center gap-1"><Stethoscope className="h-4 w-4" /> {doctors.filter(d => d.status === DoctorStatus.AVAILABLE).length} Active Doctors</span>
                 </div>
             </div>
-            <div className="flex gap-3">
-                <Button variant={activeTab === 'QUEUE' ? 'primary' : 'secondary'} onClick={() => setActiveTab('QUEUE')}>
-                    <List className="h-4 w-4 mr-2" /> Live Queue
+            
+            {/* Scrollable Tabs for Mobile */}
+            <div className="flex gap-2 sm:gap-3 overflow-x-auto w-full md:w-auto pb-1 no-scrollbar">
+                <Button variant={activeTab === 'QUEUE' ? 'primary' : 'secondary'} onClick={() => setActiveTab('QUEUE')} className="flex-shrink-0">
+                    <List className="h-4 w-4 mr-2" /> Queue
                 </Button>
-                <Button variant={activeTab === 'SCHEDULE' ? 'primary' : 'secondary'} onClick={() => setActiveTab('SCHEDULE')}>
+                <Button variant={activeTab === 'SCHEDULE' ? 'primary' : 'secondary'} onClick={() => setActiveTab('SCHEDULE')} className="flex-shrink-0">
                     <Calendar className="h-4 w-4 mr-2" /> Schedule
                 </Button>
-                <Button variant={activeTab === 'DATABASE' ? 'primary' : 'secondary'} onClick={() => setActiveTab('DATABASE')}>
-                    <Database className="h-4 w-4 mr-2" /> Patient Database
+                <Button variant={activeTab === 'DATABASE' ? 'primary' : 'secondary'} onClick={() => setActiveTab('DATABASE')} className="flex-shrink-0">
+                    <Database className="h-4 w-4 mr-2" /> Patients
                 </Button>
-                <Button variant={activeTab === 'DOCTORS' ? 'primary' : 'secondary'} onClick={() => setActiveTab('DOCTORS')}>
+                <Button variant={activeTab === 'DOCTORS' ? 'primary' : 'secondary'} onClick={() => setActiveTab('DOCTORS')} className="flex-shrink-0">
                     <Stethoscope className="h-4 w-4 mr-2" /> Doctors
                 </Button>
             </div>
@@ -396,9 +444,9 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             
             {/* COMMON SEARCH BAR (Used for Queue and Database) */}
             {(activeTab === 'QUEUE' || activeTab === 'DATABASE') && (
-                <div className="p-4 border-b border-slate-200 flex flex-wrap gap-4 items-center justify-between bg-slate-50">
-                    <div className="flex gap-3 flex-1">
-                        <div className="relative max-w-xs w-full">
+                <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row gap-4 items-center justify-between bg-slate-50">
+                    <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full">
+                        <div className="relative w-full sm:max-w-xs">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                             <input 
                                 className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -408,7 +456,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             />
                         </div>
                         {activeTab === 'QUEUE' && (
-                            <div className="relative w-48">
+                            <div className="relative w-full sm:w-48">
                                 <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                 <select 
                                     className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 appearance-none bg-white"
@@ -421,7 +469,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             </div>
                         )}
                     </div>
-                    <Button onClick={() => { setNewPType('WALK_IN'); setNewPDate(getLocalToday()); setIsPatientModalOpen(true); }}>
+                    <Button className="w-full sm:w-auto" onClick={() => { setNewPType('WALK_IN'); setNewPDate(getLocalToday()); setIsPatientModalOpen(true); }}>
                         <UserPlus className="h-4 w-4 mr-2" /> Add Patient
                     </Button>
                 </div>
@@ -430,233 +478,257 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             {/* TAB: QUEUE */}
             {activeTab === 'QUEUE' && (
                 <div className="flex-1 overflow-auto bg-slate-50/30">
-                    <table className="w-full text-sm text-left border-separate border-spacing-y-1 p-2">
-                        <thead className="bg-slate-50 text-slate-500 font-bold sticky top-0 z-20 shadow-sm text-xs uppercase tracking-wider">
-                            <tr>
-                                <th className="px-4 py-3 w-24 text-center rounded-l-lg bg-slate-50">Token</th>
-                                <th className="px-4 py-3 bg-slate-50">Patient Details</th>
-                                <th className="px-4 py-3 bg-slate-50">Assigned To</th>
-                                <th className="px-4 py-3 bg-slate-50">Status</th>
-                                <th className="px-4 py-3 bg-slate-50">Wait Time</th>
-                                <th className="px-4 py-3 text-right rounded-r-lg bg-slate-50">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredPatients.length > 0 ? filteredPatients.map((patient) => {
-                                const doc = doctors.find(d => d.id === patient.doctorId);
-                                const hasVitals = patient.vitals && Object.values(patient.vitals).some(v => v !== '');
-                                const isWaiting = patient.status === PatientStatus.WAITING;
-                                return (
-                                    <tr 
-                                        key={patient.id} 
-                                        draggable={isWaiting}
-                                        onDragStart={(e) => {
-                                            if (!isWaiting) { e.preventDefault(); return; }
-                                            setDraggedId(patient.id);
-                                            e.dataTransfer.effectAllowed = "move";
-                                        }}
-                                        onDragOver={(e) => {
-                                            if (draggedId && draggedId !== patient.id && isWaiting) {
-                                                e.preventDefault(); 
-                                                e.dataTransfer.dropEffect = "move";
-                                            }
-                                        }}
-                                        onDrop={(e) => {
-                                            e.preventDefault();
-                                            if (draggedId && draggedId !== patient.id) {
-                                                onDragDrop(draggedId, patient.id);
-                                                setDraggedId(null);
-                                            }
-                                        }}
-                                        onDragEnd={() => setDraggedId(null)}
-                                        className={`group transition-all duration-200 border border-slate-200 rounded-lg overflow-hidden
-                                            ${patient.status === PatientStatus.WITH_DOCTOR 
-                                                ? 'bg-blue-50 hover:bg-blue-100 shadow-md relative z-10 border-l-4 border-l-blue-500' 
-                                                : patient.isEmergency 
-                                                    ? 'bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500' 
-                                                    : 'bg-white hover:bg-slate-50'
-                                            }
-                                            ${draggedId === patient.id ? 'opacity-40 border-2 border-dashed border-primary-500' : ''}
-                                        `}
-                                    >
-                                        <td className="px-4 py-4 text-center rounded-l-lg">
-                                            <div className="flex items-center justify-center gap-3">
-                                                {isWaiting && (
-                                                    <GripVertical className="h-4 w-4 text-slate-300 cursor-move hover:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                )}
-                                                <div className="relative">
-                                                    <div className={`inline-flex items-center justify-center h-12 w-12 rounded-2xl font-black text-lg shadow-sm border-2
-                                                        ${patient.isEmergency 
-                                                            ? 'bg-red-500 text-white border-red-600' 
-                                                            : patient.status === PatientStatus.WITH_DOCTOR
-                                                                ? 'bg-blue-600 text-white border-blue-700 animate-pulse'
-                                                                : 'bg-white text-slate-700 border-slate-100'
-                                                        }`}>
-                                                        {patient.tokenNumber}
+                    {/* Add overflow-x-auto for responsive tables */}
+                    <div className="min-w-[800px]"> 
+                        <table className="w-full text-sm text-left border-separate border-spacing-y-1 p-2">
+                            <thead className="bg-slate-50 text-slate-500 font-bold sticky top-0 z-20 shadow-sm text-xs uppercase tracking-wider">
+                                <tr>
+                                    <th className="px-4 py-3 w-24 text-center rounded-l-lg bg-slate-50">Token</th>
+                                    <th className="px-4 py-3 bg-slate-50">Patient Details</th>
+                                    <th className="px-4 py-3 bg-slate-50">Assigned To</th>
+                                    <th className="px-4 py-3 bg-slate-50">Status</th>
+                                    <th className="px-4 py-3 bg-slate-50">Wait Time</th>
+                                    <th className="px-4 py-3 text-right rounded-r-lg bg-slate-50">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredPatients.length > 0 ? filteredPatients.map((patient) => {
+                                    const doc = doctors.find(d => d.id === patient.doctorId);
+                                    const hasVitals = patient.vitals && Object.values(patient.vitals).some(v => v !== '');
+                                    const isWaiting = patient.status === PatientStatus.WAITING;
+                                    return (
+                                        <tr 
+                                            key={patient.id} 
+                                            draggable={isWaiting}
+                                            onDragStart={(e) => {
+                                                if (!isWaiting) { e.preventDefault(); return; }
+                                                setDraggedId(patient.id);
+                                                e.dataTransfer.effectAllowed = "move";
+                                            }}
+                                            onDragOver={(e) => {
+                                                if (draggedId && draggedId !== patient.id && isWaiting) {
+                                                    e.preventDefault(); 
+                                                    e.dataTransfer.dropEffect = "move";
+                                                }
+                                            }}
+                                            onDrop={(e) => {
+                                                e.preventDefault();
+                                                if (draggedId && draggedId !== patient.id) {
+                                                    onDragDrop(draggedId, patient.id);
+                                                    setDraggedId(null);
+                                                }
+                                            }}
+                                            onDragEnd={() => setDraggedId(null)}
+                                            className={`group transition-all duration-200 border border-slate-200 rounded-lg overflow-hidden
+                                                ${patient.status === PatientStatus.WITH_DOCTOR 
+                                                    ? 'bg-blue-50 hover:bg-blue-100 shadow-md relative z-10 border-l-4 border-l-blue-500' 
+                                                    : patient.isEmergency 
+                                                        ? 'bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500' 
+                                                        : 'bg-white hover:bg-slate-50'
+                                                }
+                                                ${draggedId === patient.id ? 'opacity-40 border-2 border-dashed border-primary-500' : ''}
+                                            `}
+                                        >
+                                            <td className="px-4 py-4 text-center rounded-l-lg">
+                                                <div className="flex items-center justify-center gap-3">
+                                                    {isWaiting && (
+                                                        <GripVertical className="h-4 w-4 text-slate-300 cursor-move hover:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                    )}
+                                                    <div className="relative">
+                                                        <div className={`inline-flex items-center justify-center h-12 w-12 rounded-2xl font-black text-lg shadow-sm border-2
+                                                            ${patient.isEmergency 
+                                                                ? 'bg-red-500 text-white border-red-600' 
+                                                                : patient.status === PatientStatus.WITH_DOCTOR
+                                                                    ? 'bg-blue-600 text-white border-blue-700 animate-pulse'
+                                                                    : 'bg-white text-slate-700 border-slate-100'
+                                                            }`}>
+                                                            {patient.tokenNumber}
+                                                        </div>
+                                                        {patient.isEmergency && (
+                                                            <div className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1 rounded-full border border-red-200 shadow-sm" title="Emergency">
+                                                                <Zap className="h-3 w-3 fill-current" />
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    {patient.isEmergency && (
-                                                        <div className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1 rounded-full border border-red-200 shadow-sm" title="Emergency">
-                                                            <Zap className="h-3 w-3 fill-current" />
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <div className="flex flex-col">
+                                                    <div className={`font-bold text-base mb-1 ${patient.status === PatientStatus.WITH_DOCTOR ? 'text-blue-900' : 'text-slate-900'}`}>
+                                                        {patient.name}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold border flex items-center gap-1 uppercase tracking-wide
+                                                            ${patient.visitType === 'APPOINTMENT' 
+                                                                ? 'bg-purple-50 text-purple-700 border-purple-100' 
+                                                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                                                            }`}>
+                                                            {patient.visitType === 'APPOINTMENT' ? <Calendar className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                                                            {patient.visitType === 'APPOINTMENT' ? 'Appt' : 'Walk-in'}
+                                                        </span>
+                                                        {(patient.age || patient.gender) && (
+                                                            <span className="text-xs text-slate-500 font-medium">{patient.age}Y • {patient.gender}</span>
+                                                        )}
+                                                    </div>
+                                                    {patient.symptoms && (
+                                                        <div className="text-[10px] text-slate-500 italic mt-1 truncate max-w-[200px]" title={patient.symptoms}>
+                                                            "{patient.symptoms}"
                                                         </div>
                                                     )}
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="flex flex-col">
-                                                <div className={`font-bold text-base mb-1 ${patient.status === PatientStatus.WITH_DOCTOR ? 'text-blue-900' : 'text-slate-900'}`}>
-                                                    {patient.name}
-                                                </div>
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold border flex items-center gap-1 uppercase tracking-wide
-                                                        ${patient.visitType === 'APPOINTMENT' 
-                                                            ? 'bg-purple-50 text-purple-700 border-purple-100' 
-                                                            : 'bg-slate-100 text-slate-600 border-slate-200'
-                                                        }`}>
-                                                        {patient.visitType === 'APPOINTMENT' ? <Calendar className="h-3 w-3" /> : <User className="h-3 w-3" />}
-                                                        {patient.visitType === 'APPOINTMENT' ? 'Appt' : 'Walk-in'}
-                                                    </span>
-                                                    {(patient.age || patient.gender) && (
-                                                        <span className="text-xs text-slate-500 font-medium">{patient.age}Y • {patient.gender}</span>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <div className="text-slate-900 font-medium">{doc?.name || 'Unknown'}</div>
+                                                <div className="text-xs text-slate-500">{doc?.specialty}</div>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                {patient.status === PatientStatus.WITH_DOCTOR ? (
+                                                    <div className="flex items-center gap-2 text-blue-700 bg-blue-100/50 px-3 py-1.5 rounded-lg border border-blue-200 w-fit shadow-sm">
+                                                        <div className="relative flex h-3 w-3">
+                                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                                          <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                                                        </div>
+                                                        <span className="font-bold text-xs uppercase tracking-wide">Consulting</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col gap-1 items-start">
+                                                        <Badge status={patient.status} />
+                                                        {patient.isCheckedIn && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold flex items-center gap-1"><CheckCircle className="h-3 w-3"/> Arrived</span>}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-4 text-slate-500 font-mono text-sm">
+                                                {patient.status === PatientStatus.WAITING ? `${Math.floor((Date.now() - patient.timeAdded)/60000)}m` : '-'}
+                                            </td>
+                                            <td className="px-4 py-4 text-right rounded-r-lg">
+                                                <div className="flex justify-end gap-2 items-center">
+                                                    {patient.status === PatientStatus.WAITING && (
+                                                        <>
+                                                            {/* Send to Doctor Button - Disabled if not Checked In */}
+                                                            {patient.isCheckedIn ? (
+                                                                <button 
+                                                                    onClick={() => onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR)} 
+                                                                    className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 shadow-sm transition-all" 
+                                                                    title="Send to Doctor"
+                                                                >
+                                                                    <PlayCircle className="h-5 w-5" />
+                                                                </button>
+                                                            ) : (
+                                                                <button 
+                                                                    disabled
+                                                                    className="p-2 text-slate-300 bg-slate-100 rounded-lg border border-slate-200 cursor-not-allowed" 
+                                                                    title="Patient must Check-in first"
+                                                                >
+                                                                    <PlayCircle className="h-5 w-5" />
+                                                                </button>
+                                                            )}
+                                                            
+                                                            <button onClick={() => onManualReorder(patient.id, 'UP')} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" title="Move Up"><ArrowUp className="h-4 w-4" /></button>
+                                                        </>
+                                                    )}
+                                                    
+                                                    {patient.status === PatientStatus.WITH_DOCTOR && (
+                                                        <button onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)} className="p-2 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 shadow-sm transition-all" title="Mark Completed"><CheckSquare className="h-5 w-5" /></button>
+                                                    )}
+
+                                                    <button onClick={() => setEditingPatient(patient)} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-slate-100 rounded-lg" title="Edit Details"><Edit2 className="h-4 w-4" /></button>
+                                                    
+                                                    {/* Check In Button - Available for ALL patients who are waiting and not checked in (Walk-in or Appt) */}
+                                                    {!patient.isCheckedIn && patient.status === PatientStatus.WAITING && (
+                                                        <button onClick={() => onManualCheckIn(patient.id)} className="flex items-center gap-1 px-3 py-1.5 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-md text-xs font-bold transition-colors" title="Mark as Arrived">
+                                                            <UserCheck className="h-3.5 w-3.5" /> Check In
+                                                        </button>
+                                                    )}
+
+                                                    {patient.status === PatientStatus.WAITING && (
+                                                        <button 
+                                                            onClick={() => openVitalsModal(patient)} 
+                                                            className={`p-2 rounded-lg transition-colors ${hasVitals ? 'text-red-500 bg-red-50 hover:bg-red-100' : 'text-slate-400 hover:text-red-500 hover:bg-slate-100'}`} 
+                                                            title="Record Vitals"
+                                                        >
+                                                            <Activity className="h-4 w-4" />
+                                                        </button>
+                                                    )}
+                                                    
+                                                    <button onClick={() => onToggleEmergency(patient.id)} className={`p-2 rounded-lg transition-colors ${patient.isEmergency ? 'text-red-600 bg-red-100 shadow-inner' : 'text-slate-300 hover:text-orange-500 hover:bg-orange-50'}`} title="Toggle Emergency">
+                                                        <AlertTriangle className="h-4 w-4" />
+                                                    </button>
+
+                                                    {patient.status === PatientStatus.WAITING && (
+                                                         <button onClick={() => { if(window.confirm('Cancel visit?')) onCancelPatient(patient.id); }} className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Cancel Visit"><XCircle className="h-4 w-4" /></button>
                                                     )}
                                                 </div>
-                                                {patient.symptoms && (
-                                                    <div className="text-[10px] text-slate-500 italic mt-1 truncate max-w-[200px]" title={patient.symptoms}>
-                                                        "{patient.symptoms}"
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="text-slate-900 font-medium">{doc?.name || 'Unknown'}</div>
-                                            <div className="text-xs text-slate-500">{doc?.specialty}</div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            {patient.status === PatientStatus.WITH_DOCTOR ? (
-                                                <div className="flex items-center gap-2 text-blue-700 bg-blue-100/50 px-3 py-1.5 rounded-lg border border-blue-200 w-fit shadow-sm">
-                                                    <div className="relative flex h-3 w-3">
-                                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                                                      <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
-                                                    </div>
-                                                    <span className="font-bold text-xs uppercase tracking-wide">Consulting</span>
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-col gap-1 items-start">
-                                                    <Badge status={patient.status} />
-                                                    {patient.isCheckedIn && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold flex items-center gap-1"><CheckCircle className="h-3 w-3"/> Arrived</span>}
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-4 text-slate-500 font-mono text-sm">
-                                            {patient.status === PatientStatus.WAITING ? `${Math.floor((Date.now() - patient.timeAdded)/60000)}m` : '-'}
-                                        </td>
-                                        <td className="px-4 py-4 text-right rounded-r-lg">
-                                            <div className="flex justify-end gap-2 items-center">
-                                                {patient.status === PatientStatus.WAITING && (
-                                                    <>
-                                                        <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR)} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 shadow-sm transition-all" title="Send to Doctor"><PlayCircle className="h-5 w-5" /></button>
-                                                        <button onClick={() => onManualReorder(patient.id, 'UP')} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" title="Move Up"><ArrowUp className="h-4 w-4" /></button>
-                                                    </>
-                                                )}
-                                                
-                                                {patient.status === PatientStatus.WITH_DOCTOR && (
-                                                    <button onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)} className="p-2 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 shadow-sm transition-all" title="Mark Completed"><CheckSquare className="h-5 w-5" /></button>
-                                                )}
-
-                                                <button onClick={() => setEditingPatient(patient)} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-slate-100 rounded-lg" title="Edit Details"><Edit2 className="h-4 w-4" /></button>
-                                                
-                                                {patient.visitType === 'APPOINTMENT' && !patient.isCheckedIn && patient.status === PatientStatus.WAITING && (
-                                                    <button onClick={() => onManualCheckIn(patient.id)} className="flex items-center gap-1 px-3 py-1.5 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-md text-xs font-bold transition-colors" title="Mark as Arrived">
-                                                        <UserCheck className="h-3.5 w-3.5" /> Check In
-                                                    </button>
-                                                )}
-
-                                                {patient.status === PatientStatus.WAITING && (
-                                                    <button 
-                                                        onClick={() => openVitalsModal(patient)} 
-                                                        className={`p-2 rounded-lg transition-colors ${hasVitals ? 'text-red-500 bg-red-50 hover:bg-red-100' : 'text-slate-400 hover:text-red-500 hover:bg-slate-100'}`} 
-                                                        title="Record Vitals"
-                                                    >
-                                                        <Activity className="h-4 w-4" />
-                                                    </button>
-                                                )}
-                                                
-                                                <button onClick={() => onToggleEmergency(patient.id)} className={`p-2 rounded-lg transition-colors ${patient.isEmergency ? 'text-red-600 bg-red-100 shadow-inner' : 'text-slate-300 hover:text-orange-500 hover:bg-orange-50'}`} title="Toggle Emergency">
-                                                    <AlertTriangle className="h-4 w-4" />
-                                                </button>
-
-                                                {patient.status === PatientStatus.WAITING && (
-                                                     <button onClick={() => { if(window.confirm('Cancel visit?')) onCancelPatient(patient.id); }} className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Cancel Visit"><XCircle className="h-4 w-4" /></button>
-                                                )}
-                                            </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                }) : (
+                                    <tr>
+                                        <td colSpan={6} className="py-12 text-center text-slate-400">
+                                            No patients found in active queue.
                                         </td>
                                     </tr>
-                                );
-                            }) : (
-                                <tr>
-                                    <td colSpan={6} className="py-12 text-center text-slate-400">
-                                        No patients found in active queue.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
 
             {/* TAB: DATABASE */}
             {activeTab === 'DATABASE' && (
                 <div className="flex-1 overflow-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-50 text-slate-500 font-medium sticky top-0 z-10 border-b border-slate-200">
-                            <tr>
-                                <th className="px-6 py-3">Patient Profile</th>
-                                <th className="px-6 py-3">Phone Number</th>
-                                <th className="px-6 py-3">Total Visits</th>
-                                <th className="px-6 py-3">Last Visit</th>
-                                <th className="px-6 py-3 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {uniquePatients.length > 0 ? uniquePatients.map((patient) => {
-                                const totalVisits = patients.filter(p => p.phone === patient.phone && p.name.toLowerCase().trim() === patient.name.toLowerCase().trim()).length;
-                                return (
-                                    <tr key={`${patient.phone}_${patient.name}`} className="hover:bg-slate-50">
-                                        <td className="px-6 py-4">
-                                            <div className="font-bold text-slate-900">{patient.name}</div>
-                                            <div className="text-xs text-slate-500 flex items-center gap-1">
-                                                {patient.age ? `${patient.age} Years` : 'Age N/A'} • {patient.gender || 'Gender N/A'}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 font-mono text-slate-600">
-                                            {patient.phone}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                {totalVisits} Visits
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-500">
-                                            {new Date(patient.timeAdded).toLocaleDateString()}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex justify-end gap-2">
-                                                <button onClick={() => openHistoryModal(patient)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="View History"><History className="h-4 w-4" /></button>
-                                                <button onClick={() => setEditingPatient(patient)} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-slate-100 rounded-lg" title="Edit Profile"><Edit2 className="h-4 w-4" /></button>
-                                                <button onClick={() => openDeleteModal(patient)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete All Records"><Trash2 className="h-4 w-4" /></button>
-                                            </div>
+                    <div className="min-w-[800px]">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-50 text-slate-500 font-medium sticky top-0 z-10 border-b border-slate-200">
+                                <tr>
+                                    <th className="px-6 py-3">Patient Profile</th>
+                                    <th className="px-6 py-3">Phone Number</th>
+                                    <th className="px-6 py-3">Total Visits</th>
+                                    <th className="px-6 py-3">Last Visit</th>
+                                    <th className="px-6 py-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {uniquePatients.length > 0 ? uniquePatients.map((patient) => {
+                                    const totalVisits = patients.filter(p => p.phone === patient.phone && p.name.toLowerCase().trim() === patient.name.toLowerCase().trim()).length;
+                                    return (
+                                        <tr key={`${patient.phone}_${patient.name}`} className="hover:bg-slate-50">
+                                            <td className="px-6 py-4">
+                                                <div className="font-bold text-slate-900">{patient.name}</div>
+                                                <div className="text-xs text-slate-500 flex items-center gap-1">
+                                                    {patient.age ? `${patient.age} Years` : 'Age N/A'} • {patient.gender || 'Gender N/A'}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 font-mono text-slate-600">
+                                                {patient.phone}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                    {totalVisits} Visits
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-slate-500">
+                                                {new Date(patient.timeAdded).toLocaleDateString()}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={() => openHistoryModal(patient)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="View History"><History className="h-4 w-4" /></button>
+                                                    <button onClick={() => setEditingPatient(patient)} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-slate-100 rounded-lg" title="Edit Profile"><Edit2 className="h-4 w-4" /></button>
+                                                    <button onClick={() => openDeleteModal(patient)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete All Records"><Trash2 className="h-4 w-4" /></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                }) : (
+                                    <tr>
+                                        <td colSpan={5} className="py-12 text-center text-slate-400">
+                                            No patient records found.
                                         </td>
                                     </tr>
-                                );
-                            }) : (
-                                <tr>
-                                    <td colSpan={5} className="py-12 text-center text-slate-400">
-                                        No patient records found.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
 
@@ -691,7 +763,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     <div className="flex-1 flex overflow-hidden">
                         {/* Calendar Grid */}
                         <div className="flex-1 p-6 overflow-y-auto">
-                            <div className="grid grid-cols-7 gap-4">
+                            <div className="grid grid-cols-7 gap-4 min-w-[600px]">
                                 {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
                                     <div key={day} className="text-center text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">
                                         {day}
@@ -762,7 +834,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
                         {/* Side Panel for Selected Day */}
                         {selectedCalendarDay && (
-                            <div className="w-80 border-l border-slate-200 bg-white flex flex-col animate-in slide-in-from-right duration-300 shadow-xl z-20">
+                            <div className="w-80 border-l border-slate-200 bg-white flex flex-col animate-in slide-in-from-right duration-300 shadow-xl z-20 absolute right-0 inset-y-0">
                                 <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                                     <div>
                                         <h3 className="font-bold text-slate-800">Appointments</h3>
@@ -808,7 +880,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             {/* TAB: DOCTORS */}
             {activeTab === 'DOCTORS' && (
                 <div className="p-6 overflow-hidden flex flex-col h-full">
-                    <div className="flex justify-between items-center mb-6">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                          <div className="flex items-center gap-4">
                              <h3 className="font-bold text-lg text-slate-800">Medical Staff</h3>
                              <div className="bg-slate-100 p-1 rounded-lg flex text-xs font-bold">
@@ -845,41 +917,43 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         </div>
                     ) : (
                         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden flex-1 overflow-auto">
-                            <table className="w-full text-xs text-left">
-                                <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
-                                    <tr>
-                                        <th className="px-4 py-3 min-w-[150px]">Doctor</th>
-                                        {DAYS_OF_WEEK.map(day => (
-                                            <th key={day} className="px-4 py-3">{day.substring(0,3)}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {doctors.map(doc => (
-                                        <tr key={doc.id} className="hover:bg-slate-50">
-                                            <td className="px-4 py-3 font-bold text-slate-800">
-                                                {doc.name}
-                                                <div className="text-[10px] text-slate-400 font-normal">{doc.specialty}</div>
-                                            </td>
-                                            {DAYS_OF_WEEK.map(day => {
-                                                const schedule = doc.weeklySchedule.find(s => s.day === day);
-                                                const isOff = !schedule || schedule.isOff;
-                                                return (
-                                                    <td key={day} className="px-4 py-3">
-                                                        {isOff ? (
-                                                            <span className="text-slate-300 font-medium">OFF</span>
-                                                        ) : (
-                                                            <div className="bg-green-50 text-green-700 px-2 py-1 rounded inline-block text-[10px] font-bold border border-green-100">
-                                                                {schedule?.startTime} - {schedule?.endTime}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                );
-                                            })}
+                            <div className="min-w-[800px]">
+                                <table className="w-full text-xs text-left">
+                                    <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                                        <tr>
+                                            <th className="px-4 py-3 min-w-[150px]">Doctor</th>
+                                            {DAYS_OF_WEEK.map(day => (
+                                                <th key={day} className="px-4 py-3">{day.substring(0,3)}</th>
+                                            ))}
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {doctors.map(doc => (
+                                            <tr key={doc.id} className="hover:bg-slate-50">
+                                                <td className="px-4 py-3 font-bold text-slate-800">
+                                                    {doc.name}
+                                                    <div className="text-[10px] text-slate-400 font-normal">{doc.specialty}</div>
+                                                </td>
+                                                {DAYS_OF_WEEK.map(day => {
+                                                    const schedule = doc.weeklySchedule.find(s => s.day === day);
+                                                    const isOff = !schedule || schedule.isOff;
+                                                    return (
+                                                        <td key={day} className="px-4 py-3">
+                                                            {isOff ? (
+                                                                <span className="text-slate-300 font-medium">OFF</span>
+                                                            ) : (
+                                                                <div className="bg-green-50 text-green-700 px-2 py-1 rounded inline-block text-[10px] font-bold border border-green-100">
+                                                                    {schedule?.startTime} - {schedule?.endTime}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -891,7 +965,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         {/* ADD PATIENT MODAL */}
         {isPatientModalOpen && (
             <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 animate-in zoom-in-95">
+                <div className="bg-white rounded-xl shadow-xl w-[95%] sm:max-w-lg p-6 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="text-xl font-bold">{newPType === 'APPOINTMENT' ? 'Schedule Appointment' : 'Check-in Walk-in'}</h3>
                         <button onClick={() => setIsPatientModalOpen(false)}><X className="h-5 w-5 text-slate-400" /></button>
@@ -982,7 +1056,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         {/* ADD/EDIT DOCTOR MODAL */}
         {isDoctorModalOpen && (
             <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+                <div className="bg-white rounded-xl shadow-xl w-[95%] sm:max-w-2xl p-6 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="text-xl font-bold">{doctorModalMode === 'ADD' ? 'Add Medical Staff' : 'Edit Doctor Details'}</h3>
                         <button onClick={() => setIsDoctorModalOpen(false)}><X className="h-5 w-5 text-slate-400" /></button>
@@ -1077,7 +1151,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         {/* EDIT PATIENT MODAL */}
         {editingPatient && (
             <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+                <div className="bg-white rounded-xl shadow-xl w-[95%] sm:max-w-md p-6">
                     <h3 className="text-xl font-bold mb-4">Edit Patient Profile</h3>
                     <form onSubmit={handleEditPatientSubmit} className="space-y-4">
                         <Input label="Name" value={editingPatient.name} onChange={e => setEditingPatient({...editingPatient, name: e.target.value})} />
@@ -1095,7 +1169,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         {/* VITALS MODAL */}
         {vitalsModalPatient && (
             <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
+                <div className="bg-white rounded-xl shadow-xl w-[95%] sm:max-w-lg p-6">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="text-xl font-bold flex items-center gap-2"><Activity className="h-5 w-5 text-red-500" /> Record Vitals</h3>
                         <button onClick={() => setVitalsModalPatient(null)}><X className="h-5 w-5 text-slate-400" /></button>
@@ -1119,7 +1193,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         {/* HISTORY MODAL */}
         {historyModalPatient && (
             <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 h-[80vh] flex flex-col">
+                <div className="bg-white rounded-xl shadow-xl w-[95%] sm:max-w-2xl p-6 h-[80vh] flex flex-col">
                     <div className="flex justify-between items-center mb-6 flex-shrink-0">
                         <div>
                             <h3 className="text-xl font-bold flex items-center gap-2">Patient History</h3>
@@ -1167,7 +1241,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         {/* DELETE CONFIRMATION MODAL */}
         {deleteConfirmModal.isOpen && deleteConfirmModal.patient && (
             <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 text-center animate-in zoom-in-95">
+                <div className="bg-white rounded-xl shadow-xl w-[95%] sm:max-w-sm p-6 text-center animate-in zoom-in-95">
                     <div className="bg-red-100 h-12 w-12 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Trash2 className="h-6 w-6 text-red-600" />
                     </div>

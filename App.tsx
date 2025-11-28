@@ -573,6 +573,9 @@ export default function App() {
           city: 'Unknown',
           address: 'Update Address',
           pincode: '000000',
+          operatingHours: '09:00 AM - 09:00 PM', // Default
+          about: 'Welcome to our clinic. We provide quality healthcare services.', // Default
+          amenities: ['Waiting Area', 'Wifi', 'Drinking Water'], // Default
           subscriptionStatus: 'ACTIVE',
           joinedDate: Date.now()
       };

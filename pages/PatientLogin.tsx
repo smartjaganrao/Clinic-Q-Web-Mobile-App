@@ -12,18 +12,24 @@ interface PatientLoginProps {
 }
 
 export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, addToast, pendingActionMessage }) => {
-  const [step, setStep] = useState<'LOGIN' | 'NAME'>('LOGIN');
+  const [step, setStep] = useState<'LOGIN' | 'DETAILS'>('LOGIN');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState('Male');
   const [loading, setLoading] = useState(false);
 
   // Check if user exists in local storage when phone changes
   const checkExistingUser = (phoneNumber: string) => {
-    const data = localStorage.getItem(`clinicq_patient_${phoneNumber}`);
-    if (data) {
-      const parsed = JSON.parse(data);
-      return parsed.name || '';
+    try {
+        const data = localStorage.getItem(`clinicq_patient_${phoneNumber}`);
+        if (data) {
+          const parsed = JSON.parse(data);
+          return parsed.name || '';
+        }
+    } catch (e) {
+        console.error(e);
     }
     return '';
   };
@@ -58,12 +64,18 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
                 localStorage.setItem(`clinicq_patient_${phone}`, JSON.stringify({
                     name: testName,
                     phone,
-                    familyMembers: []
+                    age: '28',
+                    gender: 'Male',
+                    familyMembers: [
+                        { name: "Priya Verma", age: "26", gender: "Female", relation: "Wife" },
+                        { name: "Arjun Verma", age: "4", gender: "Male", relation: "Son" },
+                        { name: "Sunita Verma", age: "55", gender: "Female", relation: "Mother" }
+                    ]
                 }));
                 onLogin(phone, testName);
             } else {
-                // New user, ask for name
-                setStep('NAME');
+                // New user, ask for details
+                setStep('DETAILS');
             }
         }
     }, 800);
@@ -71,13 +83,17 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
 
   const handleRegister = (e: React.FormEvent) => {
       e.preventDefault();
-      if (!name.trim()) return;
+      if (!name.trim() || !age) return;
       
-      // Save profile
+      // Save profile with a dummy family member for demo purposes
       localStorage.setItem(`clinicq_patient_${phone}`, JSON.stringify({
           name,
           phone,
-          familyMembers: []
+          age,
+          gender,
+          familyMembers: [
+              { name: "Demo Relative", age: "30", gender: "Female", relation: "Sister" }
+          ]
       }));
       onLogin(phone, name);
   };
@@ -152,14 +168,14 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
                 </form>
             )}
 
-            {step === 'NAME' && (
+            {step === 'DETAILS' && (
                 <form onSubmit={handleRegister} className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                     <div className="text-center mb-2">
                         <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1 mb-4">
                             <ShieldCheck className="h-3 w-3" /> Mobile Verified
                         </div>
-                        <h2 className="text-lg font-bold text-slate-900">What's your name?</h2>
-                        <p className="text-sm text-slate-500">Creating new profile for {phone}</p>
+                        <h2 className="text-lg font-bold text-slate-900">Complete Profile</h2>
+                        <p className="text-sm text-slate-500">For {phone}</p>
                     </div>
                     
                     <Input 
@@ -168,9 +184,33 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         autoFocus
+                        required
                     />
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input 
+                            label="Age" 
+                            type="number"
+                            placeholder="25" 
+                            value={age}
+                            onChange={(e) => setAge(e.target.value)}
+                            required
+                        />
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
+                            <select 
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:ring-primary-500 focus:border-primary-500"
+                                value={gender}
+                                onChange={(e) => setGender(e.target.value)}
+                            >
+                                <option>Male</option>
+                                <option>Female</option>
+                                <option>Other</option>
+                            </select>
+                        </div>
+                    </div>
                     
-                    <Button type="submit" className="w-full" disabled={!name.trim()}>
+                    <Button type="submit" className="w-full" disabled={!name.trim() || !age}>
                         Create Profile <User className="h-4 w-4 ml-2" />
                     </Button>
                 </form>
