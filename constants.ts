@@ -1,12 +1,12 @@
-import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient } from './types';
+import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient, TimeSlot } from './types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const genId = () => Math.random().toString(36).substr(2, 5);
 
 const createDefaultSchedule = (): DaySchedule[] => {
   return DAYS.map(day => ({
     day,
-    // Default single slot 09:00-17:00, empty slots means OFF
-    slots: day === 'Sunday' ? [] : [{ startTime: '09:00', endTime: '17:00', active: true }],
+    slots: day === 'Sunday' ? [] : [{ id: genId(), startTime: '09:00', endTime: '17:00', label: 'Regular', active: true }],
     isOff: day === 'Sunday'
   }));
 };
@@ -38,6 +38,9 @@ const SYMPTOMS_BY_TYPE: Record<string, string[]> = {
   OTHER: ["General consultation", "Follow up", "Routine checkup"]
 };
 
+// Shared Master ID for Dr. Ravi Kumar to demonstrate multi-hospital linking
+const MASTER_ID_RAVI = 'master_doc_ravi_123';
+
 // Helper to create doctors with realistic profiles
 const createRealDoctors = (startId: number, count: number, specialty: string, feeRange: [number, number]): Doctor[] => {
   const names = [
@@ -49,20 +52,33 @@ const createRealDoctors = (startId: number, count: number, specialty: string, fe
   
   return Array.from({ length: count }).map((_, i) => {
     const idVal = startId + i;
-    // Deterministic random for consistency across reloads
     const rand = (idVal * 9301 + 49297) % 233280; 
     const fee = Math.floor(Math.random() * (feeRange[1] - feeRange[0] + 1) + feeRange[0]);
     const rating = (3.8 + (rand % 12) / 10).toFixed(1);
+    const name = names[(idVal + i) % names.length];
+    
+    // Unified Identity Logic for demo
+    let masterId = `master_${idVal}`;
+    let mobile = `98${idVal.toString().padStart(8, '0')}`;
+
+    // Force Dr. Ravi Kumar to have specific ID for linking demo
+    if (name === 'Dr. Ravi Kumar') {
+        masterId = MASTER_ID_RAVI;
+        mobile = '9876543210';
+    }
     
     return {
         id: `doc_${specialty.substring(0,3)}_${idVal}`,
-        name: names[(idVal + i) % names.length],
+        masterId: masterId,
+        name: name,
+        mobile: mobile,
+        registrationNumber: `REG${idVal}`,
         specialty: specialty,
         roomNumber: `${100 + i + 1}`,
         isAvailable: true,
         status: DoctorStatus.AVAILABLE,
         delayMinutes: 0,
-        avatarUrl: `https://i.pravatar.cc/150?u=${idVal}`,
+        avatarUrl: `https://i.pravatar.cc/150?u=${masterId}`, // Consistent avatar based on masterId
         weeklySchedule: createDefaultSchedule(),
         consultationFee: fee - (fee % 50), // Round to 50
         rating: parseFloat(rating),
@@ -77,13 +93,10 @@ const createRealisticPatients = (doctors: Doctor[], clinicType: ClinicType | str
   const symptomsList = SYMPTOMS_BY_TYPE[clinicType] || SYMPTOMS_BY_TYPE.GENERAL;
   const now = Date.now();
   
-  // Create a mix of patients for each doctor
   doctors.forEach((doc, docIdx) => {
-    // Generate 3-8 patients per doctor
     const count = 3 + Math.floor(Math.random() * 6);
     
     for (let i = 0; i < count; i++) {
-      // States: First 1-2 completed, next 1 with doctor, rest waiting
       const isCompleted = i < Math.floor(count * 0.3); 
       const isWithDoctor = !isCompleted && i === Math.floor(count * 0.3);
       
@@ -96,25 +109,19 @@ const createRealisticPatients = (doctors: Doctor[], clinicType: ClinicType | str
                      isWithDoctor ? PatientStatus.WITH_DOCTOR : 
                      PatientStatus.WAITING;
 
-      // Time staggering (mock times relative to now)
-      // Completed were 30-60 mins ago
-      // With doctor started 5 mins ago
-      // Waiting added 5-30 mins ago
       const timeOffset = (count - i) * 12 * 60 * 1000; 
-      
       const visitType = Math.random() > 0.4 ? 'WALK_IN' : 'APPOINTMENT';
       let appointmentTime;
       let appointmentDate;
       
       if (visitType === 'APPOINTMENT') {
-          // Today's date
           const d = new Date();
           const year = d.getFullYear();
           const month = String(d.getMonth() + 1).padStart(2, '0');
           const day = String(d.getDate()).padStart(2, '0');
           appointmentDate = `${year}-${month}-${day}`;
 
-          const hour = 9 + Math.floor(i/2); // 9:00, 9:30, 10:00...
+          const hour = 9 + Math.floor(i/2);
           const min = (i%2) * 30;
           appointmentTime = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}`;
       }
@@ -123,7 +130,7 @@ const createRealisticPatients = (doctors: Doctor[], clinicType: ClinicType | str
         id: `pat_${doc.id}_${i}`,
         tokenNumber: (docIdx + 1) * 100 + (i + 1),
         name,
-        phone: `9${Math.floor(Math.random()*900000000 + 100000000)}`, // Random 10 digit
+        phone: `9${Math.floor(Math.random()*900000000 + 100000000)}`,
         status,
         doctorId: doc.id,
         timeAdded: now - timeOffset,
@@ -131,7 +138,7 @@ const createRealisticPatients = (doctors: Doctor[], clinicType: ClinicType | str
         visitType,
         appointmentDate,
         appointmentTime,
-        isEmergency: !isCompleted && !isWithDoctor && Math.random() > 0.95, // Rare emergency
+        isEmergency: !isCompleted && !isWithDoctor && Math.random() > 0.95, 
         isCheckedIn: visitType === 'APPOINTMENT' ? Math.random() > 0.3 : false,
         vitals: (isWithDoctor || isCompleted) ? {
             bp: `${110 + Math.floor(Math.random()*30)}/${70 + Math.floor(Math.random()*20)}`,
@@ -150,7 +157,8 @@ const createRealisticPatients = (doctors: Doctor[], clinicType: ClinicType | str
   return patients;
 };
 
-// --- INITIAL DATA ---
+const INSURANCE_PROVIDERS = ["Star Health", "HDFC Ergo", "ICICI Lombard", "Max Bupa", "Religare"];
+const getRandomInsurances = () => INSURANCE_PROVIDERS.sort(() => 0.5 - Math.random()).slice(0, 3);
 
 const chennaiDocs1 = [...createRealDoctors(100, 2, 'General Physician', [500, 700]), ...createRealDoctors(102, 1, 'Diabetologist', [700, 900])];
 const chennaiDocs2 = createRealDoctors(200, 4, 'Ophthalmologist', [600, 1000]);
@@ -161,14 +169,32 @@ const chennaiDocs6 = [...createRealDoctors(600, 2, 'Cardiologist', [1000, 1800])
 const chennaiDocs7 = createRealDoctors(700, 2, 'Dermatologist', [700, 1200]);
 const chennaiDocs8 = createRealDoctors(800, 3, 'ENT Specialist', [600, 900]);
 const chennaiDocs9 = createRealDoctors(900, 4, 'Pediatrician', [600, 1000]);
-const chennaiDocs10 = [...createRealDoctors(1500, 3, 'General Physician', [400, 600]), ...createRealDoctors(1503, 2, 'Cardiologist', [800, 1200])];
+
+const raviKumarCityGeneral: Doctor = {
+    id: 'doc_GEN_1599',
+    masterId: MASTER_ID_RAVI, // SAME MASTER ID
+    name: 'Dr. Ravi Kumar',
+    mobile: '9876543210',
+    registrationNumber: 'REG100',
+    specialty: 'General Physician',
+    roomNumber: '205',
+    isAvailable: true,
+    status: DoctorStatus.AVAILABLE,
+    delayMinutes: 0,
+    avatarUrl: `https://i.pravatar.cc/150?u=${MASTER_ID_RAVI}`,
+    weeklySchedule: createDefaultSchedule(),
+    consultationFee: 300, // Different fee
+    rating: 4.2,
+    reviewCount: 150
+};
+
+const chennaiDocs10 = [raviKumarCityGeneral, ...createRealDoctors(1501, 3, 'General Physician', [400, 600])];
 
 const blrDocs1 = [...createRealDoctors(1000, 2, 'Cardiologist', [1000, 1500]), ...createRealDoctors(1002, 2, 'Orthopedic', [900, 1400])];
 const blrDocs2 = [...createRealDoctors(1100, 2, 'Pediatrician', [600, 900]), ...createRealDoctors(1102, 2, 'Gynecologist', [700, 1000])];
 const blrDocs3 = createRealDoctors(1200, 1, 'Dentist', [400, 800]);
 
 export const INITIAL_CLINICS: Clinic[] = [
-  // --- CHENNAI CLINICS ---
   {
     id: 'clinic_chn_1',
     name: 'Apollo Clinic',
@@ -182,6 +208,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     geoLocation: { lat: 13.0850, lng: 80.2100 },
     about: 'A multi-specialty clinic providing comprehensive healthcare services with state-of-the-art diagnostic facilities and expert doctors.',
     amenities: ['Pharmacy', 'Pathology Lab', 'X-Ray', 'Parking', 'Wheelchair Access'],
+    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs1,
     patients: createRealisticPatients(chennaiDocs1, ClinicType.GENERAL, 'Chennai')
   },
@@ -198,6 +225,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     geoLocation: { lat: 13.0629, lng: 80.2495 },
     about: 'World-class eye care hospital dedicated to providing equitable and efficient eye care to all sections of society.',
     amenities: ['Optical Shop', 'Cafeteria', 'Emergency Eye Care', 'Pharmacy', 'Prayer Room'],
+    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs2,
     patients: createRealisticPatients(chennaiDocs2, 'OPHTHALMOLOGY', 'Chennai')
   },
@@ -214,6 +242,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     geoLocation: { lat: 13.0350, lng: 80.2350 },
     about: 'India’s premier birthing, woman, and child care hospital celebrating the journey of maternity and beyond.',
     amenities: ['NICU', 'Labor Suites', 'Valet Parking', 'Baby Shop', '24x7 Pharmacy'],
+    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs3,
     patients: createRealisticPatients(chennaiDocs3, ClinicType.GYNECOLOGY, 'Chennai')
   },
@@ -230,6 +259,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     geoLocation: { lat: 13.0280, lng: 80.1850 },
     about: 'A 1000-bed quaternary care hospital offering best-in-class treatment for Orthopedics, Trauma, and Joint Replacement.',
     amenities: ['Ambulance', 'Blood Bank', 'Cafeteria', 'Rehab Center', 'International Patient Care'],
+    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs4,
     patients: createRealisticPatients(chennaiDocs4, ClinicType.ORTHOPEDIC, 'Chennai')
   },
@@ -246,6 +276,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     geoLocation: { lat: 13.0012, lng: 80.2565 },
     about: 'Advanced dental care center specializing in implants, root canals, and cosmetic dentistry with modern equipment.',
     amenities: ['Digital X-Ray', 'Waiting Lounge', 'Parking', 'Card Payment'],
+    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs5,
     patients: createRealisticPatients(chennaiDocs5, ClinicType.DENTAL, 'Chennai')
   },
@@ -262,6 +293,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     geoLocation: { lat: 13.0060, lng: 80.2580 },
     about: 'Leading multi-specialty hospital known for its excellence in Cardiology, Cardiac Surgery, and Neurology.',
     amenities: ['ICU/CCU', 'Emergency', 'Diagnostics', 'Pharmacy', 'Wifi'],
+    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs6,
     patients: createRealisticPatients(chennaiDocs6, ClinicType.CARDIOLOGY, 'Chennai')
   },
@@ -278,6 +310,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     geoLocation: { lat: 13.0330, lng: 80.2550 },
     about: 'Expert dermatologists providing advanced skin and hair treatments including laser hair removal and acne treatment.',
     amenities: ['Laser Suite', 'Private Consultation', 'Valet Parking', 'Wifi'],
+    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs7,
     patients: createRealisticPatients(chennaiDocs7, ClinicType.DERMATOLOGY, 'Chennai')
   },
@@ -294,6 +327,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     geoLocation: { lat: 13.0780, lng: 80.2400 },
     about: 'Specialized ENT care hospital known for Micro Ear Surgery, Endoscopic Sinus Surgery, and Cochlear Implants.',
     amenities: ['Audiology Lab', 'Speech Therapy', 'Pharmacy', 'In-patient Rooms'],
+    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs8,
     patients: createRealisticPatients(chennaiDocs8, 'ENT', 'Chennai')
   },
@@ -310,6 +344,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     geoLocation: { lat: 13.0700, lng: 80.2380 },
     about: 'A heritage hospital with a strong focus on Pediatric care, General Medicine, and Surgery since 1933.',
     amenities: ['Pediatric ICU', 'Play Area', 'Vaccination Center', 'Emergency', 'Lab'],
+    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs9,
     patients: createRealisticPatients(chennaiDocs9, ClinicType.PEDIATRIC, 'Chennai')
   },
@@ -326,6 +361,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     geoLocation: { lat: 13.0827, lng: 80.2707 },
     about: 'Affordable and accessible general healthcare services for the community with round-the-clock emergency support.',
     amenities: ['Emergency', 'Pharmacy', 'General Ward', 'Basic Lab'],
+    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs10,
     patients: createRealisticPatients(chennaiDocs10, ClinicType.GENERAL, 'Chennai')
   },
@@ -344,6 +380,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     geoLocation: { lat: 12.9592, lng: 77.6475 },
     about: 'One of India’s foremost multi-specialty healthcare providers offering comprehensive care.',
     amenities: ['Advanced ICU', 'Robotic Surgery', 'Cafeteria', 'Valet Parking', 'Pharmacy'],
+    acceptedInsurances: getRandomInsurances(),
     doctors: blrDocs1,
     patients: createRealisticPatients(blrDocs1, ClinicType.GENERAL, 'Bangalore')
   },
@@ -360,6 +397,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     geoLocation: { lat: 13.0285, lng: 77.6400 },
     about: 'Specialized hospital for women and children, providing maternity, gynecology, and pediatric services.',
     amenities: ['NICU', 'Labor Rooms', 'Lactation Consulting', 'Ultrasound'],
+    acceptedInsurances: getRandomInsurances(),
     doctors: blrDocs2,
     patients: createRealisticPatients(blrDocs2, ClinicType.PEDIATRIC, 'Bangalore')
   },
@@ -376,12 +414,13 @@ export const INITIAL_CLINICS: Clinic[] = [
     geoLocation: { lat: 12.9716, lng: 77.6412 },
     about: 'India’s largest dental chain offering quality dental care with modern technology and hygiene standards.',
     amenities: ['X-Ray', 'Sterilization Zone', 'Wifi', 'Card Payment'],
+    acceptedInsurances: getRandomInsurances(),
     doctors: blrDocs3,
     patients: createRealisticPatients(blrDocs3, ClinicType.DENTAL, 'Bangalore')
   }
 ];
 
-export const INITIAL_DOCTORS: Doctor[] = INITIAL_CLINICS[0].doctors; // Fallback for legacy refs
+export const INITIAL_DOCTORS: Doctor[] = INITIAL_CLINICS[0].doctors;
 
 export const PRICING_PLANS: PricingPlan[] = [
   {

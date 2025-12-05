@@ -1,5 +1,6 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
-import { Doctor, Patient, PatientStatus, DoctorStatus, PainPoint } from '../../types';
+import { Doctor, Patient, PatientStatus, DoctorStatus, PainPoint, Clinic } from '../../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { generatePatientSummary } from '../services/geminiService';
@@ -8,12 +9,15 @@ import {
     CalendarClock, AlertCircle, Coffee, Clock12, PlayCircle, 
     Zap, Activity, Thermometer, Weight, Heart, Plus, Calendar, 
     Pill, Trash2, Droplets, Ruler, PauseCircle, Play, Timer,
-    MoreHorizontal, ChevronRight, ClipboardList, List, X
+    MoreHorizontal, ChevronRight, ClipboardList, List, X, Building
 } from 'lucide-react';
 
 interface DoctorProps {
   doctor: Doctor;
   queue: Patient[];
+  linkedClinics?: Clinic[];
+  currentClinicId?: string;
+  onSwitchClinic?: (id: string) => void;
   onNextPatient: () => void;
   onCompletePatient: (id: string, notes: string) => void;
   onUpdateStatus: (id: string, status: DoctorStatus, delay: number) => void;
@@ -32,30 +36,25 @@ const COMMON_DIAGNOSES = [
     "Viral Fever", "Common Cold", "Migraine", "Hypertension", "Diabetes T2", "Gastritis", "Allergy", "Back Pain"
 ];
 
-export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPatient, onCompletePatient, onUpdateStatus, onUpdatePatientDetails, onHoldPatient, onResumePatient }) => {
+export const DoctorDashboard: React.FC<DoctorProps> = ({ 
+    doctor, queue, linkedClinics, currentClinicId, onSwitchClinic,
+    onNextPatient, onCompletePatient, onUpdateStatus, onUpdatePatientDetails, onHoldPatient, onResumePatient 
+}) => {
   const [notes, setNotes] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'NOTES' | 'VITALS' | 'RX' | 'BODY'>('NOTES');
-  const [showMobileQueue, setShowMobileQueue] = useState(false); // Mobile Toggle State
-  
-  // Timers State
+  const [showMobileQueue, setShowMobileQueue] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
-
-  // Vitals State
   const [vitals, setVitals] = useState({ bp: '', temp: '', weight: '', pulse: '', spo2: '', height: '', sugar: '' });
   const [painPoints, setPainPoints] = useState<PainPoint[]>([]);
-
-  // Prescription State
   const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>([]);
   const [rxForm, setRxForm] = useState({ name: '', dosage: '1-0-1', duration: '3 days' });
 
-  // Update timer every second for UI
   useEffect(() => {
       const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
       return () => clearInterval(interval);
   }, []);
 
-  // Format Seconds to MM:SS
   const formatTime = (ms: number) => {
       const totalSeconds = Math.floor(Math.max(0, ms) / 1000);
       const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
@@ -130,8 +129,8 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
               sugar: currentPatient.vitals?.sugar || ''
           });
           setPainPoints(currentPatient.painPoints || []);
-          setPrescriptions([]); // Clear Rx for new patient
-          setShowMobileQueue(false); // Close queue on mobile when patient selected
+          setPrescriptions([]); 
+          setShowMobileQueue(false);
       }
   }, [currentPatient?.id]);
 
@@ -187,7 +186,6 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
       }
   };
 
-  // Timer Calculation
   const breakDuration = doctor.status === DoctorStatus.ON_BREAK && doctor.statusUpdateTime 
       ? currentTime - doctor.statusUpdateTime 
       : 0;
@@ -195,6 +193,23 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
   const delayRemaining = doctor.delayMinutes > 0 && doctor.delayStartTime
       ? (doctor.delayMinutes * 60 * 1000) - (currentTime - doctor.delayStartTime)
       : 0;
+
+  // Check if doctor is technically "OFF SHIFT"
+  const isOffShift = useMemo(() => {
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const now = new Date();
+      const today = days[now.getDay()];
+      const schedule = doctor.weeklySchedule.find(s => s.day === today);
+      
+      if (!schedule || schedule.isOff) return true;
+      
+      const currentMins = now.getHours() * 60 + now.getMinutes();
+      return !schedule.slots.some(slot => {
+          const [sh, sm] = slot.startTime.split(':').map(Number);
+          const [eh, em] = slot.endTime.split(':').map(Number);
+          return currentMins >= (sh*60 + sm) && currentMins < (eh*60 + em);
+      });
+  }, [doctor, currentTime]);
 
   return (
     <div className="h-full flex flex-col bg-slate-50 overflow-hidden relative">
@@ -207,8 +222,34 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({ doctor, queue, onNextPa
                   <div className={`absolute bottom-0 right-0 w-3 h-3 sm:w-3.5 sm:h-3.5 border-2 border-white rounded-full ${doctor.status === DoctorStatus.AVAILABLE ? 'bg-green-500' : doctor.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-400'}`}></div>
               </div>
               <div>
-                  <h1 className="text-lg sm:text-xl font-bold text-slate-900 leading-none">{doctor.name}</h1>
-                  <p className="text-xs text-slate-500 mt-1">{doctor.specialty} • Room {doctor.roomNumber}</p>
+                  <h1 className="text-lg sm:text-xl font-bold text-slate-900 leading-none flex items-center gap-2">
+                      {doctor.name}
+                      {isOffShift && <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded-full uppercase font-bold border border-slate-200">Off Shift</span>}
+                  </h1>
+                  <div className="flex items-center gap-2 mt-1">
+                      <p className="text-xs text-slate-500">{doctor.specialty} • Room {doctor.roomNumber}</p>
+                      {/* Clinic Switcher */}
+                      {linkedClinics && linkedClinics.length > 1 && (
+                          <div className="relative group ml-2">
+                              <button className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-full text-xs font-bold text-slate-700 border border-slate-200 hover:bg-slate-200">
+                                  <Building className="h-3 w-3" /> Switch
+                              </button>
+                              <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-slate-200 p-1 w-48 hidden group-hover:block z-50">
+                                  {linkedClinics.map(c => (
+                                      <button 
+                                          key={c.id}
+                                          onClick={() => onSwitchClinic && onSwitchClinic(c.id)}
+                                          disabled={c.id === currentClinicId}
+                                          className={`w-full text-left px-3 py-2 rounded-md text-xs font-medium ${c.id === currentClinicId ? 'bg-slate-100 text-slate-400 cursor-default' : 'text-slate-700 hover:bg-primary-50 hover:text-primary-600'}`}
+                                      >
+                                          {c.name}
+                                          {c.id === currentClinicId && <span className="ml-1 text-[10px] font-bold uppercase">(Current)</span>}
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+                      )}
+                  </div>
               </div>
           </div>
 

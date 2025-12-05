@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Notification } from '../types';
+import { Notification } from '../../types';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 interface ToastProps {

@@ -7,7 +7,7 @@ import { Input } from '../components/Input';
 import { 
     LayoutDashboard, Building, Users, CreditCard, TrendingUp, 
     Activity, Search, MoreVertical, Edit2, Trash2, Power, 
-    ShieldCheck, AlertCircle, CheckCircle, X
+    ShieldCheck, AlertCircle, CheckCircle, X, RotateCcw
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -16,6 +16,7 @@ interface AdminDashboardProps {
     onToggleStatus: (clinicId: string) => void;
     onDeleteClinic: (clinicId: string) => void;
     onEditClinic: (clinicId: string, updates: Partial<Clinic>) => void;
+    onResetSystem: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
@@ -23,7 +24,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onUpdatePlan, 
     onToggleStatus, 
     onDeleteClinic,
-    onEditClinic
+    onEditClinic,
+    onResetSystem
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [editModal, setEditModal] = useState<{ isOpen: boolean; clinic: Clinic | null }>({ isOpen: false, clinic: null });
@@ -54,9 +56,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     return (
         <div className="p-6 h-full overflow-y-auto bg-slate-50">
-            <div className="mb-8">
-                <h1 className="text-2xl font-bold text-slate-900">System Administration</h1>
-                <p className="text-slate-500">Manage clinics, subscriptions, and global settings.</p>
+            <div className="mb-8 flex justify-between items-end">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900">System Administration</h1>
+                    <p className="text-slate-500">Manage clinics, subscriptions, and global settings.</p>
+                </div>
+                <Button 
+                    variant="danger" 
+                    onClick={() => { if(window.confirm('WARNING: This will wipe all data and reset the system to default state. This action cannot be undone. Continue?')) onResetSystem() }} 
+                    className="bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
+                >
+                    <RotateCcw className="h-4 w-4 mr-2" /> Reset System
+                </Button>
             </div>
 
             {/* Stats Cards */}

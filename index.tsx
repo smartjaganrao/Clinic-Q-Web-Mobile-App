@@ -1,7 +1,11 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './src/App';
+import App from './App';
 import './styles.css';
+import { seedMockDataIfFirstLoad } from './src/services/mockData';
+
+// Seed localStorage with mock data on first load
+seedMockDataIfFirstLoad();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
