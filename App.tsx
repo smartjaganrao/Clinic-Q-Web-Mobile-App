@@ -69,12 +69,14 @@ export default function App() {
   const [currentView, setCurrentView] = useState<AppView>(session?.currentView || 'LANDING');
   const [userRole, setUserRole] = useState<UserRole | null>(session?.userRole || null);
   
-  // Data State
+  // Data State - Initialize with Persistence Logic
+  // Simplified: Seeding is now handled in index.tsx via services/mockData.ts
   const [clinics, setClinics] = useState<Clinic[]>(() => {
       try {
           const saved = localStorage.getItem('clinicq_db_v2');
           return saved ? JSON.parse(saved) : INITIAL_CLINICS;
-      } catch {
+      } catch (e) {
+          console.error("Failed to load data", e);
           return INITIAL_CLINICS;
       }
   });
@@ -110,7 +112,7 @@ export default function App() {
       }
   }, [currentView, currentClinic, userRole]);
 
-  // Save Database
+  // Save Database on ANY change
   useEffect(() => {
     if (clinics.length > 0) {
       localStorage.setItem('clinicq_db_v2', JSON.stringify(clinics));
@@ -224,7 +226,7 @@ export default function App() {
       addToast("Please verify mobile to confirm booking", "info");
   };
   
-  // NEW: Smart Back Handler for Patient Login
+  // Smart Back Handler for Patient Login
   const handlePatientLoginBack = () => {
       if (pendingAction) {
           // If we were trying to do something (like guest booking), cancel it and go back to tracker
@@ -529,24 +531,24 @@ export default function App() {
         <ClinicAuth 
           clinics={clinics}
           onSelectClinic={handleClinicSelect}
-          onCreateClinic={(name, plan, address, city, pincode, services) => {
-            const newClinic: Clinic = {
-              id: `clinic_${Date.now()}`,
-              name,
-              slug: name.toLowerCase().replace(/\s+/g, '-'),
-              plan,
-              type: ClinicType.GENERAL,
-              doctors: [],
-              patients: [],
-              city: city, 
-              address: address, 
-              pincode: pincode,
-              amenities: services
-            };
-            setClinics([...clinics, newClinic]);
-            handleClinicSelect(newClinic.id);
-          }}
-          onBack={() => setCurrentView('STAFF_LOGIN')}
+                        onCreateClinic={(name, plan, address, city, pincode, services) => {
+                      const newClinic: Clinic = {
+                        id: `clinic_${Date.now()}`,
+                        name,
+                        slug: name.toLowerCase().replace(/\s+/g, '-'),
+                        plan,
+                        type: ClinicType.GENERAL,
+                        doctors: [],
+                        patients: [],
+                        city: city, 
+                        address: address, 
+                        pincode: pincode,
+                        amenities: services,
+                        imageUrl: 'http://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=300'
+                      };
+                      setClinics([...clinics, newClinic]);
+                      handleClinicSelect(newClinic.id);
+                    }}          onBack={() => setCurrentView('STAFF_LOGIN')}
           role={userRole}
         />
       )}

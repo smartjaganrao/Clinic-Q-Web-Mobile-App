@@ -152,6 +152,7 @@ export interface Clinic {
   coordinates?: { x: number, y: number }; // Mock coordinates for map viz (0-100%)
   geoLocation?: { lat: number, lng: number }; // Real GPS coordinates for distance calc
   operatingHours?: string; // e.g. "09:00 AM - 09:00 PM"
+  imageUrl?: string; // New: Clinic Image URL
   // Details
   about?: string; // New: Description
   amenities?: string[]; // New: List of facilities (Pharmacy, Parking, etc.)

@@ -319,9 +319,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
                         {clinics.slice(0, 3).map(clinic => (
                             <div key={clinic.id} onClick={onPatientEnter} className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-xl transition-all cursor-pointer group flex flex-col h-full">
                                 <div className="h-40 bg-slate-100 relative overflow-hidden">
-                                     {/* Placeholder Image Gradient */}
-                                     <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-slate-200 group-hover:scale-105 transition-transform duration-500"></div>
-                                     <div className="absolute inset-0 flex items-center justify-center opacity-10"><Building2 className="h-20 w-20" /></div>
+                                     {clinic.imageUrl ? (
+                                        <img src={clinic.imageUrl} alt={clinic.name} className="absolute inset-0 h-full w-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                     ) : (
+                                        <>
+                                            <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-slate-200 group-hover:scale-105 transition-transform duration-500"></div>
+                                            <div className="absolute inset-0 flex items-center justify-center opacity-10"><Building2 className="h-20 w-20" /></div>
+                                        </>
+                                     )}
                                      <div className="absolute top-3 right-3 bg-white/90 backdrop-blur px-2 py-1 rounded-lg text-xs font-bold flex items-center shadow-sm">
                                          <Star className="h-3 w-3 text-yellow-500 mr-1 fill-current" /> 4.5
                                      </div>
