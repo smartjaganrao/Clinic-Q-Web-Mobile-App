@@ -16,7 +16,7 @@ import {
     AlertTriangle, Star, Clock, Filter, Stethoscope, Smile, 
     Baby, Heart, Activity, Sparkles, LayoutGrid, Eye, Ear, 
     ArrowUpRight, Navigation, Timer, ChevronDown, Building2, 
-    ShieldCheck, ThumbsUp, Map as MapIcon, CheckCircle2, Info, Lock, History, X, AlertCircle, Sun, Moon,
+    ThumbsUp, Map as MapIcon, CheckCircle2, Info, Lock, History, X, AlertCircle, Sun, Moon,
     GraduationCap, Globe, BadgeCheck, User, Users, Plus, FileHeart, LogOut, Layout, Edit2, Trash2, Coffee, Hourglass, LogIn, ArrowRight, Sunset, CloudSun, List as ListIcon, Crosshair, Zap, ExternalLink
 } from 'lucide-react';
 
@@ -94,6 +94,22 @@ const isClinicOpen = (hours?: string) => {
 
 // --- HELPER COMPONENTS FOR MAP ---
 
+// Component to handle Leaflet resize issues when toggling visibility
+const MapInvalidator = ({ showMap }: { showMap: boolean }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (showMap) {
+        // Force invalidate size immediately and after a short delay to allow container transition
+        map.invalidateSize();
+        const timer = setTimeout(() => {
+            map.invalidateSize();
+        }, 300); 
+        return () => clearTimeout(timer);
+    }
+  }, [showMap, map]);
+  return null;
+};
+
 // Component to update map center when clinic selection changes or filters change
 const MapUpdater: React.FC<{ center: [number, number], zoom: number }> = ({ center, zoom }) => {
     const map = useMap();
@@ -150,20 +166,31 @@ const DraggableUserMarker = ({ position, onDragEnd, icon }: { position: L.LatLng
 };
 
 // Custom Marker Icons generator
-const createCustomIcon = (colorClass: string, waitTime: string) => {
+const createCustomIcon = (colorClass: string, waitTime: string, name: string) => {
     return L.divIcon({
-        className: 'custom-icon',
+        className: 'custom-map-icon', // Use a class that doesn't conflict with default leaflet styles
         html: `
-            <div class="relative group">
-                <div class="w-8 h-8 rounded-full border-2 border-white shadow-lg ${colorClass} flex items-center justify-center text-white font-bold text-xs transform transition-transform group-hover:scale-110">
-                    ${waitTime}
+            <div class="absolute bottom-0 left-1/2 -translate-x-1/2 flex flex-col items-center mb-1 drop-shadow-lg filter hover:z-[1000] cursor-pointer group transition-all duration-300 hover:scale-110 origin-bottom">
+                
+                <!-- Wait Time Badge (Top) -->
+                <div class="px-2.5 py-1 ${colorClass} text-white text-[10px] font-bold rounded-full shadow-sm border border-white/20 mb-1 whitespace-nowrap min-w-[40px] text-center">
+                     ${waitTime}m
                 </div>
-                <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rotate-45 transform"></div>
+
+                <!-- Clinic Name Pill (Bottom) -->
+                <div class="px-3 py-1.5 bg-white rounded-lg shadow-md border-2 border-white max-w-[140px] text-center">
+                   <div class="text-[10px] font-bold text-slate-800 whitespace-nowrap truncate leading-tight">
+                     ${name}
+                   </div>
+                </div>
+                
+                <!-- Pointer Triangle -->
+                <div class="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-white -mt-[1px]"></div>
             </div>
         `,
-        iconSize: [32, 32],
-        iconAnchor: [16, 36], // Point at bottom
-        popupAnchor: [0, -36]
+        iconSize: [0, 0], // Trick to handle dynamic size via CSS absolute positioning
+        iconAnchor: [0, 0],
+        popupAnchor: [0, -35]
     });
 };
 
@@ -290,7 +317,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedCity, setSelectedCity] = useState('All Cities');
   const [selectedSpecialty, setSelectedSpecialty] = useState('All Specialties');
-  const [selectedInsurance, setSelectedInsurance] = useState('All Insurances');
   const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'NEAR' | 'WAIT' | 'FEE'>('NEAR');
   
@@ -360,12 +386,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       return ['All Specialties', ...Array.from(set).sort()];
   }, [clinics]);
 
-  const uniqueInsurances = useMemo(() => {
-      const set = new Set<string>();
-      clinics.forEach(c => c.acceptedInsurances?.forEach(i => set.add(i)));
-      return ['All Insurances', ...Array.from(set).sort()];
-  }, [clinics]);
-
   useEffect(() => { if (preSelectedClinicId) { setSelectedClinicId(preSelectedClinicId); setBookingView('CLINIC_DETAILS'); setActiveTab('BOOK'); onClearPendingAction(); const clinic = clinics.find(c => c.id === preSelectedClinicId); if (clinic) { setSelectedCity(clinic.city); } } }, [preSelectedClinicId, clinics, onClearPendingAction]);
   const activeVisits = useMemo(() => { if(isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown', room: doc?.roomNumber || '-' }); } }); }); return visits.sort((a,b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
   const historyVisits = useMemo(() => { if(isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && (p.status === PatientStatus.COMPLETED || p.status === PatientStatus.CANCELLED)) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown' }); } }); }); return visits.sort((a,b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
@@ -396,11 +416,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       // 3. Specialty Filter (Doctor based)
       if (selectedSpecialty !== 'All Specialties') {
           filtered = filtered.filter(c => c.doctors.some(d => d.specialty === selectedSpecialty));
-      }
-
-      // 4. Insurance Filter
-      if (selectedInsurance !== 'All Insurances') {
-          filtered = filtered.filter(c => c.acceptedInsurances?.includes(selectedInsurance));
       }
 
       // 5. Category Buttons (Quick Filter)
@@ -441,7 +456,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           } 
           return 0; // Default order
       }); 
-  }, [clinics, searchQuery, selectedCategory, sortBy, selectedCity, selectedSpecialty, selectedInsurance, userLocation, showOpenOnly]);
+  }, [clinics, searchQuery, selectedCategory, sortBy, selectedCity, selectedSpecialty, userLocation, showOpenOnly]);
 
   // --- SMART DOCTOR-SPECIFIC WAIT LOGIC ---
   const getDoctorWaitDetails = (clinic: Clinic, doctorId: string) => {
@@ -816,7 +831,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             </header>
             <header className="hidden md:flex bg-white border-b border-slate-200 px-8 py-4 items-center justify-between shrink-0 z-10"> <div><h2 className="text-2xl font-bold text-slate-900">{activeTab === 'BOOK' && bookingView !== 'LIST' ? 'Appointment Details' : activeTab === 'ACTIVE' ? 'Your Active Visits' : activeTab === 'HISTORY' ? 'Visit History' : activeTab === 'PROFILE' ? 'My Profile' : 'Find Care'}</h2></div> <div className="flex items-center gap-4"><Button variant="outline" onClick={() => setShowQRScanner(true)} className="hidden md:flex"><QrCode className="h-4 w-4 mr-2" /> Scan QR Code</Button></div> </header>
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth pb-24 md:pb-0 p-0">
+            <div className={`flex-1 flex flex-col w-full relative ${activeTab === 'BOOK' && bookingView === 'LIST' ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden scroll-smooth pb-24 md:pb-0'}`}>
                 {activeTab === 'ACTIVE' && ( isGuest ? <GuestLoginCard /> : ( <div className="px-4 md:px-0 max-w-7xl mx-auto pt-4 md:pt-8 md:px-8"> {activeVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"> {activeVisits.map(visit => { const queueStats = getSmartQueueDetails(visit); return ( <Card key={visit.id} className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"> <div className="p-5 pb-2 flex justify-between items-start"><div><h3 className="font-bold text-lg text-slate-900">{visit.clinicName}</h3><p className="text-sm text-slate-500">Dr. {visit.doctorName} • {visit.room ? `Room ${visit.room}` : ''}</p></div><Badge status={visit.status} /></div> <div className="px-5 mb-4"><span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit"><User className="h-3 w-3" /> {visit.name}</span></div> <div className="bg-slate-50 border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center"><div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Token</div><div className="text-3xl font-black text-slate-900">#{visit.tokenNumber}</div></div><div className="border-x border-slate-200"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Now Serving</div><div className={`text-3xl font-bold ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-blue-600 animate-pulse' : 'text-slate-400'}`}>{visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken}</div></div><div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">People Ahead</div><div className="text-3xl font-bold text-slate-900">{queueStats.peopleAhead}</div></div></div> <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold`}>{queueStats.doctorStatus === DoctorStatus.ON_BREAK ? <Coffee className="h-5 w-5" /> : queueStats.doctorStatus === DoctorStatus.AVAILABLE ? <Timer className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}<div className="flex-1"><p>{queueStats.message}</p>{visit.status === PatientStatus.WAITING && (<p className="text-[10px] opacity-80 font-normal">Est. Time: {queueStats.expectedTime}</p>)}</div></div> {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (<div className="bg-orange-50 px-4 py-2 text-xs font-bold text-orange-700 flex items-center gap-2 border-t border-orange-100"><Info className="h-4 w-4 flex-shrink-0" /><span>{queueStats.peopleAhead < 3 ? "Almost your turn! Please ask receptionist to Check-in now." : "Please ask receptionist to Check-in once you arrive."}</span></div>)} <div className="p-4 flex gap-2 mt-auto">{!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (<Button className="flex-1 bg-slate-900 hover:bg-slate-800" onClick={() => setShowQRScanner(true)}><QrCode className="h-4 w-4 mr-2" /> Scan to Check-In</Button>)}<Button variant="secondary" className="flex-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => setCancelModal({ isOpen: true, visit })} disabled={visit.status === PatientStatus.WITH_DOCTOR}>Cancel</Button></div> </Card> ); })} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><Calendar className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No active visits</h3><p className="text-slate-500 mb-6 text-center max-w-sm">Book an appointment or scan a QR code at a clinic to see your live status here.</p><Button onClick={() => setActiveTab('BOOK')} size="lg" className="shadow-lg">Find a Doctor</Button></div> )} </div> ) )}
 
                 {activeTab === 'BOOK' && (
@@ -843,7 +858,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                         </div>
 
                                         {/* Dynamic Filters Row */}
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                             {/* LOCATE ME BUTTON GROUP */}
                                             <div className="col-span-2 sm:col-span-1 flex gap-2">
                                                 <button 
@@ -887,16 +902,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                     onChange={(e) => setSelectedSpecialty(e.target.value)}
                                                 >
                                                     {uniqueSpecialties.map(spec => <option key={spec} value={spec}>{spec}</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="relative">
-                                                <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                                                <select 
-                                                    className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 appearance-none cursor-pointer"
-                                                    value={selectedInsurance}
-                                                    onChange={(e) => setSelectedInsurance(e.target.value)}
-                                                >
-                                                    {uniqueInsurances.map(ins => <option key={ins} value={ins}>{ins}</option>)}
                                                 </select>
                                             </div>
                                         </div>
@@ -978,7 +983,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                 {/* Clinic Image */}
                                                                 <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-100 rounded-xl flex-shrink-0 flex items-center justify-center relative overflow-hidden shadow-inner group-hover:shadow-md transition-all">
                                                                     {clinic.imageUrl ? (
-                                                                        <img src={clinic.imageUrl} alt={clinic.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                                                        <img src={clinic.imageUrl} alt={clinic.name} className="w-full h-full object-cover" />
                                                                     ) : (
                                                                         <Building2 className="h-6 w-6 md:h-8 md:w-8 text-slate-300" />
                                                                     )}
@@ -1061,13 +1066,15 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     </div>
 
                                     {/* MAP PANEL (Right on Desktop, Full on Mobile if showMap) */}
-                                    <div className={`w-full md:w-[40%] lg:w-[45%] xl:w-[50%] h-full bg-slate-100 border-l border-slate-200 relative ${showMap ? 'block' : 'hidden md:block'}`}>
+                                    <div className={`w-full md:w-[40%] lg:w-[45%] xl:w-[50%] h-full bg-slate-100 border-l border-slate-200 relative ${showMap ? 'absolute inset-0 z-50 md:static md:block md:flex-1' : 'hidden md:block'}`}>
                                         <MapContainer 
                                             center={mapCenter} 
                                             zoom={13} 
                                             scrollWheelZoom={true} 
                                             className={isPickingLocation ? 'cursor-crosshair' : ''}
+                                            style={{ height: '100%', width: '100%' }}
                                         >
+                                            <MapInvalidator showMap={showMap} />
                                             <TileLayer
                                                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
                                                 url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
@@ -1087,7 +1094,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                             {filteredClinics.map(clinic => {
                                                 if (!clinic.geoLocation) return null;
                                                 const waitInfo = getClinicWaitStats(clinic);
-                                                const icon = createCustomIcon(waitInfo.mapColor, waitInfo.raw);
+                                                const icon = createCustomIcon(waitInfo.mapColor, waitInfo.raw, clinic.name);
                                                 
                                                 return (
                                                     <Marker 
@@ -1098,12 +1105,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             click: () => scrollToClinic(clinic.id),
                                                         }}
                                                     >
-                                                        <Tooltip direction="top" offset={[0, -36]} opacity={1}>
-                                                            <div className="text-center">
-                                                                <div className="font-bold text-sm">{clinic.name}</div>
-                                                                <div className={`text-xs font-bold ${waitInfo.color.replace('bg-', 'text-').replace('text-', 'text-')}`}>{waitInfo.raw}m Wait</div>
-                                                            </div>
-                                                        </Tooltip>
                                                         <Popup className="custom-popup">
                                                             <div className="p-1 min-w-[180px]">
                                                                 <h3 className="font-bold text-sm mb-1">{clinic.name}</h3>
@@ -1208,7 +1209,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                         <div className="space-y-6">
                                             {selectedClinic.about && (<div className="bg-slate-50 p-4 rounded-2xl border border-slate-100"><h3 className="font-bold text-slate-900 mb-2 flex items-center gap-2 text-sm uppercase tracking-wider"><Info className="h-4 w-4 text-primary-600" /> About Clinic</h3><p className="text-sm text-slate-600 leading-relaxed">{selectedClinic.about}</p></div>)}
                                             {selectedClinic.amenities && selectedClinic.amenities.length > 0 && (<div><h3 className="font-bold text-slate-900 mb-3 text-sm uppercase tracking-wider">Facilities</h3><div className="flex flex-wrap gap-2">{selectedClinic.amenities.map(item => (<span key={item} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 shadow-sm flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-green-500" /> {item}</span>))}</div></div>)}
-                                            {selectedClinic.acceptedInsurances && selectedClinic.acceptedInsurances.length > 0 && (<div><h3 className="font-bold text-slate-900 mb-3 flex items-center gap-2 text-sm uppercase tracking-wider"><ShieldCheck className="h-4 w-4 text-blue-600" /> Insurance Accepted</h3><div className="flex flex-wrap gap-2">{selectedClinic.acceptedInsurances.map(ins => (<span key={ins} className="px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-lg text-xs font-bold text-blue-800 shadow-sm">{ins}</span>))}</div></div>)}
                                         </div>
                                     </div>
                                     <div className="border-t border-slate-200 pt-8">

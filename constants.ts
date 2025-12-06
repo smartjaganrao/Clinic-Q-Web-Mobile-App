@@ -158,9 +158,6 @@ const createRealisticPatients = (doctors: Doctor[], clinicType: ClinicType | str
   return patients;
 };
 
-const INSURANCE_PROVIDERS = ["Star Health", "HDFC Ergo", "ICICI Lombard", "Max Bupa", "Religare"];
-const getRandomInsurances = () => INSURANCE_PROVIDERS.sort(() => 0.5 - Math.random()).slice(0, 3);
-
 const chennaiDocs1 = [...createRealDoctors(100, 2, 'General Physician', [500, 700]), ...createRealDoctors(102, 1, 'Diabetologist', [700, 900])];
 const chennaiDocs2 = createRealDoctors(200, 4, 'Ophthalmologist', [600, 1000]);
 const chennaiDocs3 = [...createRealDoctors(300, 3, 'Gynecologist', [800, 1200]), ...createRealDoctors(303, 2, 'Pediatrician', [700, 1000])];
@@ -206,11 +203,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     address: 'Plot 12, 4th Avenue, Shanthi Colony, Anna Nagar',
     pincode: '600040',
     operatingHours: '08:00 AM - 09:00 PM',
-    imageUrl: 'http://images.unsplash.com/photo-1531983412531-1f49a365ffed?auto=format&fit=crop&q=80&w=300',
+    imageUrl: 'https://images.unsplash.com/photo-1531983412531-1f49a365ffed?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0850, lng: 80.2100 },
     about: 'A multi-specialty clinic providing comprehensive healthcare services with state-of-the-art diagnostic facilities and expert doctors.',
     amenities: ['Pharmacy', 'Pathology Lab', 'X-Ray', 'Parking', 'Wheelchair Access'],
-    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs1,
     patients: createRealisticPatients(chennaiDocs1, ClinicType.GENERAL, 'Chennai')
   },
@@ -224,11 +220,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     address: '41, College Road, Nungambakkam',
     pincode: '600006',
     operatingHours: '08:00 AM - 06:00 PM',
-    imageUrl: 'http://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&q=80&w=300',
+    imageUrl: 'https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0629, lng: 80.2495 },
     about: 'World-class eye care hospital dedicated to providing equitable and efficient eye care to all sections of society.',
     amenities: ['Optical Shop', 'Cafeteria', 'Emergency Eye Care', 'Pharmacy', 'Prayer Room'],
-    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs2,
     patients: createRealisticPatients(chennaiDocs2, 'OPHTHALMOLOGY', 'Chennai')
   },
@@ -242,11 +237,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     address: '54, Vijaya Raghava Rd, T. Nagar',
     pincode: '600017',
     operatingHours: '24 Hours',
-    imageUrl: 'http://images.unsplash.com/photo-1531983412531-1f49a365ffed?auto=format&fit=crop&q=80&w=300',
+    imageUrl: 'https://images.unsplash.com/photo-1531983412531-1f49a365ffed?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0350, lng: 80.2350 },
     about: 'India’s premier birthing, woman, and child care hospital celebrating the journey of maternity and beyond.',
     amenities: ['NICU', 'Labor Suites', 'Valet Parking', 'Baby Shop', '24x7 Pharmacy'],
-    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs3,
     patients: createRealisticPatients(chennaiDocs3, ClinicType.GYNECOLOGY, 'Chennai')
   },
@@ -260,11 +254,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     address: '4/112, Mount Poonamallee Rd, Manapakkam',
     pincode: '600089',
     operatingHours: '24 Hours',
-    imageUrl: 'http://images.unsplash.com/photo-1576091160550-2187d80a18f7?auto=format&fit=crop&q=80&w=300',
+    imageUrl: 'https://images.unsplash.com/photo-1576091160550-2187d80a18f7?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0280, lng: 80.1850 },
     about: 'A 1000-bed quaternary care hospital offering best-in-class treatment for Orthopedics, Trauma, and Joint Replacement.',
     amenities: ['Ambulance', 'Blood Bank', 'Cafeteria', 'Rehab Center', 'International Patient Care'],
-    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs4,
     patients: createRealisticPatients(chennaiDocs4, ClinicType.ORTHOPEDIC, 'Chennai')
   },
@@ -278,11 +271,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     address: '11, 3rd Cross St, Kasturba Nagar, Adyar',
     pincode: '600020',
     operatingHours: '10:00 AM - 08:00 PM',
-    imageUrl: 'http://images.unsplash.com/photo-1606811971618-4486d14f3f99?auto=format&fit=crop&q=80&w=300',
+    imageUrl: 'https://images.unsplash.com/photo-1606811971618-4486d14f3f99?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0012, lng: 80.2565 },
     about: 'Advanced dental care center specializing in implants, root canals, and cosmetic dentistry with modern equipment.',
     amenities: ['Digital X-Ray', 'Waiting Lounge', 'Parking', 'Card Payment'],
-    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs5,
     patients: createRealisticPatients(chennaiDocs5, ClinicType.DENTAL, 'Chennai')
   },
@@ -296,11 +288,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     address: '52, 1st Main Rd, Gandhi Nagar, Adyar',
     pincode: '600020',
     operatingHours: '24 Hours',
-    imageUrl: 'http://images.unsplash.com/photo-1628348068343-c6a848d2b6dd?auto=format&fit=crop&q=80&w=300',
+    imageUrl: 'https://images.unsplash.com/photo-1628348068343-c6a848d2b6dd?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0060, lng: 80.2580 },
     about: 'Leading multi-specialty hospital known for its excellence in Cardiology, Cardiac Surgery, and Neurology.',
     amenities: ['ICU/CCU', 'Emergency', 'Diagnostics', 'Pharmacy', 'Wifi'],
-    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs6,
     patients: createRealisticPatients(chennaiDocs6, ClinicType.CARDIOLOGY, 'Chennai')
   },
@@ -314,11 +305,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     address: '2nd Floor, TTK Road, Alwarpet',
     pincode: '600018',
     operatingHours: '10:00 AM - 08:00 PM',
-    imageUrl: 'http://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=300',
+    imageUrl: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0330, lng: 80.2550 },
     about: 'Expert dermatologists providing advanced skin and hair treatments including laser hair removal and acne treatment.',
     amenities: ['Laser Suite', 'Private Consultation', 'Valet Parking', 'Wifi'],
-    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs7,
     patients: createRealisticPatients(chennaiDocs7, ClinicType.DERMATOLOGY, 'Chennai')
   },
@@ -332,11 +322,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     address: '827, Poonamallee High Rd, Kilpauk',
     pincode: '600010',
     operatingHours: '09:00 AM - 07:00 PM',
-    imageUrl: 'http://images.unsplash.com/photo-1581594693702-fbdc51b2763b?auto=format&fit=crop&q=80&w=300',
+    imageUrl: 'https://images.unsplash.com/photo-1581594693702-fbdc51b2763b?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0780, lng: 80.2400 },
     about: 'Specialized ENT care hospital known for Micro Ear Surgery, Endoscopic Sinus Surgery, and Cochlear Implants.',
     amenities: ['Audiology Lab', 'Speech Therapy', 'Pharmacy', 'In-patient Rooms'],
-    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs8,
     patients: createRealisticPatients(chennaiDocs8, 'ENT', 'Chennai')
   },
@@ -350,11 +339,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     address: '2, McNichols Rd, Chetpet',
     pincode: '600031',
     operatingHours: '24 Hours',
-    imageUrl: 'http://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&q=80&w=300',
+    imageUrl: 'https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0700, lng: 80.2380 },
     about: 'A heritage hospital with a strong focus on Pediatric care, General Medicine, and Surgery since 1933.',
     amenities: ['Pediatric ICU', 'Play Area', 'Vaccination Center', 'Emergency', 'Lab'],
-    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs9,
     patients: createRealisticPatients(chennaiDocs9, ClinicType.PEDIATRIC, 'Chennai')
   },
@@ -368,11 +356,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     address: '123 Main Street',
     pincode: '600001',
     operatingHours: '24 Hours',
-    imageUrl: 'http://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=300',
+    imageUrl: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0827, lng: 80.2707 },
     about: 'Affordable and accessible general healthcare services for the community with round-the-clock emergency support.',
     amenities: ['Emergency', 'Pharmacy', 'General Ward', 'Basic Lab'],
-    acceptedInsurances: getRandomInsurances(),
     doctors: chennaiDocs10,
     patients: createRealisticPatients(chennaiDocs10, ClinicType.GENERAL, 'Chennai')
   },
@@ -388,11 +375,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     address: '98, HAL Old Airport Rd, Kodihalli',
     pincode: '560017',
     operatingHours: '24 Hours',
-    imageUrl: 'http://images.unsplash.com/photo-1596541223130-5d31a73fb6c6?auto=format&fit=crop&q=80&w=300',
+    imageUrl: 'https://images.unsplash.com/photo-1596541223130-5d31a73fb6c6?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 12.9592, lng: 77.6475 },
     about: 'One of India’s foremost multi-specialty healthcare providers offering comprehensive care.',
     amenities: ['Advanced ICU', 'Robotic Surgery', 'Cafeteria', 'Valet Parking', 'Pharmacy'],
-    acceptedInsurances: getRandomInsurances(),
     doctors: blrDocs1,
     patients: createRealisticPatients(blrDocs1, ClinicType.GENERAL, 'Bangalore')
   },
@@ -406,11 +392,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     address: '4th Block, HRBR Layout, Kalyan Nagar',
     pincode: '560043',
     operatingHours: '24 Hours',
-    imageUrl: 'http://images.unsplash.com/photo-1504813184591-01572f98c85f?auto=format&fit=crop&q=80&w=300',
+    imageUrl: 'https://images.unsplash.com/photo-1504813184591-01572f98c85f?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0285, lng: 77.6400 },
     about: 'Specialized hospital for women and children, providing maternity, gynecology, and pediatric services.',
     amenities: ['NICU', 'Labor Rooms', 'Lactation Consulting', 'Ultrasound'],
-    acceptedInsurances: getRandomInsurances(),
     doctors: blrDocs2,
     patients: createRealisticPatients(blrDocs2, ClinicType.PEDIATRIC, 'Bangalore')
   },
@@ -424,11 +409,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     address: '12th Main Rd, Indiranagar',
     pincode: '560038',
     operatingHours: '10:00 AM - 08:00 PM',
-    imageUrl: 'http://images.unsplash.com/photo-1609840114035-1c290b777f3f?auto=format&fit=crop&q=80&w=300',
+    imageUrl: 'https://images.unsplash.com/photo-1609840114035-1c290b777f3f?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 12.9716, lng: 77.6412 },
     about: 'India’s largest dental chain offering quality dental care with modern technology and hygiene standards.',
     amenities: ['X-Ray', 'Sterilization Zone', 'Wifi', 'Card Payment'],
-    acceptedInsurances: getRandomInsurances(),
     doctors: blrDocs3,
     patients: createRealisticPatients(blrDocs3, ClinicType.DENTAL, 'Bangalore')
   }

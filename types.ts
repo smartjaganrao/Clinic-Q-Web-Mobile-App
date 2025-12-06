@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   DOCTOR = 'DOCTOR',
@@ -156,7 +157,6 @@ export interface Clinic {
   // Details
   about?: string; // New: Description
   amenities?: string[]; // New: List of facilities (Pharmacy, Parking, etc.)
-  acceptedInsurances?: string[]; // New: List of accepted insurance providers
   // Admin Data
   subscriptionStatus?: 'ACTIVE' | 'SUSPENDED' | 'PAST_DUE';
   joinedDate?: number;
