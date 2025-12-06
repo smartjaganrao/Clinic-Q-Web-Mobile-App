@@ -110,16 +110,20 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
       setTimeout(() => {
           setLoading(false);
           if (otp === '1234' || otp === '9999') {
-              const profile = checkExistingUser(phone);
+              const existingProfile = checkExistingUser(phone);
               
-              // If we have pending booking details, we force auto-registration/update
-              // even if user exists (or we could just use existing profile)
-              if (pendingBookingDetails && pendingBookingDetails.name) {
-                  autoRegisterUser();
-              } else if (profile && profile.name) {
-                  onLogin(phone, profile.name);
+              if (existingProfile) {
+                  // User ALREADY exists.
+                  // We prioritize the existing profile and DO NOT overwrite it with guest details.
+                  addToast(`Welcome back, ${existingProfile.name}!`, "success");
+                  onLogin(phone, existingProfile.name);
               } else {
-                  setStep('REGISTER');
+                  // New User - Safe to register
+                  if (pendingBookingDetails && pendingBookingDetails.name) {
+                      autoRegisterUser();
+                  } else {
+                      setStep('REGISTER');
+                  }
               }
           } else {
               addToast("Invalid OTP. Try 1234.", "error");

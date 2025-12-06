@@ -65,25 +65,8 @@ export default function App() {
   
   const session = getSession();
 
-  const validViews: AppView[] = [
-    'LANDING', 
-    'STAFF_LOGIN',
-    'PATIENT_LOGIN',
-    'PATIENT_TRACKER', 
-    'CLINIC_AUTH', 
-    'DOCTOR_LOGIN', 
-    'DASHBOARD_RECEPTION', 
-    'DASHBOARD_DOCTOR', 
-    'ADMIN_DASHBOARD',
-    'KIOSK'
-  ];
-
   // State Machine
-  const [currentView, setCurrentView] = useState<AppView>(
-    session && validViews.includes(session.currentView) 
-    ? session.currentView 
-    : 'LANDING'
-);
+  const [currentView, setCurrentView] = useState<AppView>(session?.currentView || 'LANDING');
   const [userRole, setUserRole] = useState<UserRole | null>(session?.userRole || null);
   
   // Data State
@@ -199,7 +182,10 @@ export default function App() {
   // PATIENT LOGIN & AUTO-BOOKING LOGIC
   const handlePatientLogin = (phone: string, name: string) => {
     setPatientAuth({ phone, name });
-    setCurrentView('PATIENT_TRACKER');
+    // IMPORTANT: Do not force navigation if we are already in tracker (prevents unmount)
+    if (currentView !== 'PATIENT_TRACKER') {
+        setCurrentView('PATIENT_TRACKER');
+    }
     
     if (pendingAction) {
         if (pendingAction.type === 'CHECK_IN') {
@@ -221,11 +207,6 @@ export default function App() {
     }
   };
 
-  const handleInlineLogin = (phone: string, name: string) => {
-      setPatientAuth({ phone, name });
-      addToast(`Welcome, ${name}`, "success");
-  };
-
   const handleLogout = () => {
     setCurrentView('LANDING');
     setUserRole(null);
@@ -241,6 +222,18 @@ export default function App() {
       setPendingAction({ type: 'BOOKING', data: bookingData });
       setCurrentView('PATIENT_LOGIN');
       addToast("Please verify mobile to confirm booking", "info");
+  };
+  
+  // NEW: Smart Back Handler for Patient Login
+  const handlePatientLoginBack = () => {
+      if (pendingAction) {
+          // If we were trying to do something (like guest booking), cancel it and go back to tracker
+          setPendingAction(null);
+          setCurrentView('PATIENT_TRACKER');
+      } else {
+          // Normal login attempt, go back to Landing
+          setCurrentView('LANDING');
+      }
   };
 
   // RECEPTION HANDLERS
@@ -536,7 +529,7 @@ export default function App() {
         <ClinicAuth 
           clinics={clinics}
           onSelectClinic={handleClinicSelect}
-          onCreateClinic={(name, plan) => {
+          onCreateClinic={(name, plan, address, city, pincode, services) => {
             const newClinic: Clinic = {
               id: `clinic_${Date.now()}`,
               name,
@@ -545,7 +538,10 @@ export default function App() {
               type: ClinicType.GENERAL,
               doctors: [],
               patients: [],
-              city: 'New City', address: 'Address Pending', pincode: '000000'
+              city: city, 
+              address: address, 
+              pincode: pincode,
+              amenities: services
             };
             setClinics([...clinics, newClinic]);
             handleClinicSelect(newClinic.id);
@@ -703,7 +699,7 @@ export default function App() {
       {currentView === 'PATIENT_LOGIN' && (
         <PatientLogin 
           onLogin={handlePatientLogin}
-          onBack={() => setCurrentView('LANDING')}
+          onBack={handlePatientLoginBack}
           addToast={addToast}
           pendingActionMessage={pendingAction?.type === 'CHECK_IN' ? 'Login to confirm your arrival' : pendingAction?.type === 'BOOKING' ? 'Verify mobile number to confirm booking' : undefined}
           pendingBookingDetails={pendingAction?.type === 'BOOKING' ? pendingAction.data : undefined} // Pass booking data
@@ -718,12 +714,14 @@ export default function App() {
           isGuest={!patientAuth}
           onLoginClick={(phone, name) => {
               if (phone && name) {
-                  handleInlineLogin(phone, name);
+                  // In-place login from Tracker modal
+                  handlePatientLogin(phone, name);
               } else {
+                  // Manual navigation to login page
                   setCurrentView('PATIENT_LOGIN');
               }
           }}
-          onGuestBook={handleGuestBookingAttempt} 
+          onGuestBook={handleGuestBookingAttempt} // Pass new handler
           onBack={handleLogout}
           onGetToken={handleGetToken}
           addToast={addToast}
