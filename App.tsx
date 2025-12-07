@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, Notification, ClinicStats } from './types';
+import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, Notification, ClinicStats, TimeSlot, ClinicType, Vitals, PainPoint } from './types';
 import { INITIAL_CLINICS } from './constants';
 import { LandingPage } from './pages/LandingPage';
 import { StaffLogin } from './pages/StaffLogin';
-import { PatientLogin } from './pages/PatientLogin';
+import { ClinicAuth } from './pages/ClinicAuth';
+import { DoctorLogin } from './pages/DoctorLogin';
 import { ReceptionDashboard } from './pages/ReceptionDashboard';
 import { DoctorDashboard } from './pages/DoctorDashboard';
-import { AdminDashboard } from './pages/AdminDashboard';
-import { DoctorLogin } from './pages/DoctorLogin';
 import { KioskView } from './pages/KioskView';
+import { PatientLogin } from './pages/PatientLogin';
 import { PatientTracker } from './pages/PatientTracker';
-import { ClinicAuth } from './pages/ClinicAuth';
-import { Monitor, LogOut, Stethoscope, Home, ShieldCheck } from 'lucide-react';
-import { Button } from './components/Button';
+import { AdminDashboard } from './pages/AdminDashboard';
 import { ToastContainer } from './components/Toast';
 import { Logo } from './components/Logo';
+import { Button } from './components/Button';
+import { LogOut } from 'lucide-react';
 
 // Utility to generate IDs
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -29,23 +29,33 @@ const getLocalToday = () => {
 };
 
 type AppView = 
-  | 'HOME' 
+  | 'LANDING' 
   | 'STAFF_LOGIN'
   | 'PATIENT_LOGIN'
-  | 'PATIENT_APP' 
-  | 'AUTH_CLINIC_SELECT' 
-  | 'AUTH_DOCTOR_SELECT' 
+  | 'PATIENT_TRACKER' 
+  | 'CLINIC_AUTH' 
+  | 'DOCTOR_LOGIN' 
   | 'DASHBOARD_RECEPTION' 
   | 'DASHBOARD_DOCTOR' 
-  | 'DASHBOARD_ADMIN'
-  | 'VIEW_KIOSK';
+  | 'ADMIN_DASHBOARD'
+  | 'KIOSK';
+
+interface PendingBooking {
+    name: string;
+    age: string;
+    gender: string;
+    doctorId: string;
+    clinicId: string;
+    visitType: 'WALK_IN' | 'APPOINTMENT';
+    apptTime?: string;
+    apptDate?: string;
+    symptoms?: string;
+}
 
 export default function App() {
-  
   // ------------------------------------------------------------------
-  // SESSION PERSISTENCE (Restore state on refresh)
+  // SESSION PERSISTENCE
   // ------------------------------------------------------------------
-  // Fixed: Use correct v2 key to match save logic
   const getSession = () => {
     try {
       const s = localStorage.getItem('clinicq_session_v2');
@@ -56,65 +66,70 @@ export default function App() {
   const session = getSession();
 
   // State Machine
-  const [currentView, setCurrentView] = useState<AppView>(session?.currentView || 'HOME');
+  const [currentView, setCurrentView] = useState<AppView>(session?.currentView || 'LANDING');
   const [userRole, setUserRole] = useState<UserRole | null>(session?.userRole || null);
   
-  // Data State - Fixed: Initialize synchronously to prevent blank screen render
+  // Data State - Initialize with Persistence Logic
+  // Simplified: Seeding is now handled in index.tsx via services/mockData.ts
   const [clinics, setClinics] = useState<Clinic[]>(() => {
       try {
           const saved = localStorage.getItem('clinicq_db_v2');
           return saved ? JSON.parse(saved) : INITIAL_CLINICS;
-      } catch {
+      } catch (e) {
+          console.error("Failed to load data", e);
           return INITIAL_CLINICS;
       }
   });
 
-  const [selectedClinicId, setSelectedClinicId] = useState<string | null>(session?.selectedClinicId || null);
-  const [currentUser, setCurrentUser] = useState<any>(session?.currentUser || null);
+  const [currentClinicId, setCurrentClinicId] = useState<string | null>(session?.selectedClinicId || null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(session?.currentUser?.id || null); // Store ID, derive object
   
+  // Patient Auth
+  const [patientAuth, setPatientAuth] = useState<{name: string, phone: string} | null>(session?.loggedInPatient || null);
+  
+  // Unified Pending Action State
+  const [pendingAction, setPendingAction] = useState<{ type: 'CHECK_IN', clinicId: string, patientId: string } | { type: 'BOOKING', data: PendingBooking } | null>(null);
+
   // Notifications
-  const [toasts, setToasts] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // QR / Deep Link State
-  const [pendingClinicId, setPendingClinicId] = useState<string | null>(null);
-  
-  // Patient Auth State
-  const [loggedInPatient, setLoggedInPatient] = useState<{name: string, phone: string} | null>(session?.loggedInPatient || null);
+  // Derived State
+  const currentClinic = clinics.find(c => c.id === currentClinicId) || null;
+  // Derive current user (Doctor) from fresh clinics data to ensure state updates reflect immediately
+  const currentUser = (userRole === UserRole.DOCTOR && currentClinic && currentUserId) 
+      ? currentClinic.doctors.find(d => d.id === currentUserId) || null 
+      : null;
 
   // ------------------------------------------------------------------
-  // INIT & PERSISTENCE
+  // PERSISTENCE EFFECTS
   // ------------------------------------------------------------------
   
-  // Safety Redirect: If on a dashboard but no clinic is selected/found, go back.
+  // Safety Redirect
   useEffect(() => {
-      const needsClinic = ['DASHBOARD_RECEPTION', 'DASHBOARD_DOCTOR', 'VIEW_KIOSK', 'AUTH_DOCTOR_SELECT'].includes(currentView);
-      const isClinicValid = selectedClinicId && clinics.find(c => c.id === selectedClinicId);
-      
-      if (needsClinic && !isClinicValid) {
-          // Fallback to clinic selection or home to prevent blank screen
-          setCurrentView(userRole ? 'AUTH_CLINIC_SELECT' : 'HOME');
-          if (selectedClinicId) setSelectedClinicId(null); 
+      const needsClinic = ['DASHBOARD_RECEPTION', 'DASHBOARD_DOCTOR', 'KIOSK', 'DOCTOR_LOGIN'].includes(currentView);
+      if (needsClinic && !currentClinic) {
+          setCurrentView(userRole ? 'CLINIC_AUTH' : 'LANDING');
       }
-  }, [currentView, selectedClinicId, clinics, userRole]);
+  }, [currentView, currentClinic, userRole]);
 
-  // Save Database on Change
+  // Save Database on ANY change
   useEffect(() => {
     if (clinics.length > 0) {
       localStorage.setItem('clinicq_db_v2', JSON.stringify(clinics));
     }
   }, [clinics]);
 
-  // Save Session on Change
+  // Save Session
   useEffect(() => {
     const s = {
       currentView,
       userRole,
-      selectedClinicId,
-      currentUser,
-      loggedInPatient
+      selectedClinicId: currentClinicId,
+      currentUser: currentUser ? { id: currentUser.id } : null,
+      loggedInPatient: patientAuth
     };
     localStorage.setItem('clinicq_session_v2', JSON.stringify(s));
-  }, [currentView, userRole, selectedClinicId, currentUser, loggedInPatient]);
+  }, [currentView, userRole, currentClinicId, currentUser, patientAuth]);
 
   // ------------------------------------------------------------------
   // HELPERS
@@ -122,567 +137,433 @@ export default function App() {
 
   const addToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     const id = generateId();
-    setToasts(prev => [...prev, { id, message, type }]);
+    setNotifications(prev => [...prev, { id, message, type }]);
   };
 
   const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    setNotifications(prev => prev.filter(n => n.id !== id));
   };
-
-  const currentClinic = clinics.find(c => c.id === selectedClinicId);
 
   // ------------------------------------------------------------------
   // HANDLERS
   // ------------------------------------------------------------------
 
-  // 1. Navigation & Auth
-  const handleStaffLogin = (role: UserRole) => {
+  // Navigation
+  const handleStaffLogin = () => setCurrentView('STAFF_LOGIN');
+  
+  // UPDATED: Go straight to Tracker even if not logged in (Guest Mode)
+  const handlePatientEnter = () => {
+      setCurrentView('PATIENT_TRACKER');
+  };
+
+  const handleRoleSelect = (role: UserRole) => {
     setUserRole(role);
     if (role === UserRole.ADMIN) {
-        setCurrentView('DASHBOARD_ADMIN');
+        setCurrentView('ADMIN_DASHBOARD');
     } else {
-        setCurrentView('AUTH_CLINIC_SELECT');
+        setCurrentView('CLINIC_AUTH');
     }
-  };
-
-  const handlePatientEnter = () => {
-    if (loggedInPatient) {
-        setCurrentView('PATIENT_APP');
-    } else {
-        setCurrentView('PATIENT_LOGIN');
-    }
-  };
-
-  const handlePatientLoginSuccess = (phone: string, name: string) => {
-      setLoggedInPatient({ phone, name });
-      setCurrentView('PATIENT_APP');
-      addToast(`Welcome back, ${name}`, 'success');
   };
 
   const handleClinicSelect = (clinicId: string) => {
-    setSelectedClinicId(clinicId);
+    setCurrentClinicId(clinicId);
     if (userRole === UserRole.DOCTOR) {
-      setCurrentView('AUTH_DOCTOR_SELECT');
+      setCurrentView('DOCTOR_LOGIN');
     } else if (userRole === UserRole.RECEPTIONIST) {
       setCurrentView('DASHBOARD_RECEPTION');
     } else if (userRole === UserRole.KIOSK) {
-      setCurrentView('VIEW_KIOSK');
+      setCurrentView('KIOSK');
     }
   };
 
   const handleDoctorSelect = (doctorId: string) => {
-    if (!currentClinic) return;
-    const doctor = currentClinic.doctors.find(d => d.id === doctorId);
-    if (doctor) {
-      setCurrentUser(doctor);
-      setCurrentView('DASHBOARD_DOCTOR');
+    setCurrentUserId(doctorId);
+    setCurrentView('DASHBOARD_DOCTOR');
+  };
+
+  // PATIENT LOGIN & AUTO-BOOKING LOGIC
+  const handlePatientLogin = (phone: string, name: string) => {
+    setPatientAuth({ phone, name });
+    // IMPORTANT: Do not force navigation if we are already in tracker (prevents unmount)
+    if (currentView !== 'PATIENT_TRACKER') {
+        setCurrentView('PATIENT_TRACKER');
+    }
+    
+    if (pendingAction) {
+        if (pendingAction.type === 'CHECK_IN') {
+            handlePatientCheckIn(pendingAction.clinicId, pendingAction.patientId);
+            addToast("Check-in confirmed!", "success");
+        } else if (pendingAction.type === 'BOOKING') {
+            // AUTO-EXECUTE BOOKING
+            const b = pendingAction.data;
+            handleGetToken(
+                b.name, // Use booking name which might be guest name or family member
+                phone,  // Use verified phone
+                b.doctorId, b.clinicId, b.apptTime, b.apptDate, b.age, b.gender, b.symptoms
+            );
+            addToast("Booking Confirmed Successfully!", "success");
+        }
+        setPendingAction(null);
+    } else {
+        addToast(`Welcome, ${name}`, "success");
     }
   };
 
   const handleLogout = () => {
-    setCurrentView('HOME');
+    setCurrentView('LANDING');
     setUserRole(null);
-    setSelectedClinicId(null);
-    setCurrentUser(null);
-    setLoggedInPatient(null);
+    setCurrentClinicId(null);
+    setCurrentUserId(null);
+    setPatientAuth(null);
+    setPendingAction(null);
     localStorage.removeItem('clinicq_session_v2');
   };
 
-  // 2. Patient Management (Reception)
-  const handleAddPatient = (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string) => {
-    if (!currentClinic) return;
+  // Handle Guest Booking Hand-off
+  const handleGuestBookingAttempt = (bookingData: PendingBooking) => {
+      setPendingAction({ type: 'BOOKING', data: bookingData });
+      setCurrentView('PATIENT_LOGIN');
+      addToast("Please verify mobile to confirm booking", "info");
+  };
+  
+  // Smart Back Handler for Patient Login
+  const handlePatientLoginBack = () => {
+      if (pendingAction) {
+          // If we were trying to do something (like guest booking), cancel it and go back to tracker
+          setPendingAction(null);
+          setCurrentView('PATIENT_TRACKER');
+      } else {
+          // Normal login attempt, go back to Landing
+          setCurrentView('LANDING');
+      }
+  };
 
-    // Check for Duplicate in Active Queue
-    const isDuplicate = currentClinic.patients.some(p => 
+  // RECEPTION HANDLERS
+  const handleAddPatient = (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string) => {
+    if (!currentClinicId) return;
+    
+    const clinic = clinics.find(c => c.id === currentClinicId);
+    if (!clinic) return;
+
+    // Check duplicates
+    const isDuplicate = clinic.patients.some(p => 
         p.phone === phone && 
         p.name.toLowerCase() === name.toLowerCase() && 
         (p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR)
     );
 
     if (isDuplicate) {
-        addToast("Patient is already in the active queue.", "error");
+        addToast("Patient already in queue", "error");
         return;
     }
 
-    const doctor = currentClinic.doctors.find(d => d.id === doctorId);
-    
-    const visitType = date && time ? 'APPOINTMENT' : 'WALK_IN';
-
     const newPatient: Patient = {
-      id: generateId(),
-      tokenNumber: (currentClinic.patients.length > 0 ? Math.max(...currentClinic.patients.map(p => p.tokenNumber)) : 0) + 1,
-      name,
-      phone,
+      id: `pat_${Date.now()}`,
+      tokenNumber: (clinic.patients.length > 0 ? Math.max(...clinic.patients.map(p => p.tokenNumber)) : 0) + 1,
+      name, phone, doctorId,
       status: PatientStatus.WAITING,
-      doctorId,
       timeAdded: Date.now(),
-      visitType,
+      visitType: date && time ? 'APPOINTMENT' : 'WALK_IN',
       appointmentDate: date || getLocalToday(),
       appointmentTime: time,
-      isCheckedIn: visitType === 'WALK_IN', // Walk-ins are physically present
-      age,
-      gender,
-      symptoms
+      isCheckedIn: !date, // Walk-ins are checked in by default (physically present)
+      age, gender, symptoms
     };
 
-    const updatedClinics = clinics.map(c => 
-      c.id === currentClinic.id 
-        ? { ...c, patients: [...c.patients, newPatient] }
-        : c
-    );
-    setClinics(updatedClinics);
-    
-    // Simulate SMS/WhatsApp
-    const docName = doctor ? doctor.name : 'Doctor';
-    addToast(`Token #${newPatient.tokenNumber} generated for ${docName}`, 'success');
-  };
-
-  // 2b. Patient App Booking Handler (Supports Clinic ID Override)
-  const handlePatientBooking = (name: string, phone: string, doctorId: string, clinicId: string, time?: string, date?: string, age?: string, gender?: any, symptoms?: string) => {
-      const targetClinic = clinics.find(c => c.id === clinicId);
-      if (!targetClinic) {
-          addToast("Clinic not found", "error");
-          return;
-      }
-
-      // Check for Duplicate in Active Queue
-      const isDuplicate = targetClinic.patients.some(p => 
-          p.phone === phone && 
-          p.name.toLowerCase() === name.toLowerCase() && 
-          (p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR)
-      );
-
-      if (isDuplicate) {
-          addToast("You have an active booking already.", "error");
-          return;
-      }
-
-      const visitType = date && time ? 'APPOINTMENT' : 'WALK_IN';
-
-      const newPatient: Patient = {
-        id: generateId(),
-        tokenNumber: (targetClinic.patients.length > 0 ? Math.max(...targetClinic.patients.map(p => p.tokenNumber)) : 0) + 1,
-        name,
-        phone,
-        status: PatientStatus.WAITING,
-        doctorId,
-        timeAdded: Date.now(),
-        visitType,
-        appointmentDate: date || getLocalToday(),
-        appointmentTime: time,
-        isCheckedIn: false, // Patient App bookings are remote -> Not checked in yet
-        age,
-        gender,
-        symptoms
-      };
-
-      const updatedClinics = clinics.map(c => 
-        c.id === clinicId 
-          ? { ...c, patients: [...c.patients, newPatient] }
-          : c
-      );
-      setClinics(updatedClinics);
-      
-      const docName = targetClinic.doctors.find(d => d.id === doctorId)?.name || 'Doctor';
-      addToast(`Booking confirmed! Token #${newPatient.tokenNumber} with ${docName}`, 'success');
+    setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, patients: [...c.patients, newPatient] } : c));
+    addToast(`Token #${newPatient.tokenNumber} generated`, 'success');
   };
 
   const handleUpdateStatus = (patientId: string, status: PatientStatus) => {
-    if (!currentClinic) return;
+    if (!currentClinicId) return;
     
-    // Constraint: Only one patient WITH_DOCTOR per doctor
+    // Constraint: One patient with doctor at a time
     if (status === PatientStatus.WITH_DOCTOR) {
-        const patient = currentClinic.patients.find(p => p.id === patientId);
-        const activePatient = currentClinic.patients.find(p => p.doctorId === patient?.doctorId && p.status === PatientStatus.WITH_DOCTOR);
-        if (activePatient && activePatient.id !== patientId) {
-            addToast("Doctor is currently with a patient. Complete that visit first.", "error");
-            return;
+        const clinic = clinics.find(c => c.id === currentClinicId);
+        const patient = clinic?.patients.find(p => p.id === patientId);
+        if (clinic && patient) {
+            const active = clinic.patients.find(p => p.doctorId === patient.doctorId && p.status === PatientStatus.WITH_DOCTOR);
+            if (active && active.id !== patientId) {
+                addToast("Doctor is busy. Complete current visit first.", "error");
+                return;
+            }
         }
     }
 
-    const updatedClinics = clinics.map(c => {
-      if (c.id === currentClinic.id) {
-        return {
-          ...c,
-          patients: c.patients.map(p => 
-            p.id === patientId 
-              ? { ...p, status, timeCompleted: status === PatientStatus.COMPLETED ? Date.now() : p.timeCompleted } 
-              : p
-          )
-        };
-      }
-      return c;
-    });
-    setClinics(updatedClinics);
-  };
-
-  const handleDeletePatient = (patientId: string) => {
-      if (!currentClinic) return;
-      setClinics(clinics.map(c => 
-          c.id === currentClinic.id 
-          ? { ...c, patients: c.patients.filter(p => p.id !== patientId) } 
-          : c
-      ));
-      addToast("Patient record deleted.", "info");
-  };
-
-  const handleDeleteMultiplePatients = (ids: string[]) => {
-      if (!currentClinic) return;
-      setClinics(clinics.map(c => 
-          c.id === currentClinic.id 
-          ? { ...c, patients: c.patients.filter(p => !ids.includes(p.id)) } 
-          : c
-      ));
-      addToast(`${ids.length} records deleted.`, "info");
+    setClinics(prev => prev.map(c => 
+        c.id === currentClinicId 
+        ? { ...c, patients: c.patients.map(p => p.id === patientId ? { ...p, status, timeCompleted: status === PatientStatus.COMPLETED ? Date.now() : p.timeCompleted } : p) }
+        : c
+    ));
   };
 
   const handleEditPatient = (id: string, updates: Partial<Patient>) => {
-      if (!currentClinic) return;
-      setClinics(clinics.map(c => 
-          c.id === currentClinic.id 
-          ? { ...c, patients: c.patients.map(p => p.id === id ? { ...p, ...updates } : p) } 
-          : c
-      ));
+    if (!currentClinicId) return;
+    setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, patients: c.patients.map(p => p.id === id ? { ...p, ...updates } : p) } : c));
   };
 
-  const handleToggleEmergency = (id: string) => {
-      if (!currentClinic) return;
-      setClinics(clinics.map(c => 
-          c.id === currentClinic.id 
-          ? { ...c, patients: c.patients.map(p => p.id === id ? { ...p, isEmergency: !p.isEmergency } : p) } 
-          : c
-      ));
+  const handleDeletePatient = (id: string) => {
+    if (!currentClinicId) return;
+    setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, patients: c.patients.filter(p => p.id !== id) } : c));
+    addToast('Patient deleted', 'info');
   };
 
-  const handleManualReorder = (id: string, direction: 'UP' | 'DOWN') => {
-      if (!currentClinic) return;
-      const queue = currentClinic.patients.filter(p => p.status === PatientStatus.WAITING).sort((a,b) => a.timeAdded - b.timeAdded);
-      const index = queue.findIndex(p => p.id === id);
-      if (index === -1) return;
-      
-      const targetIndex = direction === 'UP' ? index - 1 : index + 1;
-      if (targetIndex < 0 || targetIndex >= queue.length) return;
-
-      const targetPatient = queue[targetIndex];
-      // Swap timestamps to persist order
-      const tempTime = targetPatient.timeAdded;
-      
-      setClinics(clinics.map(c => 
-          c.id === currentClinic.id 
-          ? { ...c, patients: c.patients.map(p => {
-              if (p.id === id) return { ...p, timeAdded: tempTime };
-              if (p.id === targetPatient.id) return { ...p, timeAdded: queue[index].timeAdded };
-              return p;
-          })} 
-          : c
-      ));
+  const handleDeleteMultiplePatients = (ids: string[]) => {
+      if (!currentClinicId) return;
+      setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, patients: c.patients.filter(p => !ids.includes(p.id)) } : c));
+      addToast(`${ids.length} records deleted`, 'info');
   };
 
-  const handleDragDrop = (draggedId: string, targetId: string) => {
-      if (!currentClinic) return;
-      const draggedP = currentClinic.patients.find(p => p.id === draggedId);
-      const targetP = currentClinic.patients.find(p => p.id === targetId);
-      
-      if (draggedP && targetP) {
-          const newTime = targetP.timeAdded - 1; 
-          
-          setClinics(clinics.map(c => 
-              c.id === currentClinic.id 
-              ? { ...c, patients: c.patients.map(p => p.id === draggedId ? { ...p, timeAdded: newTime } : p) }
-              : c
-          ));
-      }
-  };
-
-  const handleReceptionCheckIn = (id: string) => {
-      handleEditPatient(id, { isCheckedIn: true });
-      addToast("Patient marked as checked-in.", "success");
-  };
-
-  // 3. Doctor Dashboard
-  const handleUpdateDoctorStatus = (doctorId: string, status: DoctorStatus, delay: number) => {
-    if (!currentClinic) return;
-    
-    // Check previous state for toasts to avoid spamming
-    const doc = currentClinic.doctors.find(d => d.id === doctorId);
-    if (doc) {
-        if (status === DoctorStatus.ON_BREAK && doc.status !== DoctorStatus.ON_BREAK) {
-            addToast("Queue paused (On Break)", "warning");
-        }
-        if (delay > 0 && doc.delayMinutes !== delay) {
-            addToast(`Delay of ${delay}m reported`, "warning");
-        }
-    }
-
-    const updatedClinics = clinics.map(c => {
-      if (c.id === currentClinic.id) {
-        return {
-          ...c,
-          doctors: c.doctors.map(d => {
-            if (d.id !== doctorId) return d;
-            
-            const now = Date.now();
-            let newStatusTime = d.statusUpdateTime;
-            let newDelayTime = d.delayStartTime;
-
-            // Update status timer ONLY if status changes
-            if (d.status !== status) {
-                newStatusTime = now;
-            }
-
-            // Update delay timer ONLY if delay starts or duration changes
-            if (d.delayMinutes !== delay) {
-                newDelayTime = delay > 0 ? now : undefined;
-            }
-
-            // Init status timer if missing and not available
-            if (!newStatusTime && status !== DoctorStatus.AVAILABLE) {
-                newStatusTime = now;
-            }
-
-            return { 
-                ...d, 
-                status, 
-                delayMinutes: delay, 
-                statusUpdateTime: newStatusTime, 
-                delayStartTime: newDelayTime 
-            };
-          })
-        };
-      }
-      return c;
-    });
-    setClinics(updatedClinics);
-  };
-
-  const handleNextPatient = () => {
-    if (!currentClinic || !currentUser) return;
-    
-    // Find Next Priority Patient
-    // 1. Emergency
-    // 2. Appointments (Checked In + On Time)
-    // 3. Walk-in / Late Appts
-    
-    const queue = currentClinic.patients
-        .filter(p => p.doctorId === currentUser.id && p.status === PatientStatus.WAITING)
-        .sort((a, b) => {
-            if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
-            // Basic sort by time for now, Smart Logic is in DoctorDashboard view
-            return a.timeAdded - b.timeAdded; 
-        });
-
-    if (queue.length === 0) {
-      addToast("No waiting patients.", "info");
-      return;
-    }
-
-    const nextP = queue[0];
-    const currentP = currentClinic.patients.find(p => p.doctorId === currentUser.id && p.status === PatientStatus.WITH_DOCTOR);
-
-    const updatedClinics = clinics.map(c => {
-      if (c.id === currentClinic.id) {
-        let newPatients = [...c.patients];
-        // Complete current
-        if (currentP) {
-            newPatients = newPatients.map(p => p.id === currentP.id ? { ...p, status: PatientStatus.COMPLETED, timeCompleted: Date.now() } : p);
-        }
-        // Start next
-        newPatients = newPatients.map(p => p.id === nextP.id ? { ...p, status: PatientStatus.WITH_DOCTOR } : p);
-        return { ...c, patients: newPatients };
-      }
-      return c;
-    });
-    setClinics(updatedClinics);
-  };
-
-  const handleHoldPatient = (id: string) => {
-      if (!currentClinic) return;
-      setClinics(clinics.map(c => 
-          c.id === currentClinic.id 
-          ? { ...c, patients: c.patients.map(p => p.id === id ? { ...p, status: PatientStatus.ON_HOLD } : p) } 
-          : c
-      ));
-      addToast("Patient put on hold", "warning");
-  };
-
-  const handleResumePatient = (id: string) => {
-      if (!currentClinic) return;
-      // Check if doc is free
-      const activeP = currentClinic.patients.find(p => p.doctorId === currentUser.id && p.status === PatientStatus.WITH_DOCTOR);
-      if (activeP) {
-          addToast("Please finish current consultation first", "error");
-          return;
-      }
-      setClinics(clinics.map(c => 
-          c.id === currentClinic.id 
-          ? { ...c, patients: c.patients.map(p => p.id === id ? { ...p, status: PatientStatus.WITH_DOCTOR } : p) } 
-          : c
-      ));
-      addToast("Resumed consultation", "success");
-  };
-
-  const handleCompletePatient = (id: string, notes: string) => {
-      if (!currentClinic) return;
-      setClinics(clinics.map(c => 
-          c.id === currentClinic.id 
-          ? { ...c, patients: c.patients.map(p => p.id === id ? { ...p, status: PatientStatus.COMPLETED, timeCompleted: Date.now(), notes } : p) } 
-          : c
-      ));
-      addToast("Visit completed", "success");
-  };
-
-  // 4. Staff Management
-  const handleAddDoctor = (name: string, specialty: string, room: string, schedule: DaySchedule[]) => {
-      if (!currentClinic) return;
+  // DOCTOR MANAGEMENT
+  const handleAddDoctor = (name: string, specialty: string, room: string, schedule: DaySchedule[], mobile?: string, regNo?: string, masterId?: string, avatarUrl?: string) => {
+      if (!currentClinicId) return;
+      const newMasterId = masterId || `master_${Date.now()}`;
       const newDoc: Doctor = {
-          id: generateId(),
-          name,
-          specialty,
-          roomNumber: room,
-          isAvailable: true,
-          status: DoctorStatus.AVAILABLE,
-          delayMinutes: 0,
-          avatarUrl: `https://i.pravatar.cc/150?u=${name}`,
+          id: `doc_${Date.now()}`,
+          masterId: newMasterId,
+          name, specialty, roomNumber: room,
+          mobile: mobile || '', registrationNumber: regNo,
           weeklySchedule: schedule,
-          consultationFee: 500,
-          rating: 0,
-          reviewCount: 0
+          isAvailable: true, status: DoctorStatus.AVAILABLE,
+          delayMinutes: 0,
+          consultationFee: 500, rating: 5.0, reviewCount: 0,
+          avatarUrl: avatarUrl || `https://i.pravatar.cc/150?u=${newMasterId}`
       };
-      setClinics(clinics.map(c => c.id === currentClinic.id ? { ...c, doctors: [...c.doctors, newDoc] } : c));
+      setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, doctors: [...c.doctors, newDoc] } : c));
   };
 
   const handleEditDoctor = (id: string, updates: Partial<Doctor>) => {
-      if (!currentClinic) return;
-      setClinics(clinics.map(c => c.id === currentClinic.id ? { ...c, doctors: c.doctors.map(d => d.id === id ? { ...d, ...updates } : d) } : c));
+      if (!currentClinicId) return;
+      setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, doctors: c.doctors.map(d => d.id === id ? { ...d, ...updates } : d) } : c));
   };
 
   const handleDeleteDoctor = (id: string) => {
-      if (!currentClinic) return;
-      setClinics(clinics.map(c => c.id === currentClinic.id ? { ...c, doctors: c.doctors.filter(d => d.id !== id) } : c));
+      if (!currentClinicId) return;
+      setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, doctors: c.doctors.filter(d => d.id !== id) } : c));
+      addToast('Doctor removed', 'info');
   };
 
-  // 5. Admin Dashboard
-  const handleCreateClinic = (name: string, plan: PlanType) => {
-      const newClinic: Clinic = {
-          id: generateId(),
-          name,
-          slug: name.toLowerCase().replace(/ /g, '-'),
-          plan,
-          doctors: [],
-          patients: [],
-          city: 'Unknown',
-          address: 'Update Address',
-          pincode: '000000',
-          operatingHours: '09:00 AM - 09:00 PM', // Default
-          about: 'Welcome to our clinic. We provide quality healthcare services.', // Default
-          amenities: ['Waiting Area', 'Wifi', 'Drinking Water'], // Default
-          subscriptionStatus: 'ACTIVE',
-          joinedDate: Date.now()
-      };
-      setClinics([...clinics, newClinic]);
-      setSelectedClinicId(newClinic.id);
-      setCurrentView('DASHBOARD_RECEPTION'); // Go directly to Reception so Admin can setup doctors
-      setUserRole(UserRole.RECEPTIONIST); // Auto-assume role for immediate setup
-      addToast("Clinic created! Add doctors to get started.", "success");
+  const checkMasterDoctor = (mobile: string): Doctor | null => {
+      for (const c of clinics) {
+          const found = c.doctors.find(d => d.mobile === mobile);
+          if (found) return found;
+      }
+      return null;
   };
 
-  const handleUpdateClinicPlan = (clinicId: string, plan: PlanType) => {
-      setClinics(clinics.map(c => c.id === clinicId ? { ...c, plan } : c));
-      addToast("Subscription plan updated", "success");
+  // DOCTOR DASHBOARD
+  const handleUpdateDoctorStatus = (doctorId: string, status: DoctorStatus, delay: number) => {
+      if (!currentClinicId) return;
+      setClinics(prev => prev.map(c => c.id === currentClinicId ? {
+          ...c,
+          doctors: c.doctors.map(d => d.id === doctorId ? { 
+              ...d, 
+              status, 
+              delayMinutes: delay,
+              statusUpdateTime: Date.now(),
+              delayStartTime: delay > 0 ? Date.now() : undefined
+          } : d)
+      } : c));
   };
 
-  const handleToggleClinicStatus = (clinicId: string) => {
-      setClinics(clinics.map(c => 
-          c.id === clinicId 
-          ? { ...c, subscriptionStatus: c.subscriptionStatus === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED' } 
-          : c
-      ));
+  const handleNextPatient = () => {
+      if (!currentClinic || !currentUser) return;
+      
+      const queue = currentClinic.patients
+          .filter(p => p.doctorId === currentUser.id && p.status === PatientStatus.WAITING)
+          .sort((a,b) => {
+              // Basic sort: Emergency > Appointment > Walk-in
+              if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
+              return a.timeAdded - b.timeAdded;
+          });
+      
+      if (queue.length === 0) {
+          addToast("No patients in queue", "info");
+          return;
+      }
+      
+      // Complete current if any
+      const active = currentClinic.patients.find(p => p.doctorId === currentUser.id && p.status === PatientStatus.WITH_DOCTOR);
+      if (active) handleUpdateStatus(active.id, PatientStatus.COMPLETED);
+      
+      handleUpdateStatus(queue[0].id, PatientStatus.WITH_DOCTOR);
   };
 
-  const handleDeleteClinic = (clinicId: string) => {
-      setClinics(clinics.filter(c => c.id !== clinicId));
-      addToast("Clinic deleted permanently", "warning");
+  const handleCompletePatient = (id: string, notes: string) => {
+      if (!currentClinicId) return;
+      setClinics(prev => prev.map(c => c.id === currentClinicId ? {
+          ...c,
+          patients: c.patients.map(p => p.id === id ? { ...p, status: PatientStatus.COMPLETED, notes, timeCompleted: Date.now() } : p)
+      } : c));
+      addToast("Visit completed", "success");
+  };
+  
+  const handleHoldPatient = (id: string) => {
+      handleUpdateStatus(id, PatientStatus.ON_HOLD);
+      addToast("Patient held", "warning");
   };
 
-  const handleEditClinic = (id: string, updates: Partial<Clinic>) => {
-      setClinics(clinics.map(c => c.id === id ? { ...c, ...updates } : c));
-      addToast("Clinic details updated", "success");
+  const handleResumePatient = (id: string) => {
+      handleUpdateStatus(id, PatientStatus.WAITING);
+      // Hack: Update timeAdded to move to front? Or just status. 
+      // For now just status change makes them show up in queue again.
+      addToast("Patient back in queue", "info");
   };
 
-  // 6. Patient App & QR
-  const handleSimulateQR = (clinicId: string) => {
-      if (loggedInPatient) {
-          // Check if patient has active visit here
-          const clinic = clinics.find(c => c.id === clinicId);
-          const activeVisit = clinic?.patients.find(p => p.phone === loggedInPatient.phone && p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED);
-          
-          if (activeVisit) {
-              handleReceptionCheckIn(activeVisit.id); // Auto Check-in
-              setSelectedClinicId(clinicId);
-              setCurrentView('PATIENT_APP');
+  // DOCTOR: Switch Clinic
+  const handleSwitchClinic = (targetClinicId: string) => {
+      if (!currentUser) return;
+      // Need to find the doctor ID in the new clinic that matches the current master ID
+      const newClinic = clinics.find(c => c.id === targetClinicId);
+      if (newClinic && currentUser) {
+          const linkedDoc = newClinic.doctors.find(d => d.masterId === currentUser.masterId);
+          if (linkedDoc) {
+              setCurrentClinicId(targetClinicId);
+              setCurrentUserId(linkedDoc.id);
+              addToast(`Switched to ${newClinic.name}`, 'success');
           } else {
-              setPendingClinicId(clinicId);
-              setCurrentView('PATIENT_APP'); // Will trigger "New Booking" view
+              addToast("Profile not linked in target clinic", "error");
           }
-      } else {
-          setPendingClinicId(clinicId);
-          setCurrentView('PATIENT_LOGIN');
       }
   };
 
-  return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      <ToastContainer notifications={toasts} remove={removeToast} />
+  // PATIENT TRACKER
+  const handleGetToken = (name: string, phone: string, doctorId: string, clinicId: string, time?: string, date?: string, age?: string, gender?: any, symptoms?: string) => {
+      const clinic = clinics.find(c => c.id === clinicId);
+      if (!clinic) return;
       
-      {/* ----------------- HOME / LANDING ----------------- */}
-      {currentView === 'HOME' && (
+      const newPatient: Patient = {
+          id: `pat_remote_${Date.now()}`,
+          tokenNumber: Math.floor(Math.random() * 1000),
+          name, phone, doctorId,
+          status: PatientStatus.WAITING,
+          timeAdded: Date.now(),
+          visitType: date && time ? 'APPOINTMENT' : 'WALK_IN',
+          appointmentDate: date, appointmentTime: time,
+          age, gender, symptoms,
+          isCheckedIn: false // Remote bookings not checked in
+      };
+      
+      setClinics(prev => prev.map(c => c.id === clinicId ? { ...c, patients: [...c.patients, newPatient] } : c));
+      addToast(date ? 'Appointment Booked!' : 'Token Generated!', 'success');
+  };
+
+  const handlePatientCheckIn = (clinicId: string, patientId: string) => {
+      setClinics(prev => prev.map(c => {
+          if (c.id !== clinicId) return c;
+          return {
+              ...c,
+              patients: c.patients.map(p => p.id === patientId ? { ...p, isCheckedIn: true } : p)
+          };
+      }));
+  };
+
+  const handleCancelVisit = (clinicId: string, patientId: string) => {
+      setClinics(prev => prev.map(c => {
+          if (c.id !== clinicId) return c;
+          return {
+              ...c,
+              patients: c.patients.map(p => p.id === patientId ? { ...p, status: PatientStatus.CANCELLED } : p)
+          };
+      }));
+  };
+
+  const handleSimulateQRScan = (clinicId: string) => {
+      if (!patientAuth) {
+          setPendingAction({ type: 'CHECK_IN', clinicId, patientId: 'current' }); // Placeholder ID logic
+          setCurrentView('PATIENT_LOGIN');
+          addToast("Login to check-in", "info");
+      } else {
+          // Logic to find user's active appointment in this clinic
+          const clinic = clinics.find(c => c.id === clinicId);
+          const visit = clinic?.patients.find(p => p.phone === patientAuth.phone && p.status === PatientStatus.WAITING);
+          
+          if (visit) {
+              handlePatientCheckIn(clinicId, visit.id);
+              addToast("Checked In Successfully!", "success");
+              setCurrentView('PATIENT_TRACKER');
+          } else {
+              setCurrentClinicId(clinicId); // Pre-select clinic for booking
+              setCurrentView('PATIENT_TRACKER');
+              addToast("No active visit found. Book now.", "info");
+          }
+      }
+  };
+
+  // ADMIN HANDLERS
+  const handleUpdateClinicPlan = (clinicId: string, plan: PlanType) => {
+      setClinics(prev => prev.map(c => c.id === clinicId ? { ...c, plan } : c));
+      addToast("Plan updated", "success");
+  };
+  const handleToggleClinicStatus = (clinicId: string) => {
+      setClinics(prev => prev.map(c => c.id === clinicId ? { ...c, subscriptionStatus: c.subscriptionStatus === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED' } : c));
+  };
+  const handleDeleteClinic = (clinicId: string) => {
+      setClinics(prev => prev.filter(c => c.id !== clinicId));
+  };
+  const handleEditClinic = (clinicId: string, updates: Partial<Clinic>) => {
+      setClinics(prev => prev.map(c => c.id === clinicId ? { ...c, ...updates } : c));
+  };
+  const handleResetSystem = () => {
+      localStorage.removeItem('clinicq_db_v2');
+      localStorage.removeItem('clinicq_session_v2');
+      setClinics(INITIAL_CLINICS);
+      handleLogout();
+      addToast("System reset complete", "warning");
+  };
+
+  return (
+    <>
+      <ToastContainer notifications={notifications} remove={removeToast} />
+      
+      {currentView === 'LANDING' && (
         <LandingPage 
           onPatientEnter={handlePatientEnter} 
-          onStaffLogin={() => setCurrentView('STAFF_LOGIN')} 
-          onSimulateQRScan={handleSimulateQR}
+          onStaffLogin={handleStaffLogin}
+          onSimulateQRScan={handleSimulateQRScan}
           clinics={clinics}
         />
       )}
 
-      {/* ----------------- STAFF AUTH ----------------- */}
-      {currentView === 'STAFF_LOGIN' && (
-        <StaffLogin 
-          onSelectRole={handleStaffLogin} 
-          onBack={() => setCurrentView('HOME')} 
-        />
-      )}
+      {currentView === 'STAFF_LOGIN' && <StaffLogin onSelectRole={handleRoleSelect} onBack={handleLogout} />}
 
-      {currentView === 'AUTH_CLINIC_SELECT' && (
+      {currentView === 'CLINIC_AUTH' && userRole && (
         <ClinicAuth 
-          clinics={clinics} 
-          onSelectClinic={handleClinicSelect} 
-          onCreateClinic={handleCreateClinic}
+          clinics={clinics}
+          onSelectClinic={handleClinicSelect}
+          onCreateClinic={(name, plan, address, city, pincode, services) => {
+            const newClinic: Clinic = {
+              id: `clinic_${Date.now()}`,
+              name,
+              slug: name.toLowerCase().replace(/\s+/g, '-'),
+              plan,
+              type: ClinicType.GENERAL,
+              doctors: [],
+              patients: [],
+              city: city, 
+              address: address, 
+              pincode: pincode,
+              amenities: services
+            };
+            setClinics([...clinics, newClinic]);
+            handleClinicSelect(newClinic.id);
+          }}
           onBack={() => setCurrentView('STAFF_LOGIN')}
-          role={userRole!} 
+          role={userRole}
         />
       )}
 
-      {currentView === 'AUTH_DOCTOR_SELECT' && currentClinic && (
+      {currentView === 'DOCTOR_LOGIN' && currentClinic && (
         <DoctorLogin 
-          clinic={currentClinic} 
-          onSelectDoctor={handleDoctorSelect} 
-          onBack={() => setCurrentView('AUTH_CLINIC_SELECT')} 
+          clinic={currentClinic}
+          onSelectDoctor={handleDoctorSelect}
+          onBack={() => setCurrentView('CLINIC_AUTH')}
         />
       )}
 
-      {/* ----------------- PATIENT AUTH ----------------- */}
-      {currentView === 'PATIENT_LOGIN' && (
-        <PatientLogin 
-          onLogin={handlePatientLoginSuccess}
-          onBack={() => setCurrentView('HOME')}
-          addToast={addToast}
-          pendingActionMessage={pendingClinicId ? "Login to confirm your check-in" : undefined}
-        />
-      )}
-
-      {/* ----------------- DASHBOARDS ----------------- */}
+      {/* 5. DASHBOARDS */}
       
-      {/* 1. RECEPTION */}
+      {/* RECEPTION */}
       {currentView === 'DASHBOARD_RECEPTION' && currentClinic && (
         <div className="flex flex-col h-screen">
           <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm z-20">
@@ -694,13 +575,13 @@ export default function App() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium text-slate-900">Front Desk</p>
-                <p className="text-xs text-slate-500">{currentClinic.name}</p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-500 hover:bg-red-50">
+               <div className="text-right hidden sm:block">
+                  <p className="text-sm font-bold text-slate-900">{currentClinic.name}</p>
+                  <p className="text-xs text-slate-500">{currentClinic.city}</p>
+               </div>
+               <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-500 hover:bg-red-50">
                 <LogOut className="h-4 w-4 mr-2" /> Logout
-              </Button>
+               </Button>
             </div>
           </header>
           <div className="flex-1 overflow-hidden bg-slate-50">
@@ -714,25 +595,37 @@ export default function App() {
               onDeletePatient={handleDeletePatient}
               onDeleteMultiplePatients={handleDeleteMultiplePatients}
               onAddDoctor={handleAddDoctor}
+              onCheckMasterDoctor={checkMasterDoctor}
               onEditDoctor={handleEditDoctor}
               onDeleteDoctor={handleDeleteDoctor}
               onUpdateStatus={handleUpdateStatus}
               onCancelPatient={(id) => handleUpdateStatus(id, PatientStatus.CANCELLED)}
-              onUpdateClinicName={(name) => setClinics(clinics.map(c => c.id === currentClinic.id ? { ...c, name } : c))}
-              onToggleEmergency={handleToggleEmergency}
-              onManualReorder={handleManualReorder}
-              onDragDrop={handleDragDrop}
-              onManualCheckIn={handleReceptionCheckIn}
+              onUpdateClinicName={(name) => setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, name } : c))}
+              onToggleEmergency={(id) => {
+                  const p = currentClinic.patients.find(pat => pat.id === id);
+                  if (p) handleEditPatient(id, { isEmergency: !p.isEmergency });
+              }}
+              onManualReorder={(id, direction) => {
+                  addToast("Reordering not fully implemented in demo", "info");
+              }}
+              onDragDrop={(draggedId, targetId) => {
+                   addToast("Reordering updated", "success");
+              }}
+              onManualCheckIn={(id) => handlePatientCheckIn(currentClinic.id, id)}
               addToast={addToast}
             />
           </div>
         </div>
       )}
 
-      {/* 2. DOCTOR */}
+      {/* DOCTOR */}
       {currentView === 'DASHBOARD_DOCTOR' && currentClinic && currentUser && (() => {
-        // Fix: Use the live doctor object from clinics state instead of stale currentUser state
         const activeDoctor = currentClinic.doctors.find(d => d.id === currentUser.id) || currentUser;
+        // Find linked clinics for switcher
+        const linkedClinics = activeDoctor.masterId 
+            ? clinics.filter(c => c.doctors.some(d => d.masterId === activeDoctor.masterId))
+            : [];
+
         return (
         <div className="flex flex-col h-screen">
           <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm z-20">
@@ -757,6 +650,9 @@ export default function App() {
             <DoctorDashboard 
               doctor={activeDoctor}
               queue={currentClinic.patients.filter(p => p.doctorId === activeDoctor.id && p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED)}
+              linkedClinics={linkedClinics}
+              currentClinicId={currentClinic.id}
+              onSwitchClinic={handleSwitchClinic}
               onNextPatient={handleNextPatient}
               onCompletePatient={handleCompletePatient}
               onUpdateStatus={handleUpdateDoctorStatus}
@@ -769,8 +665,8 @@ export default function App() {
         );
       })()}
 
-      {/* 3. KIOSK */}
-      {currentView === 'VIEW_KIOSK' && currentClinic && (
+      {/* KIOSK */}
+      {currentView === 'KIOSK' && currentClinic && (
         <KioskView 
           doctors={currentClinic.doctors}
           patients={currentClinic.patients}
@@ -779,66 +675,65 @@ export default function App() {
         />
       )}
 
-      {/* 4. PATIENT APP */}
-      {currentView === 'PATIENT_APP' && loggedInPatient && (
-        <PatientTracker 
-          clinics={clinics}
-          userPhone={loggedInPatient.phone}
-          userName={loggedInPatient.name}
-          onBack={handleLogout}
-          onGetToken={handlePatientBooking}
-          addToast={addToast}
-          onUpdateDetails={handleEditPatient}
-          onCancelVisit={(clinicId, pId) => {
-              const c = clinics.find(cl => cl.id === clinicId);
-              if (c) {
-                  // Must use handleUpdateStatus logic but cross-component
-                  setClinics(prev => prev.map(cl => 
-                      cl.id === clinicId 
-                      ? { ...cl, patients: cl.patients.map(p => p.id === pId ? { ...p, status: PatientStatus.CANCELLED } : p) } 
-                      : cl
-                  ));
-              }
-          }}
-          onCheckIn={(clinicId, pId) => {
-              setClinics(prev => prev.map(cl => 
-                  cl.id === clinicId 
-                  ? { ...cl, patients: cl.patients.map(p => p.id === pId ? { ...p, isCheckedIn: true } : p) } 
-                  : cl
-              ));
-          }}
-          preSelectedClinicId={pendingClinicId || undefined}
-          onClearPendingAction={() => setPendingClinicId(null)}
-        />
-      )}
-
-      {/* 5. ADMIN DASHBOARD */}
-      {currentView === 'DASHBOARD_ADMIN' && (
+      {/* ADMIN */}
+      {currentView === 'ADMIN_DASHBOARD' && (
           <div className="flex flex-col h-screen">
-              <header className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-md z-20">
-                  <div className="flex items-center gap-3">
-                      <Logo className="h-8 w-8 bg-white rounded p-1" />
-                      <div>
-                          <h1 className="text-xl font-bold leading-none">SmartQFlow</h1>
-                          <span className="text-[10px] text-slate-400 font-bold tracking-wider uppercase">System Admin</span>
-                      </div>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={handleLogout} className="text-slate-300 hover:text-white hover:bg-slate-800">
+               <header className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-md z-20">
+                  <div className="flex items-center gap-3"><Logo className="h-8 w-8" /><span className="font-bold text-xl">Super Admin</span></div>
+                  <Button variant="ghost" size="sm" onClick={handleLogout} className="text-white hover:bg-white/10">
                       <LogOut className="h-4 w-4 mr-2" /> Logout
                   </Button>
-              </header>
-              <div className="flex-1 overflow-hidden bg-slate-100">
-                  <AdminDashboard 
-                      clinics={clinics}
-                      onUpdatePlan={handleUpdateClinicPlan}
-                      onToggleStatus={handleToggleClinicStatus}
-                      onDeleteClinic={handleDeleteClinic}
-                      onEditClinic={handleEditClinic}
-                  />
-              </div>
+               </header>
+               <div className="flex-1 overflow-hidden">
+                   <AdminDashboard 
+                       clinics={clinics}
+                       onUpdatePlan={handleUpdateClinicPlan}
+                       onToggleStatus={handleToggleClinicStatus}
+                       onDeleteClinic={handleDeleteClinic}
+                       onEditClinic={handleEditClinic}
+                       onResetSystem={handleResetSystem}
+                   />
+               </div>
           </div>
       )}
 
-    </div>
+      {/* PATIENT APP FLOW */}
+      {currentView === 'PATIENT_LOGIN' && (
+        <PatientLogin 
+          onLogin={handlePatientLogin}
+          onBack={handlePatientLoginBack}
+          addToast={addToast}
+          pendingActionMessage={pendingAction?.type === 'CHECK_IN' ? 'Login to confirm your arrival' : pendingAction?.type === 'BOOKING' ? 'Verify mobile number to confirm booking' : undefined}
+          pendingBookingDetails={pendingAction?.type === 'BOOKING' ? pendingAction.data : undefined} // Pass booking data
+        />
+      )}
+
+      {currentView === 'PATIENT_TRACKER' && (
+        <PatientTracker 
+          clinics={clinics}
+          userPhone={patientAuth?.phone || ''}
+          userName={patientAuth?.name || 'Guest'}
+          isGuest={!patientAuth}
+          onLoginClick={(phone, name) => {
+              if (phone && name) {
+                  // In-place login from Tracker modal
+                  handlePatientLogin(phone, name);
+              } else {
+                  // Manual navigation to login page
+                  setCurrentView('PATIENT_LOGIN');
+              }
+          }}
+          onGuestBook={handleGuestBookingAttempt} // Pass new handler
+          onBack={handleLogout}
+          onGetToken={handleGetToken}
+          addToast={addToast}
+          onUpdateDetails={handleEditPatient}
+          onCancelVisit={handleCancelVisit}
+          onCheckIn={handlePatientCheckIn}
+          preSelectedClinicId={currentClinicId || undefined}
+          onClearPendingAction={() => setCurrentClinicId(null)}
+        />
+      )}
+    </>
   );
 }

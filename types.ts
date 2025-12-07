@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   DOCTOR = 'DOCTOR',
@@ -40,16 +41,27 @@ export enum ClinicType {
     OTHER = 'OTHER'
 }
 
+export interface TimeSlot {
+    id?: string;
+    startTime: string; // "09:00"
+    endTime: string;   // "13:00"
+    label?: string;    // "Morning Shift"
+    active?: boolean;  // allow marking slot active/inactive
+}
+
 export interface DaySchedule {
   day: string; // 'Monday', 'Tuesday', etc.
-  startTime: string; // "09:00"
-  endTime: string;   // "17:00"
+  slots: TimeSlot[]; // Flexible multiple slots
   isOff: boolean;
 }
 
 export interface Doctor {
   id: string;
+  masterId: string; // NEW: Unique ID linking same doctor across clinics
   name: string;
+  mobile: string; // NEW: Unique identifier for linking
+  registrationNumber?: string; // NEW: Medical Reg No
+  email?: string; // NEW
   specialty: string;
   roomNumber: string;
   isAvailable: boolean;
@@ -141,10 +153,10 @@ export interface Clinic {
   coordinates?: { x: number, y: number }; // Mock coordinates for map viz (0-100%)
   geoLocation?: { lat: number, lng: number }; // Real GPS coordinates for distance calc
   operatingHours?: string; // e.g. "09:00 AM - 09:00 PM"
+  imageUrl?: string; // New: Clinic Image URL
   // Details
   about?: string; // New: Description
   amenities?: string[]; // New: List of facilities (Pharmacy, Parking, etc.)
-  acceptedInsurances?: string[]; // New: List of accepted insurance providers
   // Admin Data
   subscriptionStatus?: 'ACTIVE' | 'SUSPENDED' | 'PAST_DUE';
   joinedDate?: number;
