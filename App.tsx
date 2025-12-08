@@ -115,9 +115,35 @@ export default function App() {
   // Save Database on ANY change
   useEffect(() => {
     if (clinics.length > 0) {
-      localStorage.setItem('clinicq_db_v2', JSON.stringify(clinics));
+      const key = 'clinicq_db_v2';
+      const current = localStorage.getItem(key);
+      const next = JSON.stringify(clinics);
+      // Prevent loop by checking if value actually changed
+      if (current !== next) {
+        localStorage.setItem(key, next);
+      }
     }
   }, [clinics]);
+
+  // Sync Data Across Tabs (Concurrency)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+        if (e.key === 'clinicq_db_v2' && e.newValue) {
+            try {
+                const updatedClinics = JSON.parse(e.newValue);
+                // We update state, which triggers the save effect above.
+                // The save effect checks if LS matches state. 
+                // Since LS was just updated (causing this event), they match, so no write loop.
+                setClinics(updatedClinics);
+            } catch (err) {
+                console.error("Failed to sync external changes:", err);
+            }
+        }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // Save Session
   useEffect(() => {
