@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Patient, Doctor, PatientStatus } from '../../../types';
 import { Badge } from '../../../components/Badge';
-import { PlayCircle, CheckSquare, Edit2, UserCheck, Activity, AlertTriangle, XCircle, ArrowUp, Calendar, User, CheckCircle, GripVertical, Clock, ChevronRight, Timer, Stethoscope } from 'lucide-react';
+import { PlayCircle, CheckSquare, Edit2, UserCheck, Activity, AlertTriangle, XCircle, ArrowUp, Calendar, User, CheckCircle, GripVertical, Clock, ChevronRight, Timer, Stethoscope, PauseCircle, Play } from 'lucide-react';
 
 interface QueueTableProps {
   patients: Patient[];
@@ -54,6 +54,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
               const hasVitals = patient.vitals && Object.values(patient.vitals).some(v => v !== '');
               const isWaiting = patient.status === PatientStatus.WAITING;
               const isServing = patient.status === PatientStatus.WITH_DOCTOR;
+              const isOnHold = patient.status === PatientStatus.ON_HOLD;
               const isNextUp = nextUpPatientIds ? nextUpPatientIds.has(patient.id) : false;
               
               // Formatting Times
@@ -72,7 +73,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                   rowStateClass = "bg-white border-l-4 border-l-indigo-500 border-y-indigo-50 border-r-indigo-50 shadow-sm";
               } else if (patient.isEmergency) {
                   rowStateClass = "bg-red-50/30 border-l-4 border-l-red-500 border-red-100";
-              } else if (patient.status === PatientStatus.ON_HOLD) {
+              } else if (isOnHold) {
                   rowStateClass = "bg-orange-50/30 border-l-4 border-l-orange-400 border-orange-100 opacity-80";
               } else if (draggedId === patient.id) {
                   rowStateClass = "opacity-40 border-2 border-dashed border-primary-500";
@@ -100,6 +101,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                       </div>
                       {isServing && <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider bg-blue-50 px-1.5 py-0.5 rounded">Serving</span>}
                       {isNextUp && isWaiting && <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider bg-indigo-50 px-1.5 py-0.5 rounded animate-bounce">Next</span>}
+                      {isOnHold && <span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider bg-orange-50 px-1.5 py-0.5 rounded">On Hold</span>}
                     </div>
                   </td>
                   
@@ -143,13 +145,13 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                                   <span className="text-[10px] opacity-80">Started just now</span>
                               </div>
                           </div>
-                      ) : isWaiting ? (
+                      ) : (isWaiting || isOnHold) ? (
                           <div className="flex flex-col gap-1">
                               {/* Timing */}
                               <div className="flex items-center gap-2">
                                   <Clock className="h-3.5 w-3.5 text-slate-400" />
                                   <span className="text-sm font-bold text-slate-700">{estTimeStr}</span>
-                                  <span className="text-[10px] text-slate-400 font-medium bg-slate-50 px-1.5 rounded">~{waitMins}m</span>
+                                  {!isOnHold && <span className="text-[10px] text-slate-400 font-medium bg-slate-50 px-1.5 rounded">~{waitMins}m</span>}
                               </div>
                               {/* Arrival Status */}
                               <div className="flex items-center gap-1.5">
@@ -205,6 +207,12 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                           )}
                         </>
                       )}
+
+                      {isOnHold && (
+                          <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WAITING)} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm shadow-green-200 transition-all active:scale-95 text-xs font-bold mr-1" title="Resume to Queue">
+                              <Play className="h-3.5 w-3.5" /> Resume
+                          </button>
+                      )}
                       
                       {isServing && (
                         <button onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm shadow-green-200 transition-all active:scale-95 text-xs font-bold mr-1" title="Finish Visit">
@@ -224,9 +232,17 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                             <Edit2 className="h-3.5 w-3.5" />
                           </button>
 
-                          {isWaiting && (
+                          {(isWaiting || isOnHold) && (
                             <>
                                 <div className="w-px h-3 bg-slate-200 mx-0.5"></div>
+                                
+                                {/* Hold Button - Only for Waiting */}
+                                {isWaiting && (
+                                    <button onClick={() => onUpdateStatus(patient.id, PatientStatus.ON_HOLD)} className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-white rounded-md transition-colors" title="Hold Patient">
+                                        <PauseCircle className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+
                                 <button onClick={() => onVitalsClick(patient)} className={`p-1.5 rounded-md transition-colors ${hasVitals ? 'text-red-500 bg-red-50' : 'text-slate-400 hover:text-red-500 hover:bg-white'}`} title="Vitals">
                                 <Activity className="h-3.5 w-3.5" />
                                 </button>
