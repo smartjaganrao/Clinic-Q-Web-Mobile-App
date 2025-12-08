@@ -4,7 +4,7 @@ import { Doctor, DaySchedule } from '../../../types';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { Modal } from '../../../components/Modal';
-import { Plus, Trash2, Copy, Link as LinkIcon, Clock, Calendar, CheckSquare, Coffee, Sun, Moon, ArrowRight, Zap } from 'lucide-react';
+import { Plus, Trash2, Copy, Link as LinkIcon, Clock, Calendar, CheckSquare, Coffee, Sun, Moon, ArrowRight, Zap, CloudSun, ToggleLeft, ToggleRight, MoonStar } from 'lucide-react';
 
 interface DoctorFormModalProps {
   isOpen: boolean;
@@ -53,7 +53,7 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
             });
         } else {
             const defaultSchedule = DAYS_OF_WEEK.map(d => ({
-                day: d, slots: d === 'Sunday' ? [] : [{ startTime: '09:00', endTime: '17:00', active: true }], isOff: d === 'Sunday'
+                day: d, slots: d === 'Sunday' ? [] : [{ startTime: '09:00', endTime: '17:00', active: true, label: 'Regular' }], isOff: d === 'Sunday'
             }));
             setForm({ name: '', specialty: '', room: '', fee: '500', consultationTime: '15', mobile: '', regNo: '', masterId: '', avatarUrl: '', schedule: defaultSchedule });
             setLinkedProfile(null);
@@ -72,7 +72,7 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
       const cur = newSchedule[dayIndex]; 
       const isOff = !cur.isOff; 
       // If turning ON and no slots, add default
-      newSchedule[dayIndex] = { ...cur, isOff, slots: isOff ? [] : (cur.slots?.length ? cur.slots : [{ startTime: '09:00', endTime: '17:00', active: true }]) }; 
+      newSchedule[dayIndex] = { ...cur, isOff, slots: isOff ? [] : (cur.slots?.length ? cur.slots : [{ startTime: '09:00', endTime: '17:00', active: true, label: 'Regular' }]) }; 
       setForm({ ...form, schedule: newSchedule }); 
   };
   
@@ -85,8 +85,23 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
       // Simple logic to add 4 hours
       const addHours = (t: string, h: number) => { const [hh, mm] = t.split(':').map(Number); const nextH = (hh + h) % 24; return `${nextH.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}`; }; 
       const defaultEnd = addHours(defaultStart, 4); 
-      newSchedule[dayIndex] = { ...cur, slots: [...existing, { startTime: defaultStart, endTime: defaultEnd, active: true }], isOff: false }; 
+      newSchedule[dayIndex] = { ...cur, slots: [...existing, { startTime: defaultStart, endTime: defaultEnd, active: true, label: 'Shift' }], isOff: false }; 
       setForm({ ...form, schedule: newSchedule }); 
+  };
+
+  const addCommonSlot = (dayIndex: number, type: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT') => {
+      const newSchedule = [...form.schedule];
+      const cur = newSchedule[dayIndex];
+      const existing = cur.slots ? [...cur.slots] : [];
+      
+      let newSlot = { startTime: '09:00', endTime: '13:00', active: true, label: 'Morning' };
+      if (type === 'AFTERNOON') newSlot = { startTime: '14:00', endTime: '17:00', active: true, label: 'Afternoon' };
+      if (type === 'EVENING') newSlot = { startTime: '18:00', endTime: '21:00', active: true, label: 'Evening' };
+      if (type === 'NIGHT') newSlot = { startTime: '22:00', endTime: '06:00', active: true, label: 'Night' };
+      
+      newSchedule[dayIndex] = { ...cur, isOff: false, slots: [...existing, newSlot] };
+      setForm({ ...form, schedule: newSchedule });
+      addToast(`Added ${newSlot.label} slot`, 'success');
   };
   
   const removeSlot = (dayIndex: number, slotIndex: number) => { 
@@ -98,7 +113,7 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
       setForm({ ...form, schedule: newSchedule }); 
   };
   
-  const updateSlot = (dayIndex: number, slotIndex: number, field: string, value: string) => { 
+  const updateSlot = (dayIndex: number, slotIndex: number, field: string, value: string | boolean) => { 
       const newSchedule = [...form.schedule]; 
       const cur = newSchedule[dayIndex]; 
       const slots = [...(cur.slots || [])]; 
@@ -110,16 +125,14 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
   const generateQuickSchedule = () => {
       const newSlots = [];
       if (qsHasBreak) {
-          // Check if break is within range
           if (qsBreakStart > qsStart && qsBreakEnd < qsEnd) {
-              newSlots.push({ startTime: qsStart, endTime: qsBreakStart, active: true });
-              newSlots.push({ startTime: qsBreakEnd, endTime: qsEnd, active: true });
+              newSlots.push({ startTime: qsStart, endTime: qsBreakStart, active: true, label: 'Morning' });
+              newSlots.push({ startTime: qsBreakEnd, endTime: qsEnd, active: true, label: 'Afternoon' });
           } else {
-              // Fallback if break invalid
-              newSlots.push({ startTime: qsStart, endTime: qsEnd, active: true });
+              newSlots.push({ startTime: qsStart, endTime: qsEnd, active: true, label: 'Regular' });
           }
       } else {
-          newSlots.push({ startTime: qsStart, endTime: qsEnd, active: true });
+          newSlots.push({ startTime: qsStart, endTime: qsEnd, active: true, label: 'Regular' });
       }
 
       const newSchedule = form.schedule.map(d => {
@@ -135,8 +148,10 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
   const getDayStats = (day: DaySchedule) => {
       if (day.isOff) return null;
       let totalMins = 0;
+      let activeSlots = 0;
       day.slots.forEach(s => {
           if (!s.active) return;
+          activeSlots++;
           const [sh, sm] = s.startTime.split(':').map(Number);
           const [eh, em] = s.endTime.split(':').map(Number);
           let diff = (eh * 60 + em) - (sh * 60 + sm);
@@ -145,7 +160,7 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
       });
       const hours = (totalMins / 60).toFixed(1);
       const slots = Math.floor(totalMins / (parseInt(form.consultationTime) || 15));
-      return { hours, slots };
+      return { hours, slots, activeSlots };
   };
 
   return (
@@ -239,51 +254,87 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
                     </div>
 
                     {/* DAILY ROWS */}
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                         {form.schedule.map((daySchedule, idx) => {
                             const stats = getDayStats(daySchedule);
                             return (
-                                <div key={daySchedule.day} className={`rounded-xl border transition-all ${daySchedule.isOff ? 'bg-slate-50 border-slate-200 opacity-70' : 'bg-white border-slate-300 shadow-sm'}`}>
+                                <div key={daySchedule.day} className={`rounded-xl border transition-all overflow-hidden ${daySchedule.isOff ? 'bg-slate-50 border-slate-200 opacity-60' : 'bg-white border-slate-300 shadow-sm'}`}>
                                     {/* Row Header */}
-                                    <div className="flex items-center justify-between p-3 border-b border-slate-100/50 bg-slate-50/50 rounded-t-xl">
+                                    <div className="flex items-center justify-between p-3 border-b border-slate-100 bg-slate-50/50">
                                         <div className="flex items-center gap-3">
                                             <button 
                                                 type="button" 
                                                 onClick={() => toggleDayOff(idx)} 
-                                                className={`w-20 py-1 rounded text-xs font-bold border transition-colors text-center ${daySchedule.isOff ? 'bg-slate-200 text-slate-500 border-slate-300' : 'bg-green-500 text-white border-green-600 shadow-sm'}`}
+                                                className={`w-20 py-1.5 rounded-lg text-xs font-bold border transition-colors text-center ${daySchedule.isOff ? 'bg-slate-200 text-slate-500 border-slate-300 hover:bg-slate-300' : 'bg-green-500 text-white border-green-600 shadow-sm hover:bg-green-600'}`}
                                             >
-                                                {daySchedule.isOff ? 'OFF' : 'WORK'}
+                                                {daySchedule.isOff ? 'OFF' : 'WORKING'}
                                             </button>
-                                            <h4 className={`font-bold ${daySchedule.isOff ? 'text-slate-400' : 'text-slate-800'}`}>{daySchedule.day}</h4>
+                                            <h4 className={`font-bold text-sm ${daySchedule.isOff ? 'text-slate-400' : 'text-slate-800'}`}>{daySchedule.day}</h4>
                                         </div>
                                         {!daySchedule.isOff && stats && (
                                             <div className="flex items-center gap-3 text-xs">
-                                                <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100 font-medium">{stats.hours} Hrs Shift</span>
-                                                <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded border border-purple-100 font-medium">~{stats.slots} Slots</span>
+                                                <span className="text-slate-500 font-medium">{stats.activeSlots} Active Slots</span>
+                                                <div className="h-4 w-px bg-slate-200"></div>
+                                                <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100 font-bold">{stats.hours}h Total</span>
                                             </div>
                                         )}
                                     </div>
 
                                     {/* Row Content */}
                                     {!daySchedule.isOff && (
-                                        <div className="p-3">
-                                            <div className="flex flex-wrap items-center gap-3">
-                                                {(daySchedule.slots && daySchedule.slots.length > 0) ? (
-                                                    daySchedule.slots.map((slot, sIdx) => (
-                                                        <div key={sIdx} className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-1.5 shadow-sm group">
-                                                            <div className="bg-white border border-slate-200 rounded px-1.5 py-0.5">
-                                                                <input type="time" className="text-xs font-medium text-slate-700 bg-transparent outline-none w-[4.5rem] text-center" value={slot.startTime} onChange={(e) => updateSlot(idx, sIdx, 'startTime', e.target.value)} />
-                                                            </div>
-                                                            <ArrowRight className="h-3 w-3 text-slate-300" />
-                                                            <div className="bg-white border border-slate-200 rounded px-1.5 py-0.5">
-                                                                <input type="time" className="text-xs font-medium text-slate-700 bg-transparent outline-none w-[4.5rem] text-center" value={slot.endTime} onChange={(e) => updateSlot(idx, sIdx, 'endTime', e.target.value)} />
-                                                            </div>
-                                                            <button type="button" onClick={() => removeSlot(idx, sIdx)} className="ml-1 text-slate-300 hover:text-red-500 transition-colors p-0.5 rounded"><XIcon className="h-3.5 w-3.5" /></button>
-                                                        </div>
-                                                    ))
-                                                ) : <span className="text-xs text-slate-400 italic px-2">No active slots. Add one below.</span>}
+                                        <div className="p-3 bg-white">
+                                            <div className="flex flex-col gap-3">
                                                 
-                                                <button type="button" onClick={() => addSlot(idx)} className="h-9 w-9 rounded-lg border border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:text-primary-600 hover:border-primary-400 hover:bg-primary-50 transition-all" title="Add Slot"><Plus className="h-4 w-4" /></button>
+                                                {/* Slots List */}
+                                                {(daySchedule.slots && daySchedule.slots.length > 0) ? (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    {daySchedule.slots.map((slot, sIdx) => (
+                                                        <div key={sIdx} className={`flex items-center gap-3 p-2 rounded-lg border transition-all ${slot.active ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-50 border-slate-200 opacity-75'}`}>
+                                                            <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded px-2 py-1">
+                                                                <input type="time" className="text-xs font-bold text-slate-700 bg-transparent outline-none w-[4.5rem] text-center" value={slot.startTime} onChange={(e) => updateSlot(idx, sIdx, 'startTime', e.target.value)} />
+                                                                <ArrowRight className="h-3 w-3 text-slate-400" />
+                                                                <input type="time" className="text-xs font-bold text-slate-700 bg-transparent outline-none w-[4.5rem] text-center" value={slot.endTime} onChange={(e) => updateSlot(idx, sIdx, 'endTime', e.target.value)} />
+                                                            </div>
+                                                            
+                                                            <div className="flex-1">
+                                                                <Input 
+                                                                    className="h-8 text-xs py-1" 
+                                                                    placeholder="Label (e.g. Morning)" 
+                                                                    value={slot.label || ''} 
+                                                                    onChange={(e) => updateSlot(idx, sIdx, 'label', e.target.value)} 
+                                                                />
+                                                            </div>
+
+                                                            <div className="flex items-center gap-1">
+                                                                <button 
+                                                                    type="button" 
+                                                                    onClick={() => updateSlot(idx, sIdx, 'active', !slot.active)} 
+                                                                    className="p-1.5 rounded hover:bg-slate-100 transition-colors"
+                                                                    title={slot.active ? "Deactivate Slot" : "Activate Slot"}
+                                                                >
+                                                                    {slot.active ? <ToggleRight className="h-5 w-5 text-green-500" /> : <ToggleLeft className="h-5 w-5 text-slate-400" />}
+                                                                </button>
+                                                                
+                                                                <button type="button" onClick={() => removeSlot(idx, sIdx)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="Remove Slot">
+                                                                    <XIcon className="h-4 w-4" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    </div>
+                                                ) : <div className="text-xs text-slate-400 italic py-2 text-center border-2 border-dashed border-slate-100 rounded-lg">No active slots. Add one using buttons below.</div>}
+                                                
+                                                {/* Action Bar */}
+                                                <div className="flex items-center gap-2 pt-2 border-t border-slate-50 mt-1">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-2">Quick Add:</span>
+                                                    <button type="button" onClick={() => addCommonSlot(idx, 'MORNING')} className="px-2 py-1.5 rounded-lg bg-orange-50 text-orange-700 border border-orange-200 text-xs font-bold flex items-center gap-1.5 hover:bg-orange-100 transition-colors"><Sun className="h-3 w-3" /> Morning</button>
+                                                    <button type="button" onClick={() => addCommonSlot(idx, 'AFTERNOON')} className="px-2 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold flex items-center gap-1.5 hover:bg-blue-100 transition-colors"><CloudSun className="h-3 w-3" /> Afternoon</button>
+                                                    <button type="button" onClick={() => addCommonSlot(idx, 'EVENING')} className="px-2 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 hover:bg-indigo-100 transition-colors"><Moon className="h-3 w-3" /> Evening</button>
+                                                    <button type="button" onClick={() => addCommonSlot(idx, 'NIGHT')} className="px-2 py-1.5 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-700 transition-colors"><MoonStar className="h-3 w-3" /> Night</button>
+                                                    
+                                                    <div className="flex-1"></div>
+                                                    <button type="button" onClick={() => addSlot(idx)} className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-primary-600 hover:border-primary-300 hover:bg-primary-50 text-xs font-bold flex items-center gap-1.5 transition-colors"><Plus className="h-3 w-3" /> Custom Slot</button>
+                                                </div>
                                             </div>
                                         </div>
                                     )}

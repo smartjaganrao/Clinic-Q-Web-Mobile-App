@@ -3,9 +3,10 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Doctor, Patient, PatientStatus, ClinicType, Vitals, DaySchedule } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { Modal } from '../components/Modal';
 import { 
   UserPlus, Search, Filter, Stethoscope, List, Database, Calendar, 
-  Clock, XCircle, RefreshCw
+  Clock, XCircle, RefreshCw, History, User, Phone, Activity
 } from 'lucide-react';
 // Modular Features
 import { QueueTable } from '../features/reception/components/QueueTable';
@@ -73,6 +74,15 @@ const comparePatients = (a: Patient, b: Patient) => {
     return getSortTime(a) - getSortTime(b);
 };
 
+// Helper to get local date string YYYY-MM-DD
+const getLocalTodayStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     doctors, patients, clinicName, onAddPatient, onEditPatient, onDeletePatient, onDeleteMultiplePatients, 
     onAddDoctor, onCheckMasterDoctor, onEditDoctor, onDeleteDoctor, onUpdateStatus, onCancelPatient, onUpdateClinicName, 
@@ -94,6 +104,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
   const [editingDoctorData, setEditingDoctorData] = useState<Doctor | undefined>(undefined);
   
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [historyPatient, setHistoryPatient] = useState<Patient | null>(null);
   
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
@@ -102,31 +113,38 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
   }, []);
 
   // --- QUEUE ESTIMATION ENGINE ---
-  // Calculates expected service time for every waiting patient based on their doctor's queue
   const estimatedTimes = useMemo(() => {
     const estimates: Record<string, number> = {};
+    const todayStr = getLocalTodayStr();
     
     doctors.forEach(doc => {
-        // Get all waiting patients for this doctor, sorted by logical queue order
         const queue = patients
-            .filter(p => p.doctorId === doc.id && p.status === PatientStatus.WAITING)
+            .filter(p => {
+                if (p.doctorId !== doc.id || p.status !== PatientStatus.WAITING) return false;
+                if (p.visitType === 'APPOINTMENT' && p.appointmentDate !== todayStr) return false;
+                return true;
+            })
             .sort(comparePatients);
             
         let predictedTime = Date.now();
-        const duration = doc.consultationTime || 15; // Use configured time or default
+        const duration = doc.consultationTime || 15; 
         
-        // Add Doctor's manual delay
         if (doc.delayMinutes > 0) {
             predictedTime += doc.delayMinutes * 60000;
         }
 
-        // Add buffer if doctor is currently seeing someone
         const activePatient = patients.find(p => p.doctorId === doc.id && p.status === PatientStatus.WITH_DOCTOR);
         if (activePatient) {
-            predictedTime += Math.floor(duration * 0.7) * 60000; // Assume 70% of time remaining for current
+            predictedTime += Math.floor(duration * 0.7) * 60000;
         }
 
         queue.forEach(p => {
+            if (p.visitType === 'APPOINTMENT' && p.appointmentDate && p.appointmentTime) {
+                const apptTime = new Date(`${p.appointmentDate}T${p.appointmentTime}:00`).getTime();
+                if (!isNaN(apptTime) && predictedTime < apptTime) {
+                    predictedTime = apptTime;
+                }
+            }
             estimates[p.id] = predictedTime;
             predictedTime += duration * 60000; 
         });
@@ -138,23 +156,24 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
   // --- FILTER LOGIC ---
   const filteredPatients = useMemo(() => {
+    const todayStr = getLocalTodayStr();
+
     return patients
       .filter(p => {
-        // Doctor Filter
+        if (p.visitType === 'APPOINTMENT' && p.appointmentDate !== todayStr) {
+            return false;
+        }
         if (filterDoctorId !== 'ALL' && p.doctorId !== filterDoctorId) return false;
         
-        // Search Filter
         const q = searchQuery.toLowerCase();
         if (q && !p.name.toLowerCase().includes(q) && !p.phone.includes(q) && !p.tokenNumber.toString().includes(q)) return false;
         
-        // Status Filter
         if (filterStatus === 'ACTIVE') {
              if (p.status !== PatientStatus.WAITING && p.status !== PatientStatus.WITH_DOCTOR && p.status !== PatientStatus.ON_HOLD) return false;
         } else if (filterStatus !== 'ALL') {
              if (p.status !== filterStatus) return false;
         }
 
-        // Type Filter
         if (filterType !== 'ALL' && p.visitType !== filterType) return false;
 
         return true;
@@ -214,6 +233,41 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
       onEditDoctor(doctorId, { weeklySchedule: updatedSchedule });
   };
 
+  const handleSaveEditedPatient = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!editingPatient) return;
+      
+      const originalRecord = patients.find(p => p.id === editingPatient.id);
+      if (!originalRecord) return;
+      
+      // Bulk update demographics for all records of this patient
+      const originalPhone = originalRecord.phone;
+      const matchingIds = patients.filter(p => p.phone === originalPhone).map(p => p.id);
+      
+      matchingIds.forEach(id => {
+          onEditPatient(id, {
+              name: editingPatient.name,
+              age: editingPatient.age,
+              gender: editingPatient.gender,
+              phone: editingPatient.phone // Propagate phone change if any
+          });
+      });
+
+      // Update visit-specific details (symptoms) only for the specific record being edited
+      if (editingPatient.symptoms !== originalRecord.symptoms) {
+          onEditPatient(editingPatient.id, { symptoms: editingPatient.symptoms });
+      }
+
+      setEditingPatient(null);
+      addToast(`Updated profile and linked ${matchingIds.length} records`, "success");
+  };
+
+  const getPatientHistory = (patient: Patient) => {
+      return patients
+          .filter(p => p.phone === patient.phone)
+          .sort((a, b) => b.timeAdded - a.timeAdded);
+  };
+
   const clearFilters = () => {
       setSearchQuery('');
       setFilterDoctorId('ALL');
@@ -259,9 +313,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} 
                             />
                         </div>
-                        {activeTab === 'QUEUE' && (
-                            <Button className="w-full sm:w-auto shadow-sm" onClick={() => setIsPatientModalOpen(true)}> <UserPlus className="h-4 w-4 mr-2" /> Add Patient </Button>
-                        )}
+                        <Button className="w-full sm:w-auto shadow-sm" onClick={() => setIsPatientModalOpen(true)}> <UserPlus className="h-4 w-4 mr-2" /> Add Patient </Button>
                     </div>
 
                     {/* Bottom Row: Filters (Queue Only) */}
@@ -271,7 +323,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 <Filter className="h-3 w-3" /> Filters:
                             </div>
                             
-                            {/* Doctor Filter */}
                             <select 
                                 className="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2 min-w-[140px]"
                                 value={filterDoctorId} 
@@ -281,7 +332,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                             </select>
 
-                            {/* Status Filter */}
                             <select 
                                 className="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2"
                                 value={filterStatus} 
@@ -296,7 +346,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 <option value={PatientStatus.ON_HOLD}>On Hold</option>
                             </select>
 
-                            {/* Type Filter */}
                             <select 
                                 className="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2"
                                 value={filterType} 
@@ -332,7 +381,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     onDragDrop={onDragDrop}
                     onManualCheckIn={onManualCheckIn}
                     onEditPatient={(p) => setEditingPatient(p)}
-                    onVitalsClick={(p) => addToast("Vitals Modal functionality preserved but hidden in refactor for brevity", "info")}
+                    onVitalsClick={(p) => addToast("Vitals View", "info")}
                     onToggleEmergency={onToggleEmergency}
                     onCancelPatient={onCancelPatient}
                 />
@@ -342,9 +391,9 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 <PatientDatabaseTable 
                     patients={uniquePatients}
                     doctors={doctors}
-                    onHistoryClick={(p) => addToast(`History for ${p.name}`, "info")}
+                    onHistoryClick={(p) => setHistoryPatient(p)}
                     onEditClick={(p) => setEditingPatient(p)}
-                    onDeleteClick={(p) => { if(window.confirm('Delete all records for this patient?')) onDeleteMultiplePatients(patients.filter(pat => pat.phone === p.phone).map(pat => pat.id)); }}
+                    onDeleteClick={(p) => { if(window.confirm(`WARNING: This will permanently delete all history for ${p.name}. Continue?`)) onDeleteMultiplePatients(patients.filter(pat => pat.phone === p.phone).map(pat => pat.id)); }}
                 />
             )}
 
@@ -379,21 +428,79 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             addToast={addToast}
         />
         
-        {editingPatient && (
-             <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                 <div className="bg-white p-6 rounded-lg shadow-xl animate-in zoom-in-95">
-                     <h3 className="text-lg font-bold mb-4">Edit Patient</h3>
-                     <p className="text-sm text-slate-500 mb-4">Editing details for {editingPatient.name}</p>
-                     <div className="mb-4">
-                        <Input label="Full Name" value={editingPatient.name} onChange={(e) => setEditingPatient({...editingPatient, name: e.target.value})} />
+        {/* EDIT PATIENT MODAL */}
+        <Modal isOpen={!!editingPatient} onClose={() => setEditingPatient(null)} title="Edit Patient Profile" maxWidth="max-w-md">
+             {editingPatient && (
+                 <form onSubmit={handleSaveEditedPatient} className="space-y-4">
+                     <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 mb-2 border border-blue-100 flex gap-2">
+                         <Activity className="h-5 w-5 flex-shrink-0" />
+                         <p>Changes to Name, Age, Gender, and Phone will apply to <strong>all past visits</strong> for this patient.</p>
                      </div>
-                     <div className="flex justify-end gap-2">
-                         <Button variant="secondary" onClick={() => setEditingPatient(null)}>Close</Button>
-                         <Button onClick={() => { onEditPatient(editingPatient.id, { name: editingPatient.name }); setEditingPatient(null); addToast("Patient updated", "success"); }}>Save</Button>
+                     <Input label="Full Name" value={editingPatient.name} onChange={(e) => setEditingPatient({...editingPatient, name: e.target.value})} required />
+                     <div className="grid grid-cols-2 gap-4">
+                         <Input label="Age" value={editingPatient.age || ''} onChange={(e) => setEditingPatient({...editingPatient, age: e.target.value})} />
+                         <div>
+                             <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
+                             <select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={editingPatient.gender} onChange={(e) => setEditingPatient({...editingPatient, gender: e.target.value as any})}><option>Male</option><option>Female</option><option>Other</option></select>
+                         </div>
                      </div>
-                 </div>
-             </div>
-        )}
+                     <Input label="Phone Number" value={editingPatient.phone} onChange={(e) => setEditingPatient({...editingPatient, phone: e.target.value})} required />
+                     <div>
+                         <label className="block text-sm font-medium text-slate-700 mb-1">Symptoms (Current Visit)</label>
+                         <textarea className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm h-20 resize-none" value={editingPatient.symptoms || ''} onChange={(e) => setEditingPatient({...editingPatient, symptoms: e.target.value})} placeholder="e.g. Fever, Cough" />
+                     </div>
+                     <div className="pt-2 flex justify-end gap-3">
+                         <Button variant="secondary" type="button" onClick={() => setEditingPatient(null)}>Cancel</Button>
+                         <Button type="submit">Save Changes</Button>
+                     </div>
+                 </form>
+             )}
+        </Modal>
+
+        {/* HISTORY MODAL */}
+        <Modal isOpen={!!historyPatient} onClose={() => setHistoryPatient(null)} title="Patient History" maxWidth="max-w-2xl">
+            {historyPatient && (() => {
+                const history = getPatientHistory(historyPatient);
+                return (
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg">{historyPatient.name.charAt(0)}</div>
+                            <div>
+                                <h4 className="font-bold text-slate-900 text-lg">{historyPatient.name}</h4>
+                                <div className="flex items-center gap-3 text-sm text-slate-500">
+                                    <span className="flex items-center gap-1"><User className="h-3 w-3" /> {historyPatient.age} Yrs • {historyPatient.gender}</span>
+                                    <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {historyPatient.phone}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="space-y-4 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                            {history.map(visit => {
+                                const doc = doctors.find(d => d.id === visit.doctorId);
+                                return (
+                                    <div key={visit.id} className="relative pl-10">
+                                        <div className="absolute left-2.5 top-3 w-3 h-3 rounded-full bg-slate-400 ring-4 ring-white"></div>
+                                        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:border-primary-200 transition-colors">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <span className="text-xs font-bold text-slate-500 uppercase">{new Date(visit.timeAdded).toLocaleDateString()}</span>
+                                                    <h5 className="font-bold text-slate-900">Dr. {doc?.name || 'Unknown'}</h5>
+                                                </div>
+                                                <span className={`px-2 py-1 rounded text-[10px] font-bold ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>{visit.status}</span>
+                                            </div>
+                                            {visit.symptoms && <p className="text-sm text-slate-600 mb-2"><strong>Reason:</strong> {visit.symptoms}</p>}
+                                            {visit.diagnosis && <p className="text-sm text-slate-600 mb-2"><strong>Diagnosis:</strong> {visit.diagnosis}</p>}
+                                            {visit.notes && <div className="bg-slate-50 p-2 rounded text-xs text-slate-500 italic border border-slate-100">{visit.notes}</div>}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        {history.length === 0 && <p className="text-center text-slate-400 py-8">No history found.</p>}
+                    </div>
+                );
+            })()}
+        </Modal>
     </div>
   );
 };

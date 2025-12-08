@@ -634,7 +634,10 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           const [startH, startM] = slot.startTime.split(':').map(Number); 
           const [endH, endM] = slot.endTime.split(':').map(Number); 
           const startMins = startH * 60 + startM; 
-          const endMins = endH * 60 + endM; 
+          let endMins = endH * 60 + endM;
+          // Handle overnight wrap
+          if (endMins <= startMins) endMins += 24 * 60;
+          
           return currentMins >= startMins && currentMins < endMins; 
       }); 
   }, [selectedDoctor]);
@@ -644,7 +647,68 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   
   // Memoized Booking Dates/Slots (same logic)
   const bookingDates = useMemo(() => { if (!selectedDoctor) return []; const days = []; const today = new Date(); for(let i=0; i<14; i++) { const d = new Date(today); d.setDate(today.getDate() + i); const dayName = d.toLocaleDateString('en-US', { weekday: 'long' }); const schedule = selectedDoctor.weeklySchedule.find(s => s.day === dayName); days.push({ date: d, dateStr: d.toISOString().split('T')[0], dayShort: d.toLocaleDateString('en-US', { weekday: 'short' }), dayNum: d.getDate(), isOff: !schedule || schedule.isOff, schedule }); } return days; }, [selectedDoctor]);
-  const groupedTimeSlots = useMemo<GroupedSlots>(() => { const groups: GroupedSlots = { Morning: [], Afternoon: [], Evening: [] }; if (!selectedDoctor || !apptDate) return groups; const selectedDayObj = bookingDates.find(d => d.dateStr === apptDate); if (!selectedDayObj || selectedDayObj.isOff || !selectedDayObj.schedule) return groups; selectedDayObj.schedule.slots.forEach(timeSlot => { const { startTime, endTime } = timeSlot; const [startH, startM] = startTime.split(':').map(Number); const [endH, endM] = endTime.split(':').map(Number); let currentMins = startH * 60 + startM; const endMins = endH * 60 + endM; const shiftStartMins = startH * 60 + startM; const now = new Date(); const isToday = apptDate === now.toISOString().split('T')[0]; const nowMins = now.getHours() * 60 + now.getMinutes(); if (isToday && nowMins >= shiftStartMins) { return; } const MIN_NOTICE_MINS = 30; while (currentMins + 15 <= endMins) { if (!isToday || currentMins > (nowMins + MIN_NOTICE_MINS)) { const h = Math.floor(currentMins / 60); const m = currentMins % 60; const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`; const suffix = h >= 12 ? 'PM' : 'AM'; const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h; const displayStr = `${displayH}:${m.toString().padStart(2, '0')} ${suffix}`; const slotObj = { value: timeStr, label: displayStr }; if (h < 12) groups.Morning.push(slotObj); else if (h < 17) groups.Afternoon.push(slotObj); else groups.Evening.push(slotObj); } currentMins += 15; } }); return groups; }, [selectedDoctor, apptDate, bookingDates]);
+  
+  const groupedTimeSlots = useMemo<GroupedSlots>(() => { 
+      const groups: GroupedSlots = { Morning: [], Afternoon: [], Evening: [] }; 
+      if (!selectedDoctor || !apptDate) return groups; 
+      const selectedDayObj = bookingDates.find(d => d.dateStr === apptDate); 
+      if (!selectedDayObj || selectedDayObj.isOff || !selectedDayObj.schedule) return groups; 
+      
+      selectedDayObj.schedule.slots.forEach(timeSlot => { 
+          const { startTime, endTime } = timeSlot; 
+          const [startH, startM] = startTime.split(':').map(Number); 
+          const [endH, endM] = endTime.split(':').map(Number); 
+          let currentMins = startH * 60 + startM; 
+          let endMins = endH * 60 + endM; 
+          const shiftStartMins = startH * 60 + startM; 
+          
+          // Fix for overnight slots (e.g., 22:00 to 06:00)
+          if (endMins <= currentMins) endMins += 24 * 60;
+
+          const now = new Date(); 
+          const isToday = apptDate === now.toISOString().split('T')[0]; 
+          const nowMins = now.getHours() * 60 + now.getMinutes(); 
+          
+          if (isToday && nowMins >= shiftStartMins) { 
+              // If shift started, we might allow late booking or not. 
+              // Usually appointments must be future. 
+              // But for this demo, let's just use currentMins logic inside loop
+          } 
+          
+          const MIN_NOTICE_MINS = 30; 
+          
+          while (currentMins + 15 <= endMins) { 
+              if (!isToday || currentMins > (nowMins + MIN_NOTICE_MINS)) { 
+                  // Normalize for display (modulo 24h)
+                  let displayMins = currentMins % (24 * 60);
+                  
+                  const h = Math.floor(displayMins / 60); 
+                  const m = displayMins % 60; 
+                  const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`; 
+                  const suffix = h >= 12 ? 'PM' : 'AM'; 
+                  const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h; 
+                  const displayStr = `${displayH}:${m.toString().padStart(2, '0')} ${suffix}`; 
+                  const slotObj = { value: timeStr, label: displayStr }; 
+                  
+                  // Bucketing logic based on start hour
+                  // Night slots (e.g. 22:00+) go to Evening bucket for simplicity or new bucket?
+                  // Existing buckets: Morning < 12, Afternoon < 17, Evening >= 17
+                  // 22:00, 23:00, 00:00, 01:00... 
+                  // If it's next day early morning (00:00 - 06:00), technically "Night"
+                  // But our UI has Morning/Afternoon/Evening tabs. 
+                  // Let's put 00:00-04:00 into Evening (Late Night) or Morning?
+                  // Usually 00-04 is "Late Night" -> Evening bucket works best for UI
+                  
+                  if (h >= 4 && h < 12) groups.Morning.push(slotObj); 
+                  else if (h >= 12 && h < 17) groups.Afternoon.push(slotObj); 
+                  else groups.Evening.push(slotObj); 
+              } 
+              currentMins += 15; 
+          } 
+      }); 
+      return groups; 
+  }, [selectedDoctor, apptDate, bookingDates]);
+  
   const hasAnySlots = useMemo(() => { return groupedTimeSlots.Morning.length > 0 || groupedTimeSlots.Afternoon.length > 0 || groupedTimeSlots.Evening.length > 0; }, [groupedTimeSlots]);
 
   const getDoctorTodaySchedule = (doc: any) => { const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']; const today = days[new Date().getDay()]; const schedule = doc.weeklySchedule.find((s: any) => s.day === today); if (!schedule || schedule.isOff) return <span className="text-red-500 font-bold text-[10px]">OFF Today</span>; if (schedule.slots.length === 1) return <span className="text-green-700 font-bold text-[10px]">{schedule.slots[0].startTime} - {schedule.slots[0].endTime}</span>; return <span className="text-green-700 font-bold text-[10px]">{schedule.slots.length} Shifts Today</span>; };

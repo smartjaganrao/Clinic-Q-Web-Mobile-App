@@ -54,6 +54,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
               // Formatting Times
               const estTimeMs = estimatedTimes[patient.id];
               const estTimeStr = estTimeMs ? new Date(estTimeMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--';
+              const waitMins = estTimeMs ? Math.max(0, Math.ceil((estTimeMs - Date.now()) / 60000)) : 0;
               const isAppt = patient.visitType === 'APPOINTMENT';
 
               return (
@@ -86,9 +87,10 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                       {isAppt ? (
                           <div className="flex flex-col">
                               <span className="text-purple-700 font-bold flex items-center gap-1 text-sm bg-purple-50 px-2 py-0.5 rounded-md w-fit border border-purple-100">
-                                  <Calendar className="h-3 w-3" /> {patient.appointmentTime}
+                                  <Calendar className="h-3 w-3" />
+                                  {patient.appointmentDate} {patient.appointmentTime}
                               </span>
-                              <span className="text-[10px] text-slate-400 mt-0.5">Appointment</span>
+                              <span className="text-[10px] text-slate-400 mt-0.5">Scheduled Appointment</span>
                           </div>
                       ) : (
                           <div className="flex flex-col">
@@ -130,7 +132,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                               <span className="text-sm font-bold text-slate-700 flex items-center gap-1">
                                   <Clock className="h-3 w-3 text-slate-400" /> {estTimeStr}
                               </span>
-                              <span className="text-[10px] text-slate-400">approximate</span>
+                              <span className="text-[10px] text-slate-500 font-medium">in ~{waitMins} mins</span>
                           </div>
                       ) : (
                           <span className="text-slate-400 text-xs">--</span>
