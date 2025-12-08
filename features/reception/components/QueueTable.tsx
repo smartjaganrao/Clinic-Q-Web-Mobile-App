@@ -193,64 +193,104 @@ export const QueueTable: React.FC<QueueTableProps> = ({
 
                   {/* ACTIONS */}
                   <td className="px-4 py-4 text-right rounded-r-xl">
-                    <div className="flex justify-end gap-1 items-center">
+                    <div className="flex justify-end gap-2 items-center">
+                      
+                      {/* WAITING STATE ACTIONS */}
                       {isWaiting && (
                         <>
+                          {/* Primary Action: Call (if checked in) or Check In (if not) */}
                           {patient.isCheckedIn ? (
-                            <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm shadow-blue-200 transition-all active:scale-95 text-xs font-bold mr-1" title="Call Patient">
-                              <PlayCircle className="h-3.5 w-3.5" /> Call
+                            <button 
+                                onClick={() => onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR)} 
+                                className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm shadow-blue-200 transition-all active:scale-95 text-xs font-bold" 
+                                title="Call Patient to Room"
+                            >
+                              <PlayCircle className="h-4 w-4" /> Call
                             </button>
                           ) : (
-                            <button disabled className="p-2 text-slate-300 bg-slate-50 rounded-lg cursor-not-allowed border border-slate-100 mr-1">
-                              <PlayCircle className="h-4 w-4" />
+                            <button 
+                                onClick={() => onManualCheckIn(patient.id)} 
+                                className="flex items-center gap-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm shadow-emerald-200 transition-all active:scale-95 text-xs font-bold" 
+                                title="Mark as Arrived"
+                            >
+                              <UserCheck className="h-4 w-4" /> Arrived
                             </button>
                           )}
                         </>
                       )}
 
+                      {/* ON HOLD ACTIONS */}
                       {isOnHold && (
-                          <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WAITING)} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm shadow-green-200 transition-all active:scale-95 text-xs font-bold mr-1" title="Resume to Queue">
-                              <Play className="h-3.5 w-3.5" /> Resume
+                          <button 
+                            onClick={() => onUpdateStatus(patient.id, PatientStatus.WAITING)} 
+                            className="flex items-center gap-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm shadow-green-200 transition-all active:scale-95 text-xs font-bold" 
+                            title="Resume to Queue"
+                          >
+                              <Play className="h-4 w-4" /> Resume
                           </button>
                       )}
                       
+                      {/* SERVING ACTIONS */}
                       {isServing && (
-                        <button onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm shadow-green-200 transition-all active:scale-95 text-xs font-bold mr-1" title="Finish Visit">
-                          <CheckSquare className="h-3.5 w-3.5" /> Done
+                        <button 
+                            onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)} 
+                            className="flex items-center gap-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm shadow-green-200 transition-all active:scale-95 text-xs font-bold" 
+                            title="Finish Visit"
+                        >
+                          <CheckSquare className="h-4 w-4" /> Done
                         </button>
                       )}
                       
                       {/* Secondary Actions Group */}
-                      <div className="flex items-center bg-slate-50 rounded-lg border border-slate-200 p-0.5">
-                          {!patient.isCheckedIn && isWaiting && (
-                            <button onClick={() => onManualCheckIn(patient.id)} className="p-1.5 text-slate-500 hover:text-purple-600 hover:bg-white rounded-md transition-colors" title="Check In">
-                              <UserCheck className="h-3.5 w-3.5" />
-                            </button>
-                          )}
+                      <div className="flex items-center gap-1">
                           
-                          <button onClick={() => onEditPatient(patient)} className="p-1.5 text-slate-500 hover:text-primary-600 hover:bg-white rounded-md transition-colors" title="Edit">
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </button>
-
                           {(isWaiting || isOnHold) && (
                             <>
-                                <div className="w-px h-3 bg-slate-200 mx-0.5"></div>
-                                
+                                {/* Vitals Button */}
+                                <button 
+                                    onClick={() => onVitalsClick(patient)} 
+                                    className={`p-2 rounded-lg transition-colors ${hasVitals ? 'bg-pink-100 text-pink-700 border border-pink-200' : 'bg-slate-100 text-slate-500 hover:bg-pink-50 hover:text-pink-600 border border-slate-200 hover:border-pink-200'}`} 
+                                    title="Record Vitals"
+                                >
+                                    <Activity className="h-4 w-4" />
+                                </button>
+
                                 {/* Hold Button - Only for Waiting */}
                                 {isWaiting && (
-                                    <button onClick={() => onUpdateStatus(patient.id, PatientStatus.ON_HOLD)} className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-white rounded-md transition-colors" title="Hold Patient">
-                                        <PauseCircle className="h-3.5 w-3.5" />
+                                    <button 
+                                        onClick={() => onUpdateStatus(patient.id, PatientStatus.ON_HOLD)} 
+                                        className="p-2 bg-slate-100 text-slate-500 hover:bg-amber-50 hover:text-amber-600 rounded-lg transition-colors border border-slate-200 hover:border-amber-200" 
+                                        title="Put On Hold"
+                                    >
+                                        <PauseCircle className="h-4 w-4" />
                                     </button>
                                 )}
 
-                                <button onClick={() => onVitalsClick(patient)} className={`p-1.5 rounded-md transition-colors ${hasVitals ? 'text-red-500 bg-red-50' : 'text-slate-400 hover:text-red-500 hover:bg-white'}`} title="Vitals">
-                                <Activity className="h-3.5 w-3.5" />
+                                {/* Edit Button */}
+                                <button 
+                                    onClick={() => onEditPatient(patient)} 
+                                    className="p-2 bg-slate-100 text-slate-500 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors border border-slate-200 hover:border-blue-200" 
+                                    title="Edit Details"
+                                >
+                                    <Edit2 className="h-4 w-4" />
                                 </button>
-                                <button onClick={() => onToggleEmergency(patient.id)} className={`p-1.5 rounded-md transition-colors ${patient.isEmergency ? 'text-red-600 bg-red-100' : 'text-slate-400 hover:text-orange-500 hover:bg-white'}`} title="Emergency">
-                                <AlertTriangle className="h-3.5 w-3.5" />
+
+                                {/* Emergency Toggle */}
+                                <button 
+                                    onClick={() => onToggleEmergency(patient.id)} 
+                                    className={`p-2 rounded-lg transition-colors border ${patient.isEmergency ? 'bg-red-100 text-red-600 border-red-200' : 'bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-600 border-slate-200 hover:border-red-200'}`} 
+                                    title="Toggle Emergency"
+                                >
+                                    <AlertTriangle className="h-4 w-4" />
                                 </button>
-                                <button onClick={() => { if(window.confirm('Cancel visit?')) onCancelPatient(patient.id); }} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-white rounded-md transition-colors" title="Cancel">
-                                <XCircle className="h-3.5 w-3.5" />
+
+                                {/* Cancel Button */}
+                                <button 
+                                    onClick={() => { if(window.confirm('Cancel visit?')) onCancelPatient(patient.id); }} 
+                                    className="p-2 bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors border border-slate-200 hover:border-red-100" 
+                                    title="Cancel Visit"
+                                >
+                                    <XCircle className="h-4 w-4" />
                                 </button>
                             </>
                           )}

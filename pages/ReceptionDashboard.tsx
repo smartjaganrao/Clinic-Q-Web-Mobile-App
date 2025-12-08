@@ -6,7 +6,7 @@ import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
 import { 
   UserPlus, Search, Filter, Stethoscope, List, Database, Calendar, 
-  Clock, XCircle, RefreshCw, History, User, Phone, Activity, PlayCircle, PauseCircle, ChevronRight
+  Clock, XCircle, RefreshCw, History, User, Phone, Activity, PlayCircle, PauseCircle, ChevronRight, Thermometer, Heart, Weight, Zap, Droplets
 } from 'lucide-react';
 // Modular Features
 import { QueueTable } from '../features/reception/components/QueueTable';
@@ -105,6 +105,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
   
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [historyPatient, setHistoryPatient] = useState<Patient | null>(null);
+  const [vitalsPatient, setVitalsPatient] = useState<Patient | null>(null);
   
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
@@ -294,6 +295,15 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
       setEditingPatient(null);
       addToast(`Updated profile and linked ${matchingIds.length} records`, "success");
+  };
+
+  const handleSaveVitals = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!vitalsPatient) return;
+      
+      onEditPatient(vitalsPatient.id, { vitals: vitalsPatient.vitals });
+      setVitalsPatient(null);
+      addToast('Vitals updated', 'success');
   };
 
   const getPatientHistory = (patient: Patient) => {
@@ -491,7 +501,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     onDragDrop={onDragDrop}
                     onManualCheckIn={onManualCheckIn}
                     onEditPatient={(p) => setEditingPatient(p)}
-                    onVitalsClick={(p) => addToast("Vitals View", "info")}
+                    onVitalsClick={(p) => setVitalsPatient(p)}
                     onToggleEmergency={onToggleEmergency}
                     onCancelPatient={onCancelPatient}
                 />
@@ -566,6 +576,79 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                      </div>
                  </form>
              )}
+        </Modal>
+
+        {/* VITALS MODAL */}
+        <Modal isOpen={!!vitalsPatient} onClose={() => setVitalsPatient(null)} title="Record Vitals" maxWidth="max-w-2xl">
+            {vitalsPatient && (
+                <form onSubmit={handleSaveVitals} className="space-y-6">
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 bg-white rounded-full flex items-center justify-center text-slate-500 font-bold border border-slate-200">
+                                {vitalsPatient.tokenNumber}
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-slate-900">{vitalsPatient.name}</h3>
+                                <p className="text-xs text-slate-500">{vitalsPatient.age} Yrs • {vitalsPatient.gender}</p>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <div className="text-xs font-bold text-slate-400 uppercase">Status</div>
+                            <span className={`text-sm font-bold ${vitalsPatient.status === PatientStatus.WAITING ? 'text-orange-600' : 'text-blue-600'}`}>{vitalsPatient.status}</span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Activity className="h-3 w-3" /> Blood Pressure</label>
+                            <div className="relative">
+                                <Input placeholder="120/80" value={vitalsPatient.vitals?.bp || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, bp: e.target.value}})} className="pl-3" />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">mmHg</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Thermometer className="h-3 w-3" /> Temperature</label>
+                            <div className="relative">
+                                <Input placeholder="98.6" value={vitalsPatient.vitals?.temp || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, temp: e.target.value}})} />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">°F</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Heart className="h-3 w-3" /> Pulse Rate</label>
+                            <div className="relative">
+                                <Input placeholder="72" value={vitalsPatient.vitals?.pulse || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, pulse: e.target.value}})} />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">bpm</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Weight className="h-3 w-3" /> Weight</label>
+                            <div className="relative">
+                                <Input placeholder="65" value={vitalsPatient.vitals?.weight || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, weight: e.target.value}})} />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">kg</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Zap className="h-3 w-3" /> SpO2</label>
+                            <div className="relative">
+                                <Input placeholder="98" value={vitalsPatient.vitals?.spo2 || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, spo2: e.target.value}})} />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Droplets className="h-3 w-3" /> Blood Sugar</label>
+                            <div className="relative">
+                                <Input placeholder="100" value={vitalsPatient.vitals?.sugar || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, sugar: e.target.value}})} />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">mg/dL</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+                        <Button variant="secondary" type="button" onClick={() => setVitalsPatient(null)}>Cancel</Button>
+                        <Button type="submit">Save Vitals</Button>
+                    </div>
+                </form>
+            )}
         </Modal>
 
         {/* HISTORY MODAL */}
