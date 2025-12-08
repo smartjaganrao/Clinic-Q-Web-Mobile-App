@@ -341,7 +341,7 @@ export default function App() {
   };
 
   // DOCTOR MANAGEMENT
-  const handleAddDoctor = (name: string, specialty: string, room: string, schedule: DaySchedule[], mobile?: string, regNo?: string, masterId?: string, avatarUrl?: string) => {
+  const handleAddDoctor = (name: string, specialty: string, room: string, schedule: DaySchedule[], mobile?: string, regNo?: string, masterId?: string, avatarUrl?: string, fee?: number, time?: number) => {
       if (!currentClinicId) return;
       const newMasterId = masterId || `master_${Date.now()}`;
       const newDoc: Doctor = {
@@ -352,7 +352,8 @@ export default function App() {
           weeklySchedule: schedule,
           isAvailable: true, status: DoctorStatus.AVAILABLE,
           delayMinutes: 0,
-          consultationFee: 500, rating: 5.0, reviewCount: 0,
+          consultationFee: fee || 500, rating: 5.0, reviewCount: 0,
+          consultationTime: time || 15,
           avatarUrl: avatarUrl || `https://i.pravatar.cc/150?u=${newMasterId}`
       };
       setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, doctors: [...c.doctors, newDoc] } : c));

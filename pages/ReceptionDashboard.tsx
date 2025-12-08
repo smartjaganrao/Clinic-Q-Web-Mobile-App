@@ -4,7 +4,8 @@ import { Doctor, Patient, PatientStatus, ClinicType, Vitals, DaySchedule } from 
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { 
-  UserPlus, Search, Filter, Stethoscope, List, Database, Calendar
+  UserPlus, Search, Filter, Stethoscope, List, Database, Calendar, 
+  Clock, XCircle, RefreshCw
 } from 'lucide-react';
 // Modular Features
 import { QueueTable } from '../features/reception/components/QueueTable';
@@ -22,7 +23,7 @@ interface ReceptionDashboardProps {
   onEditPatient: (id: string, updates: Partial<Patient>) => void;
   onDeletePatient: (id: string) => void;
   onDeleteMultiplePatients: (ids: string[]) => void;
-  onAddDoctor: (name: string, specialty: string, room: string, schedule: DaySchedule[], mobile?: string, regNo?: string, masterId?: string, avatarUrl?: string) => void;
+  onAddDoctor: (name: string, specialty: string, room: string, schedule: DaySchedule[], mobile?: string, regNo?: string, masterId?: string, avatarUrl?: string, fee?: number, time?: number) => void;
   onCheckMasterDoctor: (mobile: string) => Doctor | null;
   onEditDoctor: (id: string, updates: Partial<Doctor>) => void;
   onDeleteDoctor: (id: string) => void;
@@ -36,14 +37,54 @@ interface ReceptionDashboardProps {
   addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
+// --- SORTING HELPERS ---
+const getSortTime = (p: Patient) => {
+    // For Appointments, effective queue time is their Scheduled Time.
+    // For Walk-ins, effective queue time is their Arrival Time (timeAdded).
+    if (p.visitType === 'APPOINTMENT' && p.appointmentDate && p.appointmentTime) {
+        return new Date(`${p.appointmentDate}T${p.appointmentTime}:00`).getTime();
+    }
+    return p.timeAdded;
+};
+
+const comparePatients = (a: Patient, b: Patient) => {
+    // 1. Status Priority: WITH_DOCTOR > WAITING > ON_HOLD > COMPLETED/CANCELLED
+    const statusScore = (s: PatientStatus) => {
+        if (s === PatientStatus.WITH_DOCTOR) return 0;
+        if (s === PatientStatus.WAITING) return 1;
+        if (s === PatientStatus.ON_HOLD) return 2;
+        return 3;
+    };
+    
+    if (statusScore(a.status) !== statusScore(b.status)) {
+        return statusScore(a.status) - statusScore(b.status);
+    }
+    
+    // 2. Emergency Priority (Only applies to active queue: WAITING or WITH_DOCTOR)
+    // Emergency patients bump to the top of their status group.
+    if (a.status === PatientStatus.WAITING || a.status === PatientStatus.WITH_DOCTOR) {
+        if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
+    }
+    
+    // 3. Time-based Sorting (The Hybrid Queue)
+    // Compares "Scheduled Time" vs "Arrival Time"
+    // e.g., A Walk-in at 9:00 AM comes before an Appointment at 9:15 AM.
+    // e.g., An Appointment at 9:00 AM (even if late) comes before a Walk-in at 9:05 AM.
+    return getSortTime(a) - getSortTime(b);
+};
+
 export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     doctors, patients, clinicName, onAddPatient, onEditPatient, onDeletePatient, onDeleteMultiplePatients, 
     onAddDoctor, onCheckMasterDoctor, onEditDoctor, onDeleteDoctor, onUpdateStatus, onCancelPatient, onUpdateClinicName, 
     onToggleEmergency, onManualReorder, onDragDrop, onManualCheckIn, addToast
 }) => {
   const [activeTab, setActiveTab] = useState<'QUEUE' | 'DATABASE' | 'DOCTORS' | 'SCHEDULE'>('QUEUE');
+  
+  // Filters State
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDoctorId, setFilterDoctorId] = useState<string>('ALL');
+  const [filterStatus, setFilterStatus] = useState<string>('ACTIVE'); // ACTIVE (Wait+WithDoc), ALL, COMPLETED...
+  const [filterType, setFilterType] = useState<string>('ALL'); // ALL, WALK_IN, APPOINTMENT
   
   // Modal States
   const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
@@ -54,38 +95,75 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
   
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   
-  // NOTE: Simple Vitals/Delete/History modals are kept inline or can be refactored later for Phase 3. 
-  // For brevity in this refactor, I will keep simplified handling or placeholders if they are not complex.
-  // Actually, let's keep them here as simple states to pass down callbacks, preserving functionality.
-  
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
       const interval = setInterval(() => setCurrentTime(Date.now()), 60000);
       return () => clearInterval(interval);
   }, []);
 
-  // Filter Logic for Queue
+  // --- QUEUE ESTIMATION ENGINE ---
+  // Calculates expected service time for every waiting patient based on their doctor's queue
+  const estimatedTimes = useMemo(() => {
+    const estimates: Record<string, number> = {};
+    
+    doctors.forEach(doc => {
+        // Get all waiting patients for this doctor, sorted by logical queue order
+        const queue = patients
+            .filter(p => p.doctorId === doc.id && p.status === PatientStatus.WAITING)
+            .sort(comparePatients);
+            
+        let predictedTime = Date.now();
+        const duration = doc.consultationTime || 15; // Use configured time or default
+        
+        // Add Doctor's manual delay
+        if (doc.delayMinutes > 0) {
+            predictedTime += doc.delayMinutes * 60000;
+        }
+
+        // Add buffer if doctor is currently seeing someone
+        const activePatient = patients.find(p => p.doctorId === doc.id && p.status === PatientStatus.WITH_DOCTOR);
+        if (activePatient) {
+            predictedTime += Math.floor(duration * 0.7) * 60000; // Assume 70% of time remaining for current
+        }
+
+        queue.forEach(p => {
+            estimates[p.id] = predictedTime;
+            predictedTime += duration * 60000; 
+        });
+    });
+    
+    return estimates;
+  }, [patients, doctors, currentTime]);
+
+
+  // --- FILTER LOGIC ---
   const filteredPatients = useMemo(() => {
     return patients
       .filter(p => {
-        const matchDoc = filterDoctorId === 'ALL' || p.doctorId === filterDoctorId;
-        const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.phone.includes(searchQuery) || p.tokenNumber.toString().includes(searchQuery);
-        const isActiveStatus = p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR;
-        return matchDoc && matchSearch && isActiveStatus;
+        // Doctor Filter
+        if (filterDoctorId !== 'ALL' && p.doctorId !== filterDoctorId) return false;
+        
+        // Search Filter
+        const q = searchQuery.toLowerCase();
+        if (q && !p.name.toLowerCase().includes(q) && !p.phone.includes(q) && !p.tokenNumber.toString().includes(q)) return false;
+        
+        // Status Filter
+        if (filterStatus === 'ACTIVE') {
+             if (p.status !== PatientStatus.WAITING && p.status !== PatientStatus.WITH_DOCTOR && p.status !== PatientStatus.ON_HOLD) return false;
+        } else if (filterStatus !== 'ALL') {
+             if (p.status !== filterStatus) return false;
+        }
+
+        // Type Filter
+        if (filterType !== 'ALL' && p.visitType !== filterType) return false;
+
+        return true;
       })
-      .sort((a, b) => {
-          if (a.status === PatientStatus.WITH_DOCTOR && b.status !== PatientStatus.WITH_DOCTOR) return -1;
-          if (a.status !== PatientStatus.WITH_DOCTOR && b.status === PatientStatus.WITH_DOCTOR) return 1;
-          // ... (Complex sort logic preserved implicitly by order of operations in original)
-          // Simplified sort for brevity in refactor: active -> emergency -> time
-          if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
-          return a.timeAdded - b.timeAdded;
-      });
-  }, [patients, filterDoctorId, searchQuery, currentTime]);
+      .sort(comparePatients);
+  }, [patients, filterDoctorId, searchQuery, filterStatus, filterType, currentTime]);
 
   const uniquePatients = useMemo(() => {
     const map = new Map<string, Patient>();
-    // Sort by most recent to get latest details
     const sorted = [...patients].sort((a, b) => b.timeAdded - a.timeAdded);
     sorted.forEach(p => {
         const key = `${p.phone.trim()}_${p.name.trim().toLowerCase()}`;
@@ -102,12 +180,18 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
   // Handlers
   const handleSaveDoctor = (data: any) => {
       if (doctorModalMode === 'ADD') {
-          onAddDoctor(data.name, data.specialty, data.room, data.schedule, data.mobile, data.regNo, data.masterId, data.avatarUrl);
+          onAddDoctor(data.name, data.specialty, data.room, data.schedule, data.mobile, data.regNo, data.masterId, data.avatarUrl, parseInt(data.fee), parseInt(data.consultationTime));
           addToast('New doctor added', 'success');
       } else if (editingDoctorId) {
           onEditDoctor(editingDoctorId, {
-              name: data.name, specialty: data.specialty, roomNumber: data.room, consultationFee: parseInt(data.fee) || 0, weeklySchedule: data.schedule,
-              mobile: data.mobile, registrationNumber: data.regNo
+              name: data.name, 
+              specialty: data.specialty, 
+              roomNumber: data.room, 
+              consultationFee: parseInt(data.fee) || 0, 
+              consultationTime: parseInt(data.consultationTime) || 15,
+              weeklySchedule: data.schedule,
+              mobile: data.mobile, 
+              registrationNumber: data.regNo
           });
           addToast('Doctor details updated', 'success');
       }
@@ -130,6 +214,15 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
       onEditDoctor(doctorId, { weeklySchedule: updatedSchedule });
   };
 
+  const clearFilters = () => {
+      setSearchQuery('');
+      setFilterDoctorId('ALL');
+      setFilterStatus('ACTIVE');
+      setFilterType('ALL');
+  };
+
+  const isFiltered = searchQuery !== '' || filterDoctorId !== 'ALL' || filterStatus !== 'ACTIVE' || filterType !== 'ALL';
+
   return (
     <div className="h-full flex flex-col p-4 sm:p-6 overflow-hidden">
         {/* HEADER & TABS */}
@@ -139,12 +232,15 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     <h1 className="text-xl sm:text-2xl font-bold text-slate-900">{clinicName}</h1>
                 </div>
                 <div className="flex flex-wrap gap-4 mt-1 text-sm text-slate-500">
+                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Avg Wait: 15m</span>
+                    <span>•</span>
                     <span>{patients.filter(p => p.status === PatientStatus.WAITING).length} Waiting</span>
+                    <span>•</span>
                     <span>{doctors.filter(d => d.isAvailable).length} Active Doctors</span>
                 </div>
             </div>
             <div className="flex gap-2 sm:gap-3 overflow-x-auto w-full md:w-auto pb-1 no-scrollbar">
-                <Button variant={activeTab === 'QUEUE' ? 'primary' : 'secondary'} onClick={() => setActiveTab('QUEUE')} className="flex-shrink-0"> <List className="h-4 w-4 mr-2" /> Queue </Button>
+                <Button variant={activeTab === 'QUEUE' ? 'primary' : 'secondary'} onClick={() => setActiveTab('QUEUE')} className="flex-shrink-0"> <List className="h-4 w-4 mr-2" /> Live Queue </Button>
                 <Button variant={activeTab === 'DATABASE' ? 'primary' : 'secondary'} onClick={() => setActiveTab('DATABASE')} className="flex-shrink-0"> <Database className="h-4 w-4 mr-2" /> Patients </Button>
                 <Button variant={activeTab === 'DOCTORS' ? 'primary' : 'secondary'} onClick={() => setActiveTab('DOCTORS')} className="flex-shrink-0"> <Stethoscope className="h-4 w-4 mr-2" /> Doctors </Button>
             </div>
@@ -153,29 +249,73 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
             {/* TOOLBAR */}
             {(activeTab === 'QUEUE' || activeTab === 'DATABASE') && (
-                <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row gap-4 items-center justify-between bg-slate-50">
-                    <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full">
-                        <div className="relative w-full sm:max-w-xs">
+                <div className="p-4 border-b border-slate-200 bg-slate-50 space-y-4">
+                    {/* Top Row: Search & Add */}
+                    <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                         <div className="relative w-full sm:max-w-md">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                             <input className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" 
-                                placeholder={activeTab === 'QUEUE' ? "Search live queue..." : "Search patient database..."} 
+                                placeholder={activeTab === 'QUEUE' ? "Search by name, token or phone..." : "Search patient database..."} 
                                 value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} 
                             />
                         </div>
                         {activeTab === 'QUEUE' && (
-                            <div className="relative w-full sm:w-48">
-                                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                <select className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 appearance-none bg-white" 
-                                    value={filterDoctorId} onChange={(e) => setFilterDoctorId(e.target.value)}
-                                >
-                                    <option value="ALL">All Doctors</option>
-                                    {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                </select>
-                            </div>
+                            <Button className="w-full sm:w-auto shadow-sm" onClick={() => setIsPatientModalOpen(true)}> <UserPlus className="h-4 w-4 mr-2" /> Add Patient </Button>
                         )}
                     </div>
+
+                    {/* Bottom Row: Filters (Queue Only) */}
                     {activeTab === 'QUEUE' && (
-                        <Button className="w-full sm:w-auto" onClick={() => setIsPatientModalOpen(true)}> <UserPlus className="h-4 w-4 mr-2" /> Add Patient </Button>
+                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-200/50">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wide mr-2">
+                                <Filter className="h-3 w-3" /> Filters:
+                            </div>
+                            
+                            {/* Doctor Filter */}
+                            <select 
+                                className="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2 min-w-[140px]"
+                                value={filterDoctorId} 
+                                onChange={(e) => setFilterDoctorId(e.target.value)}
+                            >
+                                <option value="ALL">All Doctors</option>
+                                {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                            </select>
+
+                            {/* Status Filter */}
+                            <select 
+                                className="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2"
+                                value={filterStatus} 
+                                onChange={(e) => setFilterStatus(e.target.value)}
+                            >
+                                <option value="ACTIVE">Active (Wait + Consult)</option>
+                                <option value="ALL">All Statuses</option>
+                                <option value={PatientStatus.WAITING}>Waiting Only</option>
+                                <option value={PatientStatus.WITH_DOCTOR}>Consulting</option>
+                                <option value={PatientStatus.COMPLETED}>Completed</option>
+                                <option value={PatientStatus.CANCELLED}>Cancelled</option>
+                                <option value={PatientStatus.ON_HOLD}>On Hold</option>
+                            </select>
+
+                            {/* Type Filter */}
+                            <select 
+                                className="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2"
+                                value={filterType} 
+                                onChange={(e) => setFilterType(e.target.value)}
+                            >
+                                <option value="ALL">All Types</option>
+                                <option value="WALK_IN">Walk-in</option>
+                                <option value="APPOINTMENT">Appointments</option>
+                            </select>
+
+                            {isFiltered && (
+                                <button 
+                                    onClick={clearFilters}
+                                    className="text-xs text-red-600 hover:text-red-800 font-medium flex items-center gap-1 ml-auto sm:ml-2"
+                                >
+                                    <XCircle className="h-3 w-3" /> Clear
+                                </button>
+                            )}
+                        </div>
                     )}
                 </div>
             )}
@@ -185,6 +325,8 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 <QueueTable 
                     patients={filteredPatients}
                     doctors={doctors}
+                    estimatedTimes={estimatedTimes}
+                    isFiltered={isFiltered}
                     onUpdateStatus={onUpdateStatus}
                     onManualReorder={onManualReorder}
                     onDragDrop={onDragDrop}
@@ -215,9 +357,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     onAddPresetSlot={handleAddPresetSlot}
                 />
             )}
-            
-            {/* Note: 'SCHEDULE' tab is merged into Doctors view in DoctorManager for better UX, or can be kept separate. 
-                For this refactor, I've moved the schedule view inside DoctorManager's toggle. */}
         </div>
 
         {/* MODALS */}
@@ -240,15 +379,17 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             addToast={addToast}
         />
         
-        {/* Placeholder for simple Edit Patient Modal (re-use generic or create dedicated if needed) */}
         {editingPatient && (
              <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                 <div className="bg-white p-6 rounded-lg shadow-xl">
+                 <div className="bg-white p-6 rounded-lg shadow-xl animate-in zoom-in-95">
                      <h3 className="text-lg font-bold mb-4">Edit Patient</h3>
-                     <p className="text-sm text-slate-500 mb-4">Editing functionality for {editingPatient.name}</p>
+                     <p className="text-sm text-slate-500 mb-4">Editing details for {editingPatient.name}</p>
+                     <div className="mb-4">
+                        <Input label="Full Name" value={editingPatient.name} onChange={(e) => setEditingPatient({...editingPatient, name: e.target.value})} />
+                     </div>
                      <div className="flex justify-end gap-2">
                          <Button variant="secondary" onClick={() => setEditingPatient(null)}>Close</Button>
-                         <Button onClick={() => { onEditPatient(editingPatient.id, { name: editingPatient.name }); setEditingPatient(null); }}>Save</Button>
+                         <Button onClick={() => { onEditPatient(editingPatient.id, { name: editingPatient.name }); setEditingPatient(null); addToast("Patient updated", "success"); }}>Save</Button>
                      </div>
                  </div>
              </div>

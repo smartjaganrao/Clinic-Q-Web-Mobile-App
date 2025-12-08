@@ -82,6 +82,7 @@ const createRealDoctors = (startId: number, count: number, specialty: string, fe
         avatarUrl: `https://i.pravatar.cc/150?u=${masterId}`, // Consistent avatar based on masterId
         weeklySchedule: createDefaultSchedule(),
         consultationFee: fee - (fee % 50), // Round to 50
+        consultationTime: 15, // Default 15 mins
         rating: parseFloat(rating),
         reviewCount: 50 + (rand % 400)
     };
@@ -182,6 +183,7 @@ const raviKumarCityGeneral: Doctor = {
     avatarUrl: `https://i.pravatar.cc/150?u=${MASTER_ID_RAVI}`,
     weeklySchedule: createDefaultSchedule(),
     consultationFee: 300, // Different fee
+    consultationTime: 10,
     rating: 4.2,
     reviewCount: 150
 };

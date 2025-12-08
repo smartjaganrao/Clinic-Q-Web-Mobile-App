@@ -72,6 +72,7 @@ export interface Doctor {
   avatarUrl?: string;
   weeklySchedule: DaySchedule[]; // New: 7-day specific schedule
   consultationFee: number; // New: Individual fee
+  consultationTime: number; // New: Avg time per patient in minutes
   rating: number; // New: Individual rating
   reviewCount: number; // New: Individual review count
 }
