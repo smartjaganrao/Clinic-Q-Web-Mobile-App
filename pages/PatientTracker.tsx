@@ -229,6 +229,90 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [showLateWarningModal, setShowLateWarningModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
+  // --- HISTORY MANAGEMENT ---
+  useEffect(() => {
+    // Ensure initial state is set correctly
+    if (!window.history.state || window.history.state.appView !== 'PATIENT_TRACKER') {
+        window.history.replaceState({ 
+            appView: 'PATIENT_TRACKER', 
+            view: bookingView, 
+            clinicId: selectedClinicId, 
+            tab: activeTab,
+            pushed: false
+        }, '');
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+        const state = event.state;
+        if (state && state.appView === 'PATIENT_TRACKER') {
+             // Restore view state
+             if (state.tab) setActiveTab(state.tab);
+             
+             // Prioritize view restoration
+             if (state.view) setBookingView(state.view);
+             if (state.clinicId !== undefined) setSelectedClinicId(state.clinicId);
+             else setSelectedClinicId(null);
+        } else {
+             // Fallback if history state is lost or external
+             // We default to LIST view in BOOK tab
+             setBookingView('LIST');
+             setSelectedClinicId(null);
+             setActiveTab('BOOK');
+        }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigateToView = (view: 'LIST' | 'CLINIC_DETAILS' | 'FORM', clinicId: string | null) => {
+      const newState = {
+          appView: 'PATIENT_TRACKER',
+          view,
+          clinicId,
+          tab: activeTab,
+          pushed: true
+      };
+      window.history.pushState(newState, '');
+      setBookingView(view);
+      setSelectedClinicId(clinicId);
+  };
+
+  const handleTabSwitch = (newTab: 'ACTIVE' | 'BOOK' | 'HISTORY' | 'PROFILE') => {
+      setActiveTab(newTab);
+      // When switching tabs, we generally reset the drill-down view to LIST
+      setBookingView('LIST');
+      setSelectedClinicId(null);
+      
+      // We replace state so that back button doesn't cycle through tabs like pages, 
+      // but treats the tab switch as a top-level context change.
+      window.history.replaceState({
+          appView: 'PATIENT_TRACKER',
+          view: 'LIST',
+          clinicId: null,
+          tab: newTab,
+          pushed: false
+      }, '');
+  };
+
+  const handleUIBack = () => {
+      if (window.history.state?.pushed) {
+          window.history.back();
+      } else {
+          // If we are at root of a pushed stack or deep-linked
+          if (bookingView === 'FORM') {
+               // Fallback to details
+               setBookingView('CLINIC_DETAILS');
+               window.history.replaceState({ ...window.history.state, view: 'CLINIC_DETAILS' }, '');
+          } else {
+               // Fallback to List
+               setBookingView('LIST');
+               setSelectedClinicId(null);
+               window.history.replaceState({ ...window.history.state, view: 'LIST', clinicId: null }, '');
+          }
+      }
+  };
+
   useEffect(() => {
       if (isGuest) return; 
       try {
@@ -265,7 +349,26 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       return ['All Specialties', ...Array.from(set).sort()];
   }, [clinics]);
 
-  useEffect(() => { if (preSelectedClinicId) { setSelectedClinicId(preSelectedClinicId); setBookingView('CLINIC_DETAILS'); setActiveTab('BOOK'); onClearPendingAction(); const clinic = clinics.find(c => c.id === preSelectedClinicId); if (clinic) { setSelectedCity(clinic.city); } } }, [preSelectedClinicId, clinics, onClearPendingAction]);
+  useEffect(() => { 
+      if (preSelectedClinicId) { 
+          setSelectedClinicId(preSelectedClinicId); 
+          setBookingView('CLINIC_DETAILS'); 
+          setActiveTab('BOOK'); 
+          onClearPendingAction(); 
+          const clinic = clinics.find(c => c.id === preSelectedClinicId); 
+          if (clinic) { setSelectedCity(clinic.city); } 
+
+          // History update for deep link
+          window.history.replaceState({ 
+              appView: 'PATIENT_TRACKER', 
+              view: 'CLINIC_DETAILS', 
+              clinicId: preSelectedClinicId, 
+              tab: 'BOOK',
+              pushed: false // Not pushed by user navigation, so Back might exit app if initial
+          }, '');
+      } 
+  }, [preSelectedClinicId, clinics, onClearPendingAction]);
+
   const activeVisits = useMemo(() => { if(isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown', room: doc?.roomNumber || '-' }); } }); }); return visits.sort((a,b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
   const historyVisits = useMemo(() => { if(isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && (p.status === PatientStatus.COMPLETED || p.status === PatientStatus.CANCELLED)) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown' }); } }); }); return visits.sort((a,b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
   
@@ -406,7 +509,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
   const getSmartQueueDetails = (visit: any) => { const clinic = clinics.find(c => c.id === visit.clinicId); const doctor = clinic?.doctors.find(d => d.id === visit.doctorId); if (!clinic || !doctor) return { peopleAhead: 0, waitTime: 0, currentToken: '-', message: 'Loading...', color: 'text-slate-500' }; const peopleAhead = clinic.patients.filter(p => p.doctorId === visit.doctorId && p.status === PatientStatus.WAITING && p.timeAdded < visit.timeAdded ).length; const servingPatient = clinic.patients.find(p => p.doctorId === visit.doctorId && p.status === PatientStatus.WITH_DOCTOR); const currentToken = servingPatient ? `#${servingPatient.tokenNumber}` : 'Not Started'; let baseWait = peopleAhead * 15; if (doctor.delayMinutes > 0) baseWait += doctor.delayMinutes; const now = new Date(); now.setMinutes(now.getMinutes() + baseWait); const expectedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); let message = `~${baseWait} mins wait`; let color = 'text-slate-600'; let bgColor = 'bg-slate-100'; if (doctor.status === DoctorStatus.ON_BREAK) { message = "Doctor is on break"; color = "text-orange-700"; bgColor = "bg-orange-100"; } else if (doctor.delayMinutes > 0) { message = `Delayed by ${doctor.delayMinutes} mins`; color = "text-red-700"; bgColor = "bg-red-100"; } else if (visit.isCheckedIn) { if (peopleAhead === 0) { message = "You are next! Get ready."; color = "text-green-700"; bgColor = "bg-green-100"; } else if (peopleAhead < 3) { message = "Almost your turn. Stay close."; color = "text-blue-700"; bgColor = "bg-blue-100"; } else { message = "Checked in. Relax in lobby."; color = "text-green-700"; bgColor = "bg-green-5"; } } else { if (peopleAhead < 3) { message = "Rush! Reaching your turn."; color = "text-red-700"; bgColor = "bg-red-100"; } else { message = "Start travelling to clinic."; color = "text-blue-700"; bgColor = "bg-blue-100"; } } return { peopleAhead, waitTime: baseWait, expectedTime, currentToken, message, color, bgColor, doctorStatus: doctor.status }; };
   
-  useEffect(() => { let timer: ReturnType<typeof setTimeout>; if (showQRScanner) { timer = setTimeout(() => { if (clinics.length > 0) { let targetClinicId = selectedClinicId; if (!targetClinicId) { const visitNeedsCheckIn = activeVisits.find(v => !v.isCheckedIn && v.status === PatientStatus.WAITING); targetClinicId = visitNeedsCheckIn ? visitNeedsCheckIn.clinicId : clinics[0].id; } const activeVisit = activeVisits.find(v => v.clinicId === targetClinicId && v.status !== PatientStatus.COMPLETED && v.status !== PatientStatus.CANCELLED); if (activeVisit) { if (!activeVisit.isCheckedIn) { onCheckIn(targetClinicId!, activeVisit.id); addToast(`Checked in at ${activeVisit.clinicName}!`, "success"); } else { addToast(`Already checked in at ${activeVisit.clinicName}.`, "info"); } setActiveTab('ACTIVE'); } else { if (targetClinicId) { setSelectedClinicId(targetClinicId); setBookingView('CLINIC_DETAILS'); setActiveTab('BOOK'); addToast("QR Detected. Loading clinic details...", "success"); } } setShowQRScanner(false); } }, 2000); } return () => clearTimeout(timer); }, [showQRScanner, clinics, activeVisits, selectedClinicId, onCheckIn, addToast]);
+  useEffect(() => { let timer: ReturnType<typeof setTimeout>; if (showQRScanner) { timer = setTimeout(() => { if (clinics.length > 0) { let targetClinicId = selectedClinicId; if (!targetClinicId) { const visitNeedsCheckIn = activeVisits.find(v => !v.isCheckedIn && v.status === PatientStatus.WAITING); targetClinicId = visitNeedsCheckIn ? visitNeedsCheckIn.clinicId : clinics[0].id; } const activeVisit = activeVisits.find(v => v.clinicId === targetClinicId && v.status !== PatientStatus.COMPLETED && v.status !== PatientStatus.CANCELLED); if (activeVisit) { if (!activeVisit.isCheckedIn) { onCheckIn(targetClinicId!, activeVisit.id); addToast(`Checked in at ${activeVisit.clinicName}!`, "success"); } else { addToast(`Already checked in at ${activeVisit.clinicName}.`, "info"); } setActiveTab('ACTIVE'); } else { if (targetClinicId) { navigateToView('CLINIC_DETAILS', targetClinicId); addToast("QR Detected. Loading clinic details...", "success"); } } setShowQRScanner(false); } }, 2000); } return () => clearTimeout(timer); }, [showQRScanner, clinics, activeVisits, selectedClinicId, onCheckIn, addToast]);
 
   const submitBooking = (overrideName?: string, overridePhone?: string) => {
       let pName = overrideName || userName;
@@ -429,7 +532,26 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           if (isDuplicate) { addToast(`Duplicate: ${pName} already has an active visit in this clinic.`, "error"); return; }
       }
       onGetToken(pName, pPhone, selectedDoctorId!, selectedClinicId!, visitType === 'APPOINTMENT' ? apptTime : undefined, visitType === 'APPOINTMENT' ? apptDate : undefined, pAge, pGender, symptoms);
-      setActiveTab('ACTIVE'); setBookingView('LIST'); setSelectedDoctorId(null); setSymptoms(''); setVisitType('WALK_IN'); setApptDate(''); setApptTime(''); setBookingFor('MYSELF'); setShowLateWarningModal(false); setShowAuthModal(false);
+      
+      // Update state and history to jump to Active tab
+      setActiveTab('ACTIVE'); 
+      setBookingView('LIST'); 
+      setSelectedDoctorId(null); 
+      setSymptoms(''); 
+      setVisitType('WALK_IN'); 
+      setApptDate(''); 
+      setApptTime(''); 
+      setBookingFor('MYSELF'); 
+      setShowLateWarningModal(false); 
+      setShowAuthModal(false);
+
+      window.history.replaceState({
+          appView: 'PATIENT_TRACKER',
+          view: 'LIST',
+          clinicId: null,
+          tab: 'ACTIVE',
+          pushed: false
+      }, '');
   };
 
   const handleBookToken = (e?: React.MouseEvent) => {
@@ -540,7 +662,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 <div className="flex items-center gap-2"> <Logo className="h-8 w-8" /> <span className="font-bold text-xl text-slate-900 tracking-tight">Smart<span className="text-primary-600">QFlow</span></span> </div> 
             </div> 
             <div className="flex-1 py-6 px-4 space-y-2"> 
-                {navItems.map(item => ( <button key={item.id} onClick={() => setActiveTab(item.id as any)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === item.id ? 'bg-primary-50 text-primary-700 shadow-sm ring-1 ring-primary-200' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}> <item.icon className={`h-5 w-5 ${activeTab === item.id ? 'text-primary-600' : 'text-slate-400'}`} /> {item.label} </button> ))} 
+                {navItems.map(item => ( <button key={item.id} onClick={() => handleTabSwitch(item.id as any)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === item.id ? 'bg-primary-50 text-primary-700 shadow-sm ring-1 ring-primary-200' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}> <item.icon className={`h-5 w-5 ${activeTab === item.id ? 'text-primary-600' : 'text-slate-400'}`} /> {item.label} </button> ))} 
             </div> 
             <div className="p-4 border-t border-slate-100"> 
                 <div className="flex items-center gap-3 px-4 py-3"> <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold">{isGuest ? <User className="h-5 w-5" /> : userName.charAt(0)}</div> <div className="flex-1 min-w-0"><p className="text-sm font-bold text-slate-900 truncate">{userName}</p><p className="text-xs text-slate-500 truncate">{userPhone}</p></div> </div> {isGuest ? ( <Button onClick={() => onLoginClick && onLoginClick()} className="w-full mt-2 justify-center gap-2 shadow-md"><LogIn className="h-4 w-4" /> Login</Button> ) : ( <button onClick={onBack} className="w-full mt-2 flex items-center justify-center gap-2 p-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"><LogOut className="h-4 w-4" /> Logout</button> )} 
@@ -552,7 +674,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             <header className="md:hidden bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-20 flex items-center justify-between shadow-sm shrink-0">
                 <div className="flex items-center gap-3">
                     {bookingView !== 'LIST' && activeTab === 'BOOK' ? (
-                        <Button variant="ghost" size="sm" onClick={() => { setBookingView('LIST'); setSelectedClinicId(null); }} className="p-0 mr-2 hover:bg-slate-100 rounded-full">
+                        <Button variant="ghost" size="sm" onClick={handleUIBack} className="p-0 mr-2 hover:bg-slate-100 rounded-full">
                             <ArrowLeft className="h-5 w-5" />
                         </Button>
                     ) : (
@@ -569,7 +691,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             <header className="hidden md:flex bg-white border-b border-slate-200 px-8 py-4 items-center justify-between shrink-0 z-10"> <div><h2 className="text-2xl font-bold text-slate-900">{activeTab === 'BOOK' && bookingView !== 'LIST' ? 'Appointment Details' : activeTab === 'ACTIVE' ? 'Your Active Visits' : activeTab === 'HISTORY' ? 'Visit History' : activeTab === 'PROFILE' ? 'My Profile' : 'Find Care'}</h2></div> <div className="flex items-center gap-4"><Button variant="outline" onClick={() => setShowQRScanner(true)} className="hidden md:flex"><QrCode className="h-4 w-4 mr-2" /> Scan QR Code</Button></div> </header>
 
             <div className={`flex-1 flex flex-col w-full relative ${activeTab === 'BOOK' && bookingView === 'LIST' ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden scroll-smooth pb-24 md:pb-0'}`}>
-                {activeTab === 'ACTIVE' && ( isGuest ? <GuestLoginCard /> : ( <div className="px-4 md:px-0 max-w-7xl mx-auto pt-4 md:pt-8 md:px-8"> {activeVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"> {activeVisits.map(visit => { const queueStats = getSmartQueueDetails(visit); return ( <Card key={visit.id} className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"> <div className="p-5 pb-2 flex justify-between items-start"><div><h3 className="font-bold text-lg text-slate-900">{visit.clinicName}</h3><p className="text-sm text-slate-500">Dr. {visit.doctorName} • {visit.room ? `Room ${visit.room}` : ''}</p></div><Badge status={visit.status} /></div> <div className="px-5 mb-4"><span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit"><User className="h-3 w-3" /> {visit.name}</span></div> <div className="bg-slate-50 border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center"><div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Token</div><div className="text-3xl font-black text-slate-900">#{visit.tokenNumber}</div></div><div className="border-x border-slate-200"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Now Serving</div><div className={`text-3xl font-bold ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-blue-600 animate-pulse' : 'text-slate-400'}`}>{visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken}</div></div><div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">People Ahead</div><div className="text-3xl font-bold text-slate-900">{queueStats.peopleAhead}</div></div></div> <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold`}>{queueStats.doctorStatus === DoctorStatus.ON_BREAK ? <Coffee className="h-5 w-5" /> : queueStats.doctorStatus === DoctorStatus.AVAILABLE ? <Timer className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}<div className="flex-1"><p>{queueStats.message}</p>{visit.status === PatientStatus.WAITING && (<p className="text-[10px] opacity-80 font-normal">Est. Time: {queueStats.expectedTime}</p>)}</div></div> {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (<div className="bg-orange-50 px-4 py-2 text-xs font-bold text-orange-700 flex items-center gap-2 border-t border-orange-100"><Info className="h-4 w-4 flex-shrink-0" /><span>{queueStats.peopleAhead < 3 ? "Almost your turn! Please ask receptionist to Check-in now." : "Please ask receptionist to Check-in once you arrive."}</span></div>)} <div className="p-4 flex gap-2 mt-auto">{!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (<Button className="flex-1 bg-slate-900 hover:bg-slate-800" onClick={() => setShowQRScanner(true)}><QrCode className="h-4 w-4 mr-2" /> Scan to Check-In</Button>)}<Button variant="secondary" className="flex-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => setCancelModal({ isOpen: true, visit })} disabled={visit.status === PatientStatus.WITH_DOCTOR}>Cancel</Button></div> </Card> ); })} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><Calendar className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No active visits</h3><p className="text-slate-500 mb-6 text-center max-w-sm">Book an appointment or scan a QR code at a clinic to see your live status here.</p><Button onClick={() => setActiveTab('BOOK')} size="lg" className="shadow-lg">Find a Doctor</Button></div> )} </div> ) )}
+                {activeTab === 'ACTIVE' && ( isGuest ? <GuestLoginCard /> : ( <div className="px-4 md:px-0 max-w-7xl mx-auto pt-4 md:pt-8 md:px-8"> {activeVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"> {activeVisits.map(visit => { const queueStats = getSmartQueueDetails(visit); return ( <Card key={visit.id} className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"> <div className="p-5 pb-2 flex justify-between items-start"><div><h3 className="font-bold text-lg text-slate-900">{visit.clinicName}</h3><p className="text-sm text-slate-500">Dr. {visit.doctorName} • {visit.room ? `Room ${visit.room}` : ''}</p></div><Badge status={visit.status} /></div> <div className="px-5 mb-4"><span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit"><User className="h-3 w-3" /> {visit.name}</span></div> <div className="bg-slate-50 border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center"><div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Token</div><div className="text-3xl font-black text-slate-900">#{visit.tokenNumber}</div></div><div className="border-x border-slate-200"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Now Serving</div><div className={`text-3xl font-bold ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-blue-600 animate-pulse' : 'text-slate-400'}`}>{visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken}</div></div><div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">People Ahead</div><div className="text-3xl font-bold text-slate-900">{queueStats.peopleAhead}</div></div></div> <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold`}>{queueStats.doctorStatus === DoctorStatus.ON_BREAK ? <Coffee className="h-5 w-5" /> : queueStats.doctorStatus === DoctorStatus.AVAILABLE ? <Timer className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}<div className="flex-1"><p>{queueStats.message}</p>{visit.status === PatientStatus.WAITING && (<p className="text-[10px] opacity-80 font-normal">Est. Time: {queueStats.expectedTime}</p>)}</div></div> {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (<div className="bg-orange-50 px-4 py-2 text-xs font-bold text-orange-700 flex items-center gap-2 border-t border-orange-100"><Info className="h-4 w-4 flex-shrink-0" /><span>{queueStats.peopleAhead < 3 ? "Almost your turn! Please ask receptionist to Check-in now." : "Please ask receptionist to Check-in once you arrive."}</span></div>)} <div className="p-4 flex gap-2 mt-auto">{!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (<Button className="flex-1 bg-slate-900 hover:bg-slate-800" onClick={() => setShowQRScanner(true)}><QrCode className="h-4 w-4 mr-2" /> Scan to Check-In</Button>)}<Button variant="secondary" className="flex-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => setCancelModal({ isOpen: true, visit })} disabled={visit.status === PatientStatus.WITH_DOCTOR}>Cancel</Button></div> </Card> ); })} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><Calendar className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No active visits</h3><p className="text-slate-500 mb-6 text-center max-w-sm">Book an appointment or scan a QR code at a clinic to see your live status here.</p><Button onClick={() => handleTabSwitch('BOOK')} size="lg" className="shadow-lg">Find a Doctor</Button></div> )} </div> ) )}
 
                 {activeTab === 'BOOK' && (
                     <div className="h-full flex flex-col">
@@ -708,9 +830,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             relevantDoctors={relevantDoctors}
                                                             isHighlighted={isHighlighted}
                                                             cardRef={(el) => { clinicCardRefs.current[clinic.id] = el; }}
-                                                            onSelect={() => { setSelectedClinicId(clinic.id); setBookingView('CLINIC_DETAILS'); }}
-                                                            onBook={() => { setSelectedClinicId(clinic.id); setVisitType('APPOINTMENT'); setBookingView('CLINIC_DETAILS'); }}
-                                                            onQueue={() => { setSelectedClinicId(clinic.id); setVisitType('WALK_IN'); setBookingView('CLINIC_DETAILS'); }}
+                                                            onSelect={() => navigateToView('CLINIC_DETAILS', clinic.id)}
+                                                            onBook={() => { navigateToView('CLINIC_DETAILS', clinic.id); setVisitType('APPOINTMENT'); }}
+                                                            onQueue={() => { navigateToView('CLINIC_DETAILS', clinic.id); setVisitType('WALK_IN'); }}
                                                         />
                                                     );
                                                 })}
@@ -732,7 +854,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                         onMarkerDragEnd={handleMarkerDragEnd}
                                         onLocateMe={handleLocateMe}
                                         onMarkerClick={scrollToClinic}
-                                        onBookClick={(id) => { setSelectedClinicId(id); setBookingView('CLINIC_DETAILS'); }}
+                                        onBookClick={(id) => navigateToView('CLINIC_DETAILS', id)}
                                         onClosePickingLocation={() => setIsPickingLocation(false)}
                                     />
                                 </div>
@@ -741,8 +863,13 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         
                         {bookingView === 'CLINIC_DETAILS' && selectedClinic && (
                             <div className="animate-in slide-in-from-right duration-300 bg-white min-h-full md:rounded-3xl md:shadow-2xl md:border md:border-slate-200 md:overflow-hidden md:max-w-5xl md:mx-auto pt-4 md:pt-0">
-                                {/* ... (Clinic Details View Content - Same as before, just ensuring imports are correct) ... */}
-                                <div className="sticky top-0 bg-white/95 backdrop-blur-md z-10 px-4 md:px-6 py-3 border-b border-slate-100 flex items-center gap-3"><Button variant="ghost" size="sm" onClick={() => { setBookingView('LIST'); setSelectedClinicId(null); }} className="p-0 rounded-full w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100"><ArrowLeft className="h-4 w-4" /></Button><h2 className="font-bold text-slate-900 truncate text-lg">{selectedClinic.name}</h2></div>
+                                {/* Clinic Details View Content */}
+                                <div className="sticky top-0 bg-white/95 backdrop-blur-md z-10 px-4 md:px-6 py-3 border-b border-slate-100 flex items-center gap-3">
+                                    <Button variant="ghost" size="sm" onClick={handleUIBack} className="p-0 rounded-full w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100">
+                                        <ArrowLeft className="h-4 w-4" />
+                                    </Button>
+                                    <h2 className="font-bold text-slate-900 truncate text-lg">{selectedClinic.name}</h2>
+                                </div>
                                 <div className="p-4 md:p-8 pb-24 h-full overflow-y-auto custom-scrollbar">
                                     <div className="w-full h-48 md:h-64 rounded-2xl overflow-hidden mb-6 relative shadow-sm group">
                                         {selectedClinic.imageUrl ? ( <img src={selectedClinic.imageUrl} alt={selectedClinic.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" /> ) : ( <div className="w-full h-full bg-slate-100 flex items-center justify-center"> <Building2 className="h-16 w-16 text-slate-300" /> </div> )}
@@ -795,8 +922,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             <div className="mt-4 sm:mt-6 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
                                                                 <div className="flex flex-col text-xs text-slate-500"> <div className="uppercase font-bold text-[10px] tracking-wide text-slate-400">Availability & Fees</div> <div className="mt-1 flex items-center gap-2 text-sm text-slate-700">{getDoctorTodaySchedule(doc)}<span className="text-xs text-slate-400">·</span><span className="font-bold text-sm text-slate-900">₹{doc.consultationFee}</span></div> </div>
                                                                 <div className="flex items-center gap-3">
-                                                                    <Button onClick={() => { setSelectedDoctorId(doc.id); setVisitType('WALK_IN'); setBookingView('FORM'); }} disabled={!canBook || !activeNow} size="sm" variant="ghost" className={`h-9 px-3 text-xs ${!activeNow ? 'opacity-50' : 'text-slate-700'}`} title="Join Queue directly"> Queue </Button>
-                                                                    <Button onClick={() => { setSelectedDoctorId(doc.id); setVisitType('APPOINTMENT'); setBookingView('FORM'); }} disabled={!canBook} size="sm" className={`h-9 px-4 ${canBook ? 'shadow-md' : 'opacity-60 cursor-not-allowed'}`}> Book </Button>
+                                                                    <Button onClick={() => { navigateToView('FORM', selectedClinic.id); setSelectedDoctorId(doc.id); setVisitType('WALK_IN'); }} disabled={!canBook || !activeNow} size="sm" variant="ghost" className={`h-9 px-3 text-xs ${!activeNow ? 'opacity-50' : 'text-slate-700'}`} title="Join Queue directly"> Queue </Button>
+                                                                    <Button onClick={() => { navigateToView('FORM', selectedClinic.id); setSelectedDoctorId(doc.id); setVisitType('APPOINTMENT'); }} disabled={!canBook} size="sm" className={`h-9 px-4 ${canBook ? 'shadow-md' : 'opacity-60 cursor-not-allowed'}`}> Book </Button>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -811,7 +938,12 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         {bookingView === 'FORM' && selectedClinic && selectedDoctorId && (
                              <div className="animate-in slide-in-from-right duration-300 bg-slate-50 min-h-full flex flex-col md:items-center md:justify-center md:py-8 pt-4 md:pt-0">
                                  <div className="w-full max-w-2xl bg-white md:rounded-3xl md:shadow-2xl md:border md:border-slate-200 overflow-hidden flex flex-col max-h-full h-full md:h-auto">
-                                    <div className="bg-white border-b border-slate-200 px-4 py-4 flex items-center gap-3 shadow-sm flex-shrink-0"><Button variant="ghost" size="sm" className="p-0 rounded-full w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100" onClick={() => setBookingView('CLINIC_DETAILS')}><ArrowLeft className="h-4 w-4" /></Button><h2 className="font-bold text-slate-900 text-lg">Confirm Booking</h2></div>
+                                    <div className="bg-white border-b border-slate-200 px-4 py-4 flex items-center gap-3 shadow-sm flex-shrink-0">
+                                        <Button variant="ghost" size="sm" className="p-0 rounded-full w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100" onClick={handleUIBack}>
+                                            <ArrowLeft className="h-4 w-4" />
+                                        </Button>
+                                        <h2 className="font-bold text-slate-900 text-lg">Confirm Booking</h2>
+                                    </div>
                                     <div className="p-6 space-y-6 flex-1 overflow-y-auto pb-24 md:pb-6 custom-scrollbar">
                                         {isGuest ? (
                                             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
@@ -975,7 +1107,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 )}
             </div>
 
-            <nav className="md:hidden bg-white border-t border-slate-200 flex justify-around py-2 px-1 pb-safe fixed bottom-0 w-full z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">{navItems.map(item => (<button key={item.id} onClick={() => setActiveTab(item.id as any)} className={`flex flex-col items-center gap-1 p-2 rounded-xl w-full transition-all ${activeTab === item.id ? 'text-primary-600' : 'text-slate-400 hover:text-slate-600'}`}><div className={`p-1 rounded-full ${activeTab === item.id ? 'bg-primary-50' : ''}`}><item.icon className={`h-5 w-5 ${activeTab === item.id ? 'fill-primary-100' : ''}`} /></div><span className="text-[10px] font-bold">{item.label}</span></button>))}</nav>
+            <nav className="md:hidden bg-white border-t border-slate-200 flex justify-around py-2 px-1 pb-safe fixed bottom-0 w-full z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">{navItems.map(item => (<button key={item.id} onClick={() => handleTabSwitch(item.id as any)} className={`flex flex-col items-center gap-1 p-2 rounded-xl w-full transition-all ${activeTab === item.id ? 'text-primary-600' : 'text-slate-400 hover:text-slate-600'}`}><div className={`p-1 rounded-full ${activeTab === item.id ? 'bg-primary-50' : ''}`}><item.icon className={`h-5 w-5 ${activeTab === item.id ? 'fill-primary-100' : ''}`} /></div><span className="text-[10px] font-bold">{item.label}</span></button>))}</nav>
             {showQRScanner && (<div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-8 animate-in fade-in"><div className="w-64 h-64 border-2 border-primary-500 rounded-2xl relative mb-8 flex items-center justify-center overflow-hidden"><div className="absolute inset-0 bg-primary-500/20 animate-pulse"></div><div className="absolute top-0 left-0 w-full h-1 bg-primary-500 shadow-[0_0_20px_rgba(14,165,233,1)] animate-[scan_2s_ease-in-out_infinite]"></div><p className="text-white font-bold z-10">Scanning...</p></div><p className="text-slate-400 text-center mb-8">Point at clinic QR code.</p><Button variant="secondary" onClick={() => setShowQRScanner(false)}>Cancel</Button></div>)}
             {cancelModal.isOpen && (<div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 animate-in fade-in"><div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 text-center animate-in zoom-in-95"><div className="bg-red-100 h-12 w-12 rounded-full flex items-center justify-center mx-auto mb-4"><AlertCircle className="h-6 w-6 text-red-600" /></div><h3 className="text-lg font-bold text-slate-900 mb-2">Cancel Appointment?</h3><p className="text-sm text-slate-500 mb-6">Are you sure you want to cancel your visit with <span className="font-bold text-slate-900">{cancelModal.visit?.doctorName}</span>? This action cannot be undone.</p><div className="flex gap-3 justify-center"><Button variant="secondary" onClick={() => setCancelModal({ isOpen: false, visit: null })}>No, Keep It</Button><Button className="bg-red-600 hover:bg-red-700 border-red-600" onClick={confirmCancel}>Yes, Cancel</Button></div></div></div>)}
             {showAddMember && (
