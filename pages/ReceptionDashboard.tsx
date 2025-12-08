@@ -514,6 +514,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     onEditDoctor={(doc) => { setDoctorModalMode('EDIT'); setEditingDoctorId(doc.id); setEditingDoctorData(doc); setIsDoctorModalOpen(true); }}
                     onDeleteDoctor={(id) => { if(window.confirm("Remove Doctor?")) onDeleteDoctor(id); }}
                     onAddPresetSlot={handleAddPresetSlot}
+                    onStatusChange={(id, status) => onEditDoctor(id, { status })}
                 />
             )}
         </div>

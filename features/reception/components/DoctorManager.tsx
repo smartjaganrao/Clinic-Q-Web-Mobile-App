@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Doctor, DoctorStatus } from '../../../types';
 import { Button } from '../../../components/Button';
-import { Grid, CalendarDays, Plus, Edit2, Trash2 } from 'lucide-react';
+import { Grid, CalendarDays, Plus, Edit2, Trash2, ChevronDown } from 'lucide-react';
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -12,12 +12,30 @@ interface DoctorManagerProps {
   onEditDoctor: (doctor: Doctor) => void;
   onDeleteDoctor: (id: string) => void;
   onAddPresetSlot: (doctorId: string, day: string) => void;
+  onStatusChange: (id: string, status: DoctorStatus) => void;
 }
 
 export const DoctorManager: React.FC<DoctorManagerProps> = ({
-  doctors, onAddDoctor, onEditDoctor, onDeleteDoctor, onAddPresetSlot
+  doctors, onAddDoctor, onEditDoctor, onDeleteDoctor, onAddPresetSlot, onStatusChange
 }) => {
   const [viewMode, setViewMode] = useState<'GRID' | 'CALENDAR'>('GRID');
+
+  const getStatusColor = (status: DoctorStatus) => {
+      switch (status) {
+          case DoctorStatus.AVAILABLE: return 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200';
+          case DoctorStatus.ON_BREAK: return 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200';
+          case DoctorStatus.OFF_DUTY: return 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200';
+          default: return 'bg-slate-100';
+      }
+  };
+
+  const getStatusDot = (status: DoctorStatus) => {
+      switch (status) {
+          case DoctorStatus.AVAILABLE: return 'bg-green-500';
+          case DoctorStatus.ON_BREAK: return 'bg-orange-500';
+          default: return 'bg-slate-400';
+      }
+  };
 
   return (
     <div className="p-6 overflow-hidden flex flex-col h-full">
@@ -35,19 +53,32 @@ export const DoctorManager: React.FC<DoctorManagerProps> = ({
       {viewMode === 'GRID' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto pb-4">
           {doctors.map(doc => (
-            <div key={doc.id} className="bg-white rounded-xl border border-slate-200 p-4 flex gap-4 hover:shadow-md transition-shadow">
-              <img src={doc.avatarUrl} className="h-16 w-16 rounded-full object-cover bg-slate-100" />
-              <div className="flex-1">
-                <h4 className="font-bold text-slate-900">{doc.name}</h4>
-                <p className="text-sm text-slate-500 mb-2">{doc.specialty}</p>
-                <div className="flex items-center gap-2">
-                  <span className={`h-2.5 w-2.5 rounded-full ${doc.status === DoctorStatus.AVAILABLE ? 'bg-green-500' : doc.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-300'}`}></span>
-                  <span className="text-xs font-medium text-slate-600">{doc.status.replace('_', ' ')}</span>
+            <div key={doc.id} className="bg-white rounded-xl border border-slate-200 p-4 flex gap-4 hover:shadow-md transition-shadow group">
+              <img src={doc.avatarUrl} className="h-16 w-16 rounded-full object-cover bg-slate-100 border border-slate-100" />
+              <div className="flex-1 min-w-0">
+                <h4 className="font-bold text-slate-900 truncate">{doc.name}</h4>
+                <p className="text-sm text-slate-500 mb-3 truncate">{doc.specialty}</p>
+                
+                {/* Status Toggle */}
+                <div className="relative inline-block">
+                    <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${getStatusColor(doc.status)}`}>
+                        <span className={`h-2 w-2 rounded-full flex-shrink-0 ${getStatusDot(doc.status)}`}></span>
+                        <select 
+                            value={doc.status}
+                            onChange={(e) => onStatusChange(doc.id, e.target.value as DoctorStatus)}
+                            className="appearance-none bg-transparent border-none outline-none text-xs font-bold uppercase cursor-pointer w-full pr-4 focus:ring-0"
+                        >
+                            <option value={DoctorStatus.AVAILABLE}>Available</option>
+                            <option value={DoctorStatus.ON_BREAK}>On Break</option>
+                            <option value={DoctorStatus.OFF_DUTY}>Off Duty</option>
+                        </select>
+                        <ChevronDown className="h-3 w-3 absolute right-2 pointer-events-none opacity-50" />
+                    </div>
                 </div>
               </div>
-              <div className="flex flex-col gap-2">
-                <button onClick={() => onEditDoctor(doc)} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-primary-600"><Edit2 className="h-4 w-4" /></button>
-                <button onClick={() => onDeleteDoctor(doc.id)} className="p-2 hover:bg-red-50 rounded text-slate-400 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
+              <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => onEditDoctor(doc)} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-primary-600 transition-colors" title="Edit Profile"><Edit2 className="h-4 w-4" /></button>
+                <button onClick={() => onDeleteDoctor(doc.id)} className="p-2 hover:bg-red-50 rounded text-slate-400 hover:text-red-500 transition-colors" title="Delete Doctor"><Trash2 className="h-4 w-4" /></button>
               </div>
             </div>
           ))}

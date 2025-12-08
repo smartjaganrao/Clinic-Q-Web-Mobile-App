@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Patient, Doctor, PatientStatus } from '../../../types';
 import { Badge } from '../../../components/Badge';
-import { PlayCircle, CheckSquare, Edit2, UserCheck, Activity, AlertTriangle, XCircle, ArrowUp, Calendar, User, CheckCircle, GripVertical, Clock, Info, ChevronRight } from 'lucide-react';
+import { PlayCircle, CheckSquare, Edit2, UserCheck, Activity, AlertTriangle, XCircle, ArrowUp, Calendar, User, CheckCircle, GripVertical, Clock, ChevronRight, Timer, Stethoscope } from 'lucide-react';
 
 interface QueueTableProps {
   patients: Patient[];
@@ -26,26 +26,29 @@ export const QueueTable: React.FC<QueueTableProps> = ({
   const [draggedId, setDraggedId] = useState<string | null>(null);
 
   return (
-    <div className="flex-1 overflow-auto bg-slate-50/30">
-      <div className="min-w-[1200px]">
+    <div className="flex-1 overflow-auto bg-slate-50/50 pb-20">
+      <div className="min-w-[1000px] px-4 py-2">
         {patients.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                <Info className="h-10 w-10 mb-2 opacity-50" />
-                <p>No patients found matching the current filters.</p>
+            <div className="flex flex-col items-center justify-center py-24 text-slate-400">
+                <div className="bg-white p-4 rounded-full shadow-sm mb-3">
+                    <UserCheck className="h-8 w-8 text-slate-300" />
+                </div>
+                <p className="font-medium">No patients found matching the current filters.</p>
+                <p className="text-xs text-slate-400 mt-1">Try clearing filters or adding a new patient.</p>
             </div>
         ) : (
-        <table className="w-full text-sm text-left border-separate border-spacing-y-1 p-2">
-          <thead className="bg-slate-50 text-slate-500 font-bold sticky top-0 z-20 shadow-sm text-xs uppercase tracking-wider">
+        <table className="w-full text-sm text-left border-separate border-spacing-y-3">
+          <thead className="text-slate-400 font-bold text-[11px] uppercase tracking-wider sticky top-0 z-20">
             <tr>
-              <th className="px-4 py-3 w-28 text-center rounded-l-lg bg-slate-50">Token</th>
-              <th className="px-4 py-3 bg-slate-50">Patient</th>
-              <th className="px-4 py-3 bg-slate-50">Assigned To</th>
-              <th className="px-4 py-3 bg-slate-50">Est. Service</th>
-              <th className="px-4 py-3 bg-slate-50">Status</th>
-              <th className="px-4 py-3 text-right rounded-r-lg bg-slate-50">Actions</th>
+              <th className="px-4 pb-2 w-28 text-center">Token</th>
+              <th className="px-4 pb-2">Patient Details</th>
+              <th className="px-4 pb-2">Doctor</th>
+              <th className="px-4 pb-2">Timing & Status</th>
+              <th className="px-4 pb-2">Type</th>
+              <th className="px-4 pb-2 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="align-middle">
             {patients.map((patient) => {
               const doc = doctors.find(d => d.id === patient.doctorId);
               const hasVitals = patient.vitals && Object.values(patient.vitals).some(v => v !== '');
@@ -59,6 +62,22 @@ export const QueueTable: React.FC<QueueTableProps> = ({
               const waitMins = estTimeMs ? Math.max(0, Math.ceil((estTimeMs - Date.now()) / 60000)) : 0;
               const isAppt = patient.visitType === 'APPOINTMENT';
 
+              // Visual States
+              const cardBaseClass = "transition-all duration-200 rounded-xl border";
+              let rowStateClass = "bg-white border-slate-200 hover:border-primary-300 hover:shadow-sm";
+              
+              if (isServing) {
+                  rowStateClass = "bg-white border-l-4 border-l-blue-500 border-y-blue-100 border-r-blue-100 shadow-md shadow-blue-100/50 scale-[1.01] z-10 relative";
+              } else if (isNextUp) {
+                  rowStateClass = "bg-white border-l-4 border-l-indigo-500 border-y-indigo-50 border-r-indigo-50 shadow-sm";
+              } else if (patient.isEmergency) {
+                  rowStateClass = "bg-red-50/30 border-l-4 border-l-red-500 border-red-100";
+              } else if (patient.status === PatientStatus.ON_HOLD) {
+                  rowStateClass = "bg-orange-50/30 border-l-4 border-l-orange-400 border-orange-100 opacity-80";
+              } else if (draggedId === patient.id) {
+                  rowStateClass = "opacity-40 border-2 border-dashed border-primary-500";
+              }
+
               return (
                 <tr 
                   key={patient.id} 
@@ -67,149 +86,159 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                   onDragOver={(e) => { if (draggedId && draggedId !== patient.id && isWaiting && !isFiltered) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }}
                   onDrop={(e) => { e.preventDefault(); if (draggedId && draggedId !== patient.id && !isFiltered) { onDragDrop(draggedId, patient.id); setDraggedId(null); } }}
                   onDragEnd={() => setDraggedId(null)}
-                  className={`group transition-all duration-200 border border-slate-200 rounded-lg overflow-hidden 
-                    ${isServing ? 'bg-blue-50/80 hover:bg-blue-100 shadow-md relative z-10 border-l-4 border-l-blue-500' : 
-                      patient.isEmergency ? 'bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500' : 
-                      isNextUp ? 'bg-indigo-50/50 hover:bg-indigo-100/50 border-l-4 border-l-indigo-400' : 'bg-white hover:bg-slate-50'} 
-                    ${draggedId === patient.id ? 'opacity-40 border-2 border-dashed border-primary-500' : ''}`}
+                  className={`${cardBaseClass} ${rowStateClass} group`}
                 >
-                  <td className="px-4 py-4 text-center rounded-l-lg">
-                    <div className="flex items-center justify-center gap-3">
-                      {isWaiting && !isFiltered && <GripVertical className="h-4 w-4 text-slate-300 cursor-move hover:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                  {/* TOKEN COLUMN */}
+                  <td className="px-2 py-4 text-center rounded-l-xl">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      {isWaiting && !isFiltered && <GripVertical className="h-3 w-3 text-slate-300 cursor-move hover:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity mb-1" />}
                       <div className="relative">
-                        <div className={`inline-flex items-center justify-center h-10 w-10 rounded-xl font-black text-lg shadow-sm border ${patient.isEmergency ? 'bg-red-500 text-white border-red-600' : isServing ? 'bg-blue-600 text-white border-blue-700 animate-pulse' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                        <div className={`inline-flex items-center justify-center h-12 w-12 rounded-2xl font-black text-xl shadow-sm border ${patient.isEmergency ? 'bg-red-500 text-white border-red-600 shadow-red-200' : isServing ? 'bg-blue-600 text-white border-blue-700 shadow-blue-300 animate-pulse' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
                           {patient.tokenNumber}
                         </div>
-                        {patient.isEmergency && <div className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-0.5 rounded-full border border-red-200 shadow-sm"><AlertTriangle className="h-3 w-3 fill-current" /></div>}
+                        {patient.isEmergency && <div className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1 rounded-full border border-red-200 shadow-sm z-10"><AlertTriangle className="h-3 w-3 fill-current" /></div>}
                       </div>
+                      {isServing && <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider bg-blue-50 px-1.5 py-0.5 rounded">Serving</span>}
+                      {isNextUp && isWaiting && <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider bg-indigo-50 px-1.5 py-0.5 rounded animate-bounce">Next</span>}
                     </div>
                   </td>
                   
+                  {/* PATIENT INFO */}
                   <td className="px-4 py-4">
                     <div className="flex flex-col">
-                      <div className="flex items-center gap-2">
-                          <div className={`font-bold text-base ${isServing ? 'text-blue-900' : 'text-slate-900'}`}>{patient.name}</div>
-                          {isNextUp && isWaiting && (
-                              <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                  NEXT <ChevronRight className="h-3 w-3" />
-                              </span>
-                          )}
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 mt-0.5">
-                        <span>{patient.age ? `${patient.age}Y` : '--'} • {patient.gender || '--'}</span>
-                        <span className="text-slate-300">|</span>
+                      <div className={`font-bold text-base ${isServing ? 'text-blue-900' : 'text-slate-900'}`}>{patient.name}</div>
+                      <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5 font-medium">
+                        <span>{patient.age ? `${patient.age}Y` : '--'}</span>
+                        <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                        <span>{patient.gender || '--'}</span>
+                        <span className="w-1 h-1 rounded-full bg-slate-300"></span>
                         <span className="font-mono">{patient.phone}</span>
                       </div>
-                      <div className="flex items-center gap-2 mt-1">
-                          {isAppt ? (
-                              <span className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100 font-bold flex items-center gap-1">
-                                  <Calendar className="h-3 w-3" /> {patient.appointmentTime}
-                              </span>
-                          ) : (
-                              <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                                  <User className="h-3 w-3" /> Walk-in
-                              </span>
-                          )}
-                          {patient.symptoms && <div className="text-[10px] text-slate-500 italic truncate max-w-[150px]">"{patient.symptoms}"</div>}
-                      </div>
+                      {patient.symptoms && (
+                          <div className="mt-1.5 text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded inline-block w-fit max-w-[200px] truncate border border-slate-100">
+                              <span className="opacity-60 mr-1">Reason:</span>{patient.symptoms}
+                          </div>
+                      )}
                     </div>
                   </td>
 
+                  {/* DOCTOR */}
                   <td className="px-4 py-4">
-                    <div className="flex items-center gap-2">
-                        {doc?.avatarUrl ? <img src={doc.avatarUrl} className="w-8 h-8 rounded-full bg-slate-200 border border-white shadow-sm" /> : <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-500">{doc?.name?.charAt(0)}</div>}
+                    <div className="flex items-center gap-3">
+                        {doc?.avatarUrl ? <img src={doc.avatarUrl} className="w-9 h-9 rounded-full bg-slate-200 border border-white shadow-sm object-cover" /> : <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-500">{doc?.name?.charAt(0)}</div>}
                         <div>
-                            <div className="text-slate-900 font-medium text-sm">{doc?.name || 'Unknown'}</div>
-                            <div className="text-[10px] text-slate-400">{doc?.specialty}</div>
+                            <div className="text-slate-900 font-bold text-sm leading-tight">{doc?.name || 'Unknown'}</div>
+                            <div className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold mt-0.5">{doc?.specialty}</div>
                         </div>
                     </div>
                   </td>
                   
-                  {/* Estimated Time Column */}
+                  {/* TIMING & STATUS */}
                   <td className="px-4 py-4">
                       {isServing ? (
-                          <span className="text-xs font-bold text-blue-600 animate-pulse bg-blue-100 px-2 py-1 rounded">Serving Now</span>
+                          <div className="flex items-center gap-2 text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 w-fit">
+                              <Activity className="h-4 w-4 animate-pulse" />
+                              <div className="flex flex-col">
+                                  <span className="text-xs font-bold">In Consultation</span>
+                                  <span className="text-[10px] opacity-80">Started just now</span>
+                              </div>
+                          </div>
                       ) : isWaiting ? (
-                          <div className="flex flex-col">
-                              <span className="text-sm font-bold text-slate-700 flex items-center gap-1">
-                                  <Clock className="h-3 w-3 text-slate-400" /> {estTimeStr}
-                              </span>
-                              <span className="text-[10px] text-slate-500 font-medium">in ~{waitMins} mins</span>
+                          <div className="flex flex-col gap-1">
+                              {/* Timing */}
+                              <div className="flex items-center gap-2">
+                                  <Clock className="h-3.5 w-3.5 text-slate-400" />
+                                  <span className="text-sm font-bold text-slate-700">{estTimeStr}</span>
+                                  <span className="text-[10px] text-slate-400 font-medium bg-slate-50 px-1.5 rounded">~{waitMins}m</span>
+                              </div>
+                              {/* Arrival Status */}
+                              <div className="flex items-center gap-1.5">
+                                  {patient.isCheckedIn ? (
+                                      <span className="text-[10px] font-bold text-green-600 flex items-center gap-1">
+                                          <CheckCircle className="h-3 w-3 fill-current" /> Arrived
+                                      </span>
+                                  ) : (
+                                      <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                                          <div className="w-2 h-2 rounded-full border border-slate-300"></div> Not Arrived
+                                      </span>
+                                  )}
+                              </div>
                           </div>
                       ) : (
-                          <span className="text-slate-400 text-xs">--</span>
+                          <Badge status={patient.status} />
                       )}
                   </td>
 
+                  {/* TYPE */}
                   <td className="px-4 py-4">
-                    <div className="flex flex-col gap-1 items-start">
-                        <Badge status={patient.status} />
-                        {patient.status !== PatientStatus.COMPLETED && patient.status !== PatientStatus.CANCELLED && (
-                            patient.isCheckedIn ? (
-                                <span className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded font-bold flex items-center gap-1 border border-green-100">
-                                    <CheckCircle className="h-3 w-3"/> Arrived
-                                </span>
-                            ) : (
-                                <span className="text-[10px] bg-slate-50 text-slate-400 px-1.5 py-0.5 rounded font-medium border border-slate-100">
-                                    Not Here
-                                </span>
-                            )
-                        )}
-                    </div>
+                      <div className="flex flex-col items-start gap-1">
+                          {isAppt ? (
+                              <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-1 rounded-md border border-purple-100 font-bold flex items-center gap-1.5">
+                                  <Calendar className="h-3 w-3" /> {patient.appointmentTime}
+                              </span>
+                          ) : (
+                              <span className="text-[10px] text-slate-600 bg-slate-50 px-2 py-1 rounded-md border border-slate-200 font-bold flex items-center gap-1.5">
+                                  <User className="h-3 w-3" /> Walk-in
+                              </span>
+                          )}
+                          {patient.isEmergency && (
+                              <span className="text-[10px] text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100 font-bold">
+                                  Emergency
+                              </span>
+                          )}
+                      </div>
                   </td>
 
-                  <td className="px-4 py-4 text-right rounded-r-lg">
-                    <div className="flex justify-end gap-2 items-center">
+                  {/* ACTIONS */}
+                  <td className="px-4 py-4 text-right rounded-r-xl">
+                    <div className="flex justify-end gap-1 items-center">
                       {isWaiting && (
                         <>
                           {patient.isCheckedIn ? (
-                            <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR)} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 shadow-sm transition-all group-hover:scale-105" title="Call Next">
-                              <PlayCircle className="h-5 w-5" />
+                            <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm shadow-blue-200 transition-all active:scale-95 text-xs font-bold mr-1" title="Call Patient">
+                              <PlayCircle className="h-3.5 w-3.5" /> Call
                             </button>
                           ) : (
-                            <button disabled className="p-2 text-slate-300 bg-slate-100 rounded-lg border border-slate-200 cursor-not-allowed">
-                              <PlayCircle className="h-5 w-5" />
+                            <button disabled className="p-2 text-slate-300 bg-slate-50 rounded-lg cursor-not-allowed border border-slate-100 mr-1">
+                              <PlayCircle className="h-4 w-4" />
                             </button>
-                          )}
-                          {!isFiltered && (
-                              <button onClick={() => onManualReorder(patient.id, 'UP')} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                                <ArrowUp className="h-4 w-4" />
-                              </button>
                           )}
                         </>
                       )}
                       
                       {isServing && (
-                        <button onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)} className="p-2 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 shadow-sm transition-all" title="Mark Completed">
-                          <CheckSquare className="h-5 w-5" />
+                        <button onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm shadow-green-200 transition-all active:scale-95 text-xs font-bold mr-1" title="Finish Visit">
+                          <CheckSquare className="h-3.5 w-3.5" /> Done
                         </button>
                       )}
                       
-                      <button onClick={() => onEditPatient(patient)} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-slate-100 rounded-lg" title="Edit Details">
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      
-                      {!patient.isCheckedIn && isWaiting && (
-                        <button onClick={() => onManualCheckIn(patient.id)} className="flex items-center gap-1 px-3 py-1.5 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-md text-xs font-bold transition-colors">
-                          <UserCheck className="h-3.5 w-3.5" /> Check In
-                        </button>
-                      )}
-                      
-                      {isWaiting && (
-                        <button onClick={() => onVitalsClick(patient)} className={`p-2 rounded-lg transition-colors ${hasVitals ? 'text-red-500 bg-red-50 hover:bg-red-100' : 'text-slate-400 hover:text-red-500 hover:bg-slate-100'}`} title="Vitals">
-                          <Activity className="h-4 w-4" />
-                        </button>
-                      )}
-                      
-                      <button onClick={() => onToggleEmergency(patient.id)} className={`p-2 rounded-lg transition-colors ${patient.isEmergency ? 'text-red-600 bg-red-100 shadow-inner' : 'text-slate-300 hover:text-orange-500 hover:bg-orange-50'}`} title="Toggle Emergency">
-                        <AlertTriangle className="h-4 w-4" />
-                      </button>
-                      
-                      {isWaiting && (
-                        <button onClick={() => { if(window.confirm('Cancel visit?')) onCancelPatient(patient.id); }} className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Cancel Visit">
-                          <XCircle className="h-4 w-4" />
-                        </button>
-                      )}
+                      {/* Secondary Actions Group */}
+                      <div className="flex items-center bg-slate-50 rounded-lg border border-slate-200 p-0.5">
+                          {!patient.isCheckedIn && isWaiting && (
+                            <button onClick={() => onManualCheckIn(patient.id)} className="p-1.5 text-slate-500 hover:text-purple-600 hover:bg-white rounded-md transition-colors" title="Check In">
+                              <UserCheck className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          
+                          <button onClick={() => onEditPatient(patient)} className="p-1.5 text-slate-500 hover:text-primary-600 hover:bg-white rounded-md transition-colors" title="Edit">
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+
+                          {isWaiting && (
+                            <>
+                                <div className="w-px h-3 bg-slate-200 mx-0.5"></div>
+                                <button onClick={() => onVitalsClick(patient)} className={`p-1.5 rounded-md transition-colors ${hasVitals ? 'text-red-500 bg-red-50' : 'text-slate-400 hover:text-red-500 hover:bg-white'}`} title="Vitals">
+                                <Activity className="h-3.5 w-3.5" />
+                                </button>
+                                <button onClick={() => onToggleEmergency(patient.id)} className={`p-1.5 rounded-md transition-colors ${patient.isEmergency ? 'text-red-600 bg-red-100' : 'text-slate-400 hover:text-orange-500 hover:bg-white'}`} title="Emergency">
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                                </button>
+                                <button onClick={() => { if(window.confirm('Cancel visit?')) onCancelPatient(patient.id); }} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-white rounded-md transition-colors" title="Cancel">
+                                <XCircle className="h-3.5 w-3.5" />
+                                </button>
+                            </>
+                          )}
+                      </div>
                     </div>
                   </td>
                 </tr>
