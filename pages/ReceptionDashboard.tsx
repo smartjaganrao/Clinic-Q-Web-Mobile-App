@@ -1,12 +1,12 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Doctor, Patient, PatientStatus, ClinicType, Vitals, DaySchedule } from '../types';
+import { Doctor, Patient, PatientStatus, ClinicType, Vitals, DaySchedule, DoctorStatus } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
 import { 
   UserPlus, Search, Filter, Stethoscope, List, Database, Calendar, 
-  Clock, XCircle, RefreshCw, History, User, Phone, Activity
+  Clock, XCircle, RefreshCw, History, User, Phone, Activity, PlayCircle, PauseCircle, ChevronRight
 } from 'lucide-react';
 // Modular Features
 import { QueueTable } from '../features/reception/components/QueueTable';
@@ -112,6 +112,31 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
       return () => clearInterval(interval);
   }, []);
 
+  // --- DOCTOR QUEUE STATS (The Deck Data) ---
+  const doctorQueueStats = useMemo(() => {
+      const todayStr = getLocalTodayStr();
+      return doctors.map(doc => {
+          // Get all active patients for this doctor today
+          const docPatients = patients.filter(p => {
+              if (p.doctorId !== doc.id) return false;
+              if (p.visitType === 'APPOINTMENT' && p.appointmentDate !== todayStr) return false;
+              return p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR;
+          }).sort(comparePatients);
+
+          const current = docPatients.find(p => p.status === PatientStatus.WITH_DOCTOR);
+          const waitingList = docPatients.filter(p => p.status === PatientStatus.WAITING);
+          const next = waitingList.length > 0 ? waitingList[0] : undefined;
+          const count = waitingList.length;
+
+          return {
+              doc,
+              current,
+              next,
+              count
+          };
+      });
+  }, [doctors, patients, currentTime]);
+
   // --- QUEUE ESTIMATION ENGINE ---
   const estimatedTimes = useMemo(() => {
     const estimates: Record<string, number> = {};
@@ -180,6 +205,15 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
       })
       .sort(comparePatients);
   }, [patients, filterDoctorId, searchQuery, filterStatus, filterType, currentTime]);
+
+  // Identify "Next" patient for highlighting in the table
+  const nextUpPatientIds = useMemo(() => {
+      const ids = new Set<string>();
+      doctorQueueStats.forEach(stat => {
+          if (stat.next) ids.add(stat.next.id);
+      });
+      return ids;
+  }, [doctorQueueStats]);
 
   const uniquePatients = useMemo(() => {
     const map = new Map<string, Patient>();
@@ -301,9 +335,78 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         </div>
 
         <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+            {/* DOCTOR OPERATIONS DECK (QUEUE ONLY) */}
+            {activeTab === 'QUEUE' && (
+                <div className="bg-slate-50 border-b border-slate-200 pt-4 pb-0 px-4">
+                    <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4">
+                        {/* "All" Card */}
+                        <button 
+                            onClick={() => setFilterDoctorId('ALL')} 
+                            className={`flex-shrink-0 w-64 p-3 rounded-xl border-2 transition-all text-left relative overflow-hidden group ${filterDoctorId === 'ALL' ? 'bg-white border-primary-500 shadow-md ring-1 ring-primary-100' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
+                        >
+                            <div className="flex justify-between items-start mb-2">
+                                <span className="font-bold text-slate-900 text-sm">All Doctors</span>
+                                <span className="text-xs bg-slate-100 px-2 py-0.5 rounded-full font-bold text-slate-600">{patients.filter(p => p.status === PatientStatus.WAITING).length} Waiting</span>
+                            </div>
+                            <div className="flex -space-x-2 mb-2">
+                                {doctors.slice(0,4).map(d => <img key={d.id} src={d.avatarUrl} className="w-6 h-6 rounded-full border-2 border-white bg-slate-200" />)}
+                                {doctors.length > 4 && <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] text-slate-500 font-bold">+{doctors.length - 4}</div>}
+                            </div>
+                            <div className="text-[10px] text-slate-400">View master list</div>
+                        </button>
+
+                        {/* Individual Doctor Cards */}
+                        {doctorQueueStats.map(({ doc, current, next, count }) => {
+                            const isSelected = filterDoctorId === doc.id;
+                            const isActive = doc.status === DoctorStatus.AVAILABLE;
+                            
+                            return (
+                                <button 
+                                    key={doc.id}
+                                    onClick={() => setFilterDoctorId(isSelected ? 'ALL' : doc.id)}
+                                    className={`flex-shrink-0 w-72 p-3 rounded-xl border-2 transition-all text-left relative group ${isSelected ? 'bg-white border-primary-500 shadow-md ring-1 ring-primary-100' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
+                                >
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="relative">
+                                            <img src={doc.avatarUrl} className="w-10 h-10 rounded-full bg-slate-100 object-cover" />
+                                            <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white rounded-full ${doc.status === DoctorStatus.AVAILABLE ? 'bg-green-500' : doc.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-300'}`}></div>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-bold text-slate-900 text-sm truncate">{doc.name}</div>
+                                            <div className="text-[10px] text-slate-500 truncate">{doc.specialty}</div>
+                                        </div>
+                                        <div className={`text-xs px-2 py-1 rounded font-bold ${count > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                                            {count} Wait
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-2 text-center">
+                                        <div className={`rounded-lg p-1.5 border ${current ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-slate-100'}`}>
+                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Serving</div>
+                                            <div className={`text-lg font-black leading-none ${current ? 'text-blue-600' : 'text-slate-300'}`}>{current ? `#${current.tokenNumber}` : '--'}</div>
+                                        </div>
+                                        <div className={`rounded-lg p-1.5 border ${next ? 'bg-slate-50 border-slate-200' : 'bg-slate-50 border-slate-100'}`}>
+                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Next</div>
+                                            <div className={`text-lg font-bold leading-none ${next ? 'text-slate-700' : 'text-slate-300'}`}>{next ? `#${next.tokenNumber}` : '--'}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Action Hover (Optional: Could add "Call Next" here) */}
+                                    {isSelected && isActive && next && !current && (
+                                        <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="font-bold text-primary-600 text-sm flex items-center gap-1">Click Call Next in Table <ChevronRight className="h-4 w-4" /></div>
+                                        </div>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
             {/* TOOLBAR */}
             {(activeTab === 'QUEUE' || activeTab === 'DATABASE') && (
-                <div className="p-4 border-b border-slate-200 bg-slate-50 space-y-4">
+                <div className="p-4 border-b border-slate-200 bg-white space-y-4">
                     {/* Top Row: Search & Add */}
                     <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
                          <div className="relative w-full sm:max-w-md">
@@ -313,16 +416,22 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} 
                             />
                         </div>
-                        <Button className="w-full sm:w-auto shadow-sm" onClick={() => setIsPatientModalOpen(true)}> <UserPlus className="h-4 w-4 mr-2" /> Add Patient </Button>
+                        <div className="flex gap-2 w-full sm:w-auto">
+                            {activeTab === 'QUEUE' && filterDoctorId !== 'ALL' && (
+                                <Button variant="secondary" onClick={() => setFilterDoctorId('ALL')} className="flex-1 sm:flex-none">Show All</Button>
+                            )}
+                            <Button className="flex-1 sm:flex-none shadow-sm" onClick={() => setIsPatientModalOpen(true)}> <UserPlus className="h-4 w-4 mr-2" /> Add Patient </Button>
+                        </div>
                     </div>
 
                     {/* Bottom Row: Filters (Queue Only) */}
                     {activeTab === 'QUEUE' && (
-                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-200/50">
+                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100">
                             <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wide mr-2">
                                 <Filter className="h-3 w-3" /> Filters:
                             </div>
                             
+                            {/* Doctor Filter (Dropdown syncs with Deck) */}
                             <select 
                                 className="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2 min-w-[140px]"
                                 value={filterDoctorId} 
@@ -376,6 +485,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     doctors={doctors}
                     estimatedTimes={estimatedTimes}
                     isFiltered={isFiltered}
+                    nextUpPatientIds={nextUpPatientIds}
                     onUpdateStatus={onUpdateStatus}
                     onManualReorder={onManualReorder}
                     onDragDrop={onDragDrop}
