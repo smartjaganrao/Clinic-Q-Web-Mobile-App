@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, Notification, ClinicStats, TimeSlot, ClinicType, Vitals, PainPoint } from './types';
 import { INITIAL_CLINICS } from './constants';
@@ -112,6 +113,25 @@ export default function App() {
       }
   }, [currentView, currentClinic, userRole]);
 
+  // Sync Data Across Tabs (Concurrency)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+        if (e.key === 'clinicq_db_v2' && e.newValue) {
+            try {
+                const updatedClinics = JSON.parse(e.newValue);
+                // Updating state will trigger the save effect below, but since the value
+                // in state will match localStorage, the save effect's equality check prevents a loop.
+                setClinics(updatedClinics);
+            } catch (err) {
+                console.error("Failed to sync external changes:", err);
+            }
+        }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
   // Save Database on ANY change
   useEffect(() => {
     if (clinics.length > 0) {
@@ -124,26 +144,6 @@ export default function App() {
       }
     }
   }, [clinics]);
-
-  // Sync Data Across Tabs (Concurrency)
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-        if (e.key === 'clinicq_db_v2' && e.newValue) {
-            try {
-                const updatedClinics = JSON.parse(e.newValue);
-                // We update state, which triggers the save effect above.
-                // The save effect checks if LS matches state. 
-                // Since LS was just updated (causing this event), they match, so no write loop.
-                setClinics(updatedClinics);
-            } catch (err) {
-                console.error("Failed to sync external changes:", err);
-            }
-        }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
 
   // Save Session
   useEffect(() => {

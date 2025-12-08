@@ -358,7 +358,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           const clinic = clinics.find(c => c.id === preSelectedClinicId); 
           if (clinic) { setSelectedCity(clinic.city); } 
 
-          // History update for deep link
+          // History update for deep link: Replace state rather than push to avoid double back
           window.history.replaceState({ 
               appView: 'PATIENT_TRACKER', 
               view: 'CLINIC_DETAILS', 
