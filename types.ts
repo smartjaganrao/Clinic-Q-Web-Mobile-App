@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   DOCTOR = 'DOCTOR',
@@ -146,7 +147,8 @@ export interface ClinicStats {
   completedToday: number;
 }
 
-export interface Notification {
+// Renamed from Notification to AppNotification to avoid conflict with DOM Notification API
+export interface AppNotification {
   id: string;
   message: string;
   type: 'info' | 'success' | 'warning' | 'error';

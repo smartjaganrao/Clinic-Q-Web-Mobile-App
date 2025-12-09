@@ -1,13 +1,13 @@
+
 import { GoogleGenAI } from "@google/genai";
 
-// Initialize the client.
-// NOTE: In a real production app, you would proxy this through a backend to protect the API key.
-// For this demo structure, we assume process.env.API_KEY is available.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Initialize the client safely for browser environments where 'process' might not be defined.
+const apiKey = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : '';
+const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
 export const generatePatientSummary = async (rawNotes: string, patientName: string, age: string = 'unknown'): Promise<string> => {
-  if (!process.env.API_KEY) {
-    return "API Key missing. Please configure the environment variable.";
+  if (!apiKey) {
+    return "AI Service Unavailable (Missing API Key).";
   }
 
   try {
@@ -39,7 +39,7 @@ export const generatePatientSummary = async (rawNotes: string, patientName: stri
 export const predictWaitTime = async (queueLength: number, avgConsultTime: number): Promise<string> => {
     // A playful example of using AI for something simple, though a formula is better.
     // Demonstrating tool usage potential.
-    if (!process.env.API_KEY) return `${queueLength * avgConsultTime} minutes`;
+    if (!apiKey) return `${queueLength * avgConsultTime} minutes`;
 
     try {
         const response = await ai.models.generateContent({

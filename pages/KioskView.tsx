@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Doctor, Patient, PatientStatus, DoctorStatus } from '../types';
 import { Coffee, Clock, Zap, AlertTriangle, PlayCircle, LogOut, Maximize, Minimize, User, Calendar, Languages } from 'lucide-react';

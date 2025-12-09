@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, Notification, ClinicStats, TimeSlot, ClinicType, Vitals, PainPoint } from './types';
+import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, AppNotification, ClinicStats, TimeSlot, ClinicType, Vitals, PainPoint } from './types';
 import { INITIAL_CLINICS } from './constants';
 import { LandingPage } from './pages/LandingPage';
 import { StaffLogin } from './pages/StaffLogin';
@@ -87,12 +87,13 @@ export default function App() {
   
   // Patient Auth
   const [patientAuth, setPatientAuth] = useState<{name: string, phone: string} | null>(session?.loggedInPatient || null);
+  const [initialSearchMode, setInitialSearchMode] = useState<'DOCTOR' | 'CLINIC'>('CLINIC');
   
   // Unified Pending Action State
   const [pendingAction, setPendingAction] = useState<{ type: 'CHECK_IN', clinicId: string, patientId: string } | { type: 'BOOKING', data: PendingBooking } | null>(null);
 
   // Notifications
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   // Derived State
   const currentClinic = clinics.find(c => c.id === currentClinicId) || null;
@@ -178,7 +179,8 @@ export default function App() {
   const handleStaffLogin = () => setCurrentView('STAFF_LOGIN');
   
   // UPDATED: Go straight to Tracker even if not logged in (Guest Mode)
-  const handlePatientEnter = () => {
+  const handlePatientEnter = (mode?: 'DOCTOR' | 'CLINIC') => {
+      setInitialSearchMode(mode || 'CLINIC');
       setCurrentView('PATIENT_TRACKER');
   };
 
@@ -759,6 +761,7 @@ export default function App() {
           onCheckIn={handlePatientCheckIn}
           preSelectedClinicId={currentClinicId || undefined}
           onClearPendingAction={() => setCurrentClinicId(null)}
+          initialSearchMode={initialSearchMode}
         />
       )}
     </>

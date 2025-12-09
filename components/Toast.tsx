@@ -1,9 +1,10 @@
+
 import React, { useEffect } from 'react';
-import { Notification } from '../types';
+import { AppNotification } from '../types';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 interface ToastProps {
-  notifications: Notification[];
+  notifications: AppNotification[];
   remove: (id: string) => void;
 }
 
@@ -17,7 +18,7 @@ export const ToastContainer: React.FC<ToastProps> = ({ notifications, remove }) 
   );
 };
 
-const Toast: React.FC<{ notification: Notification; onRemove: () => void }> = ({ notification, onRemove }) => {
+const Toast: React.FC<{ notification: AppNotification; onRemove: () => void }> = ({ notification, onRemove }) => {
   useEffect(() => {
     const timer = setTimeout(() => {
       onRemove();

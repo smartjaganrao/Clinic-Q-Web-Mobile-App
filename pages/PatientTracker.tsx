@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor } from '../types';
 import { Button } from '../components/Button';
@@ -8,6 +9,7 @@ import { Logo } from '../components/Logo';
 import { AuthModal } from '../components/AuthModal';
 // Imported Modules
 import { ClinicCard } from '../features/patient/components/ClinicCard';
+import { DoctorSearchCard } from '../features/patient/components/DoctorSearchCard'; // New Import
 import { MapPanel } from '../features/patient/components/MapPanel';
 import { DoctorProfileModal } from '../features/patient/components/DoctorProfileModal';
 import L from 'leaflet';
@@ -37,6 +39,7 @@ interface PatientTrackerProps {
   onCheckIn: (clinicId: string, pId: string) => void;
   preSelectedClinicId?: string;
   onClearPendingAction: () => void;
+  initialSearchMode?: 'DOCTOR' | 'CLINIC'; // New Prop
 }
 
 // --- HELPER FUNCTIONS ---
@@ -185,7 +188,7 @@ interface GroupedSlots {
 }
 
 export const PatientTracker: React.FC<PatientTrackerProps> = ({
-  clinics, userPhone, userName, isGuest, onLoginClick, onGuestBook, onBack, onGetToken, addToast, onUpdateDetails, onCancelVisit, onCheckIn, preSelectedClinicId, onClearPendingAction
+  clinics, userPhone, userName, isGuest, onLoginClick, onGuestBook, onBack, onGetToken, addToast, onUpdateDetails, onCancelVisit, onCheckIn, preSelectedClinicId, onClearPendingAction, initialSearchMode
 }) => {
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'BOOK' | 'HISTORY' | 'PROFILE'>('BOOK');
   const [selectedClinicId, setSelectedClinicId] = useState<string | null>(preSelectedClinicId || null);
@@ -193,6 +196,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // NEW: Search Mode Switch (Doctor vs Clinic)
+  const [searchMode, setSearchMode] = useState<'DOCTOR' | 'CLINIC'>(initialSearchMode || 'CLINIC');
+
   // FILTERS STATE
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedCity, setSelectedCity] = useState('All Cities');
@@ -432,6 +438,54 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       }); 
   }, [clinics, searchQuery, selectedCategory, sortBy, selectedCity, selectedSpecialty, userLocation, showOpenOnly]);
 
+  // --- DOCTOR SEARCH FILTERING (FLATTENED LIST) ---
+  const filteredDoctors = useMemo(() => {
+      // Step 1: Flatten ALL doctors from all clinics
+      const allDoctors = clinics.flatMap(clinic => clinic.doctors.map(doctor => ({ doctor, clinic })));
+
+      // Step 2: Apply Filters
+      return allDoctors.filter(({ doctor, clinic }) => {
+          const q = searchQuery.toLowerCase();
+          
+          // Search Logic
+          if (q) {
+              const matchesName = doctor.name.toLowerCase().includes(q);
+              const matchesSpecialty = doctor.specialty.toLowerCase().includes(q);
+              const matchesClinic = clinic.name.toLowerCase().includes(q);
+              const matchesCity = clinic.city.toLowerCase().includes(q);
+              
+              if (!matchesName && !matchesSpecialty && !matchesClinic && !matchesCity) return false;
+          }
+
+          // City Logic
+          if (selectedCity !== 'All Cities' && clinic.city !== selectedCity) return false;
+
+          // Specialty Logic
+          if (selectedSpecialty !== 'All Specialties' && doctor.specialty !== selectedSpecialty) return false;
+
+          // Category Logic
+          if (selectedCategory !== 'ALL') {
+              const cat = selectedCategory.toLowerCase();
+              if (cat === 'dental' && !doctor.specialty.toLowerCase().includes('dent')) return false;
+              else if (cat === 'pediatric' && !doctor.specialty.toLowerCase().includes('pedia')) return false;
+              // ... can expand per strict definition, but simpler is often better for filtering
+          }
+
+          return true;
+      }).sort((a, b) => {
+          // Sort Logic
+          if (sortBy === 'NEAR' && userLocation && a.clinic.geoLocation && b.clinic.geoLocation) {
+              const distA = calculateDistance(userLocation.lat, userLocation.lng, a.clinic.geoLocation.lat, a.clinic.geoLocation.lng);
+              const distB = calculateDistance(userLocation.lat, userLocation.lng, b.clinic.geoLocation.lat, b.clinic.geoLocation.lng);
+              return distA - distB;
+          }
+          if (sortBy === 'FEE') return a.doctor.consultationFee - b.doctor.consultationFee;
+          // Default to rating/relevance
+          return b.doctor.rating - a.doctor.rating;
+      });
+  }, [clinics, searchQuery, selectedCity, selectedSpecialty, selectedCategory, sortBy, userLocation]);
+
+
   // --- SMART DOCTOR-SPECIFIC WAIT LOGIC ---
   const getDoctorWaitDetails = (clinic: Clinic, doctorId: string) => {
       const doc = clinic.doctors.find(d => d.id === doctorId);
@@ -583,11 +637,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       if (!viewingDoctor) return;
       
       // Need to identify the clinic the doctor belongs to.
-      // In the context of ClinicCard interaction, the doctor belongs to the clinic being displayed.
-      // However, if we filter clinics, we need to ensure we have the correct clinic ID.
-      // We'll search through clinics to find which one this doctor instance belongs to.
-      // Note: A doctor might be in multiple clinics (via masterId), but `viewingDoctor` is a specific instance.
-      
       const clinic = clinics.find(c => c.doctors.some(d => d.id === viewingDoctor.id));
       
       if (clinic) {
@@ -780,11 +829,35 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 {/* Search & Filters Header */}
                                 <div className="px-4 md:px-8 py-4 bg-white border-b border-slate-200 shadow-sm z-10 shrink-0 space-y-3">
                                     <div className="max-w-7xl mx-auto space-y-3">
+                                        
+                                        {/* NEW: MODE SWITCHER */}
+                                        <div className="flex justify-center mb-2">
+                                            <div className="bg-slate-100 p-1 rounded-lg flex text-sm font-bold shadow-inner">
+                                                <button 
+                                                    onClick={() => setSearchMode('DOCTOR')}
+                                                    className={`px-6 py-2 rounded-md transition-all flex items-center gap-2 ${searchMode === 'DOCTOR' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}
+                                                >
+                                                    <Stethoscope className="h-4 w-4" /> Doctors
+                                                </button>
+                                                <button 
+                                                    onClick={() => setSearchMode('CLINIC')}
+                                                    className={`px-6 py-2 rounded-md transition-all flex items-center gap-2 ${searchMode === 'CLINIC' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}
+                                                >
+                                                    <Building2 className="h-4 w-4" /> Clinics
+                                                </button>
+                                            </div>
+                                        </div>
+
                                         {/* Search Row */}
                                         <div className="flex flex-col md:flex-row gap-4">
                                             <div className="relative flex-1">
                                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                                <input className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 shadow-sm" placeholder="Search doctor, clinic or symptoms..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                                                <input 
+                                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 shadow-sm" 
+                                                    placeholder={searchMode === 'DOCTOR' ? "Search doctor name or specialty..." : "Search clinic name or city..."}
+                                                    value={searchQuery} 
+                                                    onChange={(e) => setSearchQuery(e.target.value)} 
+                                                />
                                             </div>
                                         </div>
 
@@ -869,7 +942,11 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     <div className={`w-full md:w-[60%] lg:w-[55%] xl:w-[50%] h-full overflow-y-auto bg-slate-50 p-4 md:p-6 lg:p-8 custom-scrollbar block`}>
                                          <div className="max-w-2xl mx-auto space-y-4 pb-20 md:pb-0">
                                             <div className="flex justify-between items-center mb-2">
-                                                <h3 className="font-bold text-slate-900">{filteredClinics.length} Care Options Found</h3>
+                                                <h3 className="font-bold text-slate-900">
+                                                    {searchMode === 'CLINIC' 
+                                                        ? `${filteredClinics.length} Clinics Found` 
+                                                        : `${filteredDoctors.length} Doctors Found`}
+                                                </h3>
                                                 <div className="hidden md:flex gap-2 text-xs">
                                                     <select className="bg-transparent font-bold text-slate-500 cursor-pointer focus:outline-none" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
                                                         <option value="NEAR">Sort: Nearest</option>
@@ -880,7 +957,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                             </div>
 
                                             <div className="grid grid-cols-1 gap-4">
-                                                {filteredClinics.map(clinic => {
+                                                {/* CLINIC MODE RENDERING */}
+                                                {searchMode === 'CLINIC' && filteredClinics.map(clinic => {
                                                     const waitInfo = getClinicWaitStats(clinic); 
                                                     const feeRange = getFeeRange(clinic); 
                                                     const rating = (clinic.doctors.reduce((acc, d) => acc + d.rating, 0) / (clinic.doctors.length || 1)).toFixed(1); 
@@ -917,14 +995,54 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                         />
                                                     );
                                                 })}
-                                                {filteredClinics.length === 0 && ( <div className="text-center py-12 opacity-50"> <Filter className="h-12 w-12 mx-auto mb-3 text-slate-300" /> <p>No clinics found.</p> </div> )}
+
+                                                {/* DOCTOR MODE RENDERING */}
+                                                {searchMode === 'DOCTOR' && filteredDoctors.map(({ doctor, clinic }) => {
+                                                    // Calculate Distance
+                                                    let distLabel = '~1.2 km';
+                                                    if (userLocation && clinic.geoLocation) {
+                                                        const d = calculateDistance(userLocation.lat, userLocation.lng, clinic.geoLocation.lat, clinic.geoLocation.lng);
+                                                        distLabel = `${d.toFixed(1)} km`;
+                                                    }
+
+                                                    // Calculate Next Slot
+                                                    const next = getNextAvailability(doctor, 14);
+                                                    const formatShort = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                                                    const nextSlotLabel = next ? (next.status === 'now' ? 'Available Now' : `Next: ${formatShort(next.start)}`) : 'No Slots';
+                                                    const isWalkInAllowed = next?.status === 'now' || doctor.isAvailable;
+
+                                                    return (
+                                                        <DoctorSearchCard 
+                                                            key={doctor.id}
+                                                            doctor={doctor}
+                                                            clinic={clinic}
+                                                            distLabel={distLabel}
+                                                            nextSlotLabel={nextSlotLabel}
+                                                            isWalkInAllowed={isWalkInAllowed}
+                                                            onBook={() => {
+                                                                setSelectedClinicId(clinic.id);
+                                                                setSelectedDoctorId(doctor.id);
+                                                                setVisitType('APPOINTMENT');
+                                                                navigateToView('FORM', clinic.id);
+                                                            }}
+                                                            onViewProfile={() => setViewingDoctor(doctor)}
+                                                        />
+                                                    );
+                                                })}
+
+                                                {((searchMode === 'CLINIC' && filteredClinics.length === 0) || (searchMode === 'DOCTOR' && filteredDoctors.length === 0)) && ( 
+                                                    <div className="text-center py-12 opacity-50"> 
+                                                        <Filter className="h-12 w-12 mx-auto mb-3 text-slate-300" /> 
+                                                        <p>No results found.</p> 
+                                                    </div> 
+                                                )}
                                             </div>
                                          </div>
                                     </div>
 
                                     {/* MAP PANEL (Right on Desktop, Hidden on Mobile) */}
                                     <MapPanel 
-                                        clinics={filteredClinics}
+                                        clinics={searchMode === 'CLINIC' ? filteredClinics : Array.from(new Set(filteredDoctors.map(d => d.clinic)))} // In Doctor mode, show unique clinics on map
                                         userLocation={userLocation}
                                         mapCenter={mapCenter}
                                         isPickingLocation={isPickingLocation}
