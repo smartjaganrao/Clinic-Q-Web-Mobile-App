@@ -1,4 +1,3 @@
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   DOCTOR = 'DOCTOR',
@@ -55,6 +54,14 @@ export interface DaySchedule {
   isOff: boolean;
 }
 
+export interface Review {
+  id: string;
+  patientName: string;
+  rating: number;
+  comment: string;
+  date: string;
+}
+
 export interface Doctor {
   id: string;
   masterId: string; // NEW: Unique ID linking same doctor across clinics
@@ -75,6 +82,12 @@ export interface Doctor {
   consultationTime: number; // New: Avg time per patient in minutes
   rating: number; // New: Individual rating
   reviewCount: number; // New: Individual review count
+  // Rich Profile Fields
+  bio?: string;
+  education?: string[];
+  languages?: string[];
+  experience?: number; // Years of experience
+  reviews?: Review[];
 }
 
 export interface PainPoint {

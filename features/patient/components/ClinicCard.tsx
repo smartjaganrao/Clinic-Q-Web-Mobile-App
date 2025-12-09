@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { Clinic, Doctor } from '../../../types';
 import { Button } from '../../../components/Button';
-import { Building2, Star, MapPin, Clock, Timer, Calendar, Zap, ExternalLink } from 'lucide-react';
+import { Building2, Star, MapPin, Clock, Timer, Calendar, Zap, ExternalLink, ChevronRight } from 'lucide-react';
 
 function IndianRupeeIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -29,10 +28,11 @@ interface ClinicCardProps {
   onSelect: () => void;
   onBook: () => void;
   onQueue: () => void;
+  onViewDoctor: (doctor: Doctor) => void;
 }
 
 export const ClinicCard: React.FC<ClinicCardProps> = ({
-  clinic, waitInfo, feeRange, rating, distLabel, gmapsLink, relevantDoctors, isHighlighted, cardRef, onSelect, onBook, onQueue
+  clinic, waitInfo, feeRange, rating, distLabel, gmapsLink, relevantDoctors, isHighlighted, cardRef, onSelect, onBook, onQueue, onViewDoctor
 }) => {
   return (
     <div 
@@ -57,17 +57,27 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                     <h3 className="font-bold text-slate-900 text-base md:text-lg truncate leading-tight group-hover:text-primary-600 transition-colors">{clinic.name}</h3>
                     <span className="flex items-center text-xs font-bold bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded border border-yellow-100 flex-shrink-0"><Star className="h-3 w-3 mr-1 fill-current" /> {rating}</span>
                 </div>
+                
                 <div className="mb-2">
                     {relevantDoctors.length > 0 ? (
-                        <div className="text-sm font-medium text-slate-700 truncate">
-                            <span className="text-slate-400 font-normal mr-1">Doctors:</span> 
-                            {relevantDoctors.slice(0, 2).map(d => `Dr. ${d.name.split(' ').pop()}`).join(', ')}
-                            {relevantDoctors.length > 2 && <span className="text-slate-400 text-xs ml-1">+{relevantDoctors.length - 2} more</span>}
+                        <div className="flex flex-wrap gap-2">
+                            {relevantDoctors.slice(0, 3).map(d => (
+                                <button 
+                                    key={d.id} 
+                                    onClick={(e) => { e.stopPropagation(); onViewDoctor(d); }}
+                                    className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-100 hover:border-slate-300 px-2 py-1 rounded-lg transition-colors group/doc"
+                                >
+                                    <img src={d.avatarUrl} className="w-4 h-4 rounded-full bg-slate-200" alt="" />
+                                    <span className="text-xs font-bold text-slate-700 group-hover/doc:text-primary-700">Dr. {d.name.split(' ').pop()}</span>
+                                </button>
+                            ))}
+                            {relevantDoctors.length > 3 && <span className="text-slate-400 text-xs self-center">+{relevantDoctors.length - 3} more</span>}
                         </div>
                     ) : (
                         <div className="text-sm text-slate-400 italic">No matching doctors</div>
                     )}
                 </div>
+
                 <div className="flex flex-col gap-1 mt-2">
                     <div className="flex items-center gap-3 text-xs font-medium text-slate-500">
                         <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {distLabel}</span>

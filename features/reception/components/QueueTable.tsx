@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Patient, Doctor, PatientStatus } from '../../../types';
 import { Badge } from '../../../components/Badge';

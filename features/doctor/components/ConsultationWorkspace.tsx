@@ -1,9 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { Patient, PainPoint } from '../../../types';
 import { Button } from '../../../components/Button';
 import { generatePatientSummary } from '../../../services/geminiService';
-import { FileText, Activity, Pill, User, Sparkles, Thermometer, Heart, Weight, Zap, Droplets, Trash2, Plus, PauseCircle, Check } from 'lucide-react';
+import { 
+    Activity, FileText, Pill, Save, PauseCircle, BrainCircuit, Plus, Trash2, X
+} from 'lucide-react';
 
 interface ConsultationWorkspaceProps {
   currentPatient: Patient;
@@ -11,78 +12,233 @@ interface ConsultationWorkspaceProps {
   onHold: () => void;
 }
 
-const COMMON_DIAGNOSES = [ "Viral Fever", "Common Cold", "Migraine", "Hypertension", "Diabetes T2", "Gastritis", "Allergy", "Back Pain" ];
-
 export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ currentPatient, onComplete, onHold }) => {
-  const [activeTab, setActiveTab] = useState<'NOTES' | 'VITALS' | 'RX' | 'BODY'>('NOTES');
   const [notes, setNotes] = useState(currentPatient.notes || '');
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [vitals, setVitals] = useState({ bp: currentPatient.vitals?.bp || '', temp: currentPatient.vitals?.temp || '', weight: currentPatient.vitals?.weight || '', pulse: currentPatient.vitals?.pulse || '', spo2: currentPatient.vitals?.spo2 || '', height: currentPatient.vitals?.height || '', sugar: currentPatient.vitals?.sugar || '' });
-  const [painPoints, setPainPoints] = useState<PainPoint[]>(currentPatient.painPoints || []);
-  const [prescriptions, setPrescriptions] = useState<any[]>([]);
-  const [rxForm, setRxForm] = useState({ name: '', dosage: '1-0-1', duration: '3 days' });
+  const [aiSummary, setAiSummary] = useState('');
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  
+  const [prescriptions, setPrescriptions] = useState<{name: string, dosage: string, duration: string}[]>([]);
+  const [newRx, setNewRx] = useState({name: '', dosage: '', duration: ''});
+  
+  const [vitals, setVitals] = useState({
+      bp: currentPatient.vitals?.bp || '',
+      temp: currentPatient.vitals?.temp || '',
+      weight: currentPatient.vitals?.weight || '',
+      pulse: currentPatient.vitals?.pulse || '',
+      spo2: currentPatient.vitals?.spo2 || ''
+  });
 
+  const [painPoints, setPainPoints] = useState<PainPoint[]>(currentPatient.painPoints || []);
+
+  // Reset state when patient changes
   useEffect(() => {
       setNotes(currentPatient.notes || '');
-      setVitals({ bp: currentPatient.vitals?.bp || '', temp: currentPatient.vitals?.temp || '', weight: currentPatient.vitals?.weight || '', pulse: currentPatient.vitals?.pulse || '', spo2: currentPatient.vitals?.spo2 || '', height: currentPatient.vitals?.height || '', sugar: currentPatient.vitals?.sugar || '' });
+      setAiSummary('');
+      setPrescriptions([]); 
+      setVitals({
+          bp: currentPatient.vitals?.bp || '',
+          temp: currentPatient.vitals?.temp || '',
+          weight: currentPatient.vitals?.weight || '',
+          pulse: currentPatient.vitals?.pulse || '',
+          spo2: currentPatient.vitals?.spo2 || ''
+      });
       setPainPoints(currentPatient.painPoints || []);
-      setPrescriptions([]);
   }, [currentPatient.id]);
 
-  const handleAiAssist = async () => { if (!notes) return; setIsAiLoading(true); const summary = await generatePatientSummary(notes, currentPatient.name); setNotes(summary); setIsAiLoading(false); };
-  const addTemplateNote = (text: string) => { setNotes(prev => prev ? `${prev}\n- Diagnosis: ${text}` : `- Diagnosis: ${text}`); };
-  const addPrescription = () => { if (rxForm.name) { setPrescriptions([...prescriptions, { ...rxForm }]); setRxForm({ name: '', dosage: '1-0-1', duration: '3 days' }); } };
+  const handleGenerateSummary = async () => {
+      if (!notes.trim()) return;
+      setIsGeneratingSummary(true);
+      const summary = await generatePatientSummary(notes, currentPatient.name, currentPatient.age);
+      setAiSummary(summary);
+      setIsGeneratingSummary(false);
+  };
+
+  const handleAddRx = () => {
+      if (newRx.name && newRx.dosage) {
+          setPrescriptions([...prescriptions, newRx]);
+          setNewRx({name: '', dosage: '', duration: ''});
+      }
+  };
+
+  const handlePainPointClick = (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      setPainPoints([...painPoints, { x, y }]);
+  };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-        <div className={`rounded-2xl p-4 sm:p-6 text-white shadow-lg mb-4 sm:mb-6 flex justify-between items-start transition-colors ${currentPatient.isEmergency ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-slate-800 to-slate-900'}`}>
-            <div><div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-1"><h2 className="text-2xl sm:text-3xl font-bold">{currentPatient.name}</h2><span className="bg-white/20 px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-bold backdrop-blur-sm">#{currentPatient.tokenNumber}</span>{currentPatient.isEmergency && <span className="bg-white text-orange-600 px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-bold uppercase">Emergency</span>}</div><div className="text-white/80 flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm"><span>{currentPatient.age || '--'} Yrs, {currentPatient.gender || '--'}</span>{currentPatient.visitType === 'APPOINTMENT' && <span>• Appt {currentPatient.appointmentTime}</span>}</div>{currentPatient.symptoms && (<div className="mt-3 sm:mt-4 bg-white/10 p-2 sm:p-3 rounded-lg backdrop-blur-sm inline-block text-xs sm:text-sm max-w-full"><span className="opacity-70">Chief Complaint:</span> <span className="font-bold">{currentPatient.symptoms}</span></div>)}</div>
-        </div>
-        <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-1">{[{ id: 'NOTES', icon: FileText, label: 'Notes' }, { id: 'VITALS', icon: Activity, label: 'Vitals' }, { id: 'RX', icon: Pill, label: 'Rx' }, { id: 'BODY', icon: User, label: 'Body Map' },].map(tab => (<button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex-shrink-0 flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all border ${activeTab === tab.id ? 'bg-white border-primary-500 text-primary-600 shadow-sm ring-1 ring-primary-100' : 'bg-slate-100 border-transparent text-slate-500 hover:bg-white hover:border-slate-200'}`}><tab.icon className="h-4 w-4" /> {tab.label}</button>))}</div>
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
-                {activeTab === 'NOTES' && (
-                    <div className="h-full flex flex-col">
-                        <div className="mb-4"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Quick Diagnosis</label><div className="flex flex-wrap gap-2">{COMMON_DIAGNOSES.map(d => (<button key={d} onClick={() => addTemplateNote(d)} className="px-2 sm:px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-[10px] sm:text-xs font-medium text-slate-700 transition-colors">+ {d}</button>))}</div></div>
-                        <textarea className="flex-1 w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none font-medium text-slate-700 leading-relaxed text-sm sm:text-base" placeholder="Type clinical observations here..." value={notes} onChange={(e) => setNotes(e.target.value)} />
-                        <div className="flex justify-end mt-2"><Button size="sm" variant="ghost" onClick={handleAiAssist} disabled={isAiLoading || !notes} className="text-purple-600 text-xs sm:text-sm"><Sparkles className="h-3 w-3 sm:h-4 sm:w-4 mr-2" /> AI Summarize</Button></div>
-                    </div>
-                )}
-                {activeTab === 'VITALS' && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
-                        {Object.entries({ bp: { label: 'Blood Pressure', unit: 'mmHg', icon: Activity }, temp: { label: 'Temperature', unit: '°F', icon: Thermometer }, pulse: { label: 'Pulse Rate', unit: 'bpm', icon: Heart }, weight: { label: 'Weight', unit: 'kg', icon: Weight }, spo2: { label: 'SpO2', unit: '%', icon: Zap }, sugar: { label: 'Blood Sugar', unit: 'mg/dL', icon: Droplets } }).map(([key, config]) => (
-                            <div key={key} className="bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-100"><div className="flex items-center gap-2 text-slate-500 mb-2"><config.icon className="h-3 w-3 sm:h-4 sm:w-4" /><span className="text-[10px] sm:text-xs font-bold uppercase">{config.label}</span></div><div className="flex items-baseline gap-2"><input className="flex-1 bg-transparent border-b-2 border-slate-200 focus:border-primary-500 outline-none text-lg sm:text-xl font-bold text-slate-900 pb-1 w-full" placeholder="--" value={(vitals as any)[key]} onChange={(e) => setVitals({ ...vitals, [key]: e.target.value })} /><span className="text-[10px] sm:text-xs text-slate-400 font-medium">{config.unit}</span></div></div>
-                        ))}
-                    </div>
-                )}
-                {activeTab === 'RX' && (
-                    <div>
-                        <div className="bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-200 mb-6">
-                            <div className="grid grid-cols-12 gap-2 sm:gap-3 items-end">
-                                <div className="col-span-12 sm:col-span-5"><label className="text-[10px] font-bold text-slate-400 uppercase">Medicine</label><input placeholder="e.g. Dolo 650" className="w-full p-2 rounded-lg border border-slate-300 text-sm" value={rxForm.name} onChange={e => setRxForm({...rxForm, name: e.target.value})} /></div>
-                                <div className="col-span-6 sm:col-span-3"><label className="text-[10px] font-bold text-slate-400 uppercase">Dosage</label><select className="w-full p-2 rounded-lg border border-slate-300 text-sm" value={rxForm.dosage} onChange={e => setRxForm({...rxForm, dosage: e.target.value})}><option>1-0-1</option><option>1-0-0</option><option>0-0-1</option><option>1-1-1</option><option>SOS</option></select></div>
-                                <div className="col-span-6 sm:col-span-3"><label className="text-[10px] font-bold text-slate-400 uppercase">Duration</label><select className="w-full p-2 rounded-lg border border-slate-300 text-sm" value={rxForm.duration} onChange={e => setRxForm({...rxForm, duration: e.target.value})}><option>3 days</option><option>5 days</option><option>7 days</option><option>15 days</option><option>1 month</option></select></div>
-                                <div className="col-span-12 sm:col-span-1 mt-2 sm:mt-0"><Button onClick={addPrescription} className="w-full justify-center"><Plus className="h-5 w-5" /></Button></div>
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            {prescriptions.map((rx, idx) => (<div key={idx} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-lg shadow-sm"><div className="flex items-center gap-3"><div className="bg-green-100 p-2 rounded-full text-green-600"><Pill className="h-4 w-4" /></div><div><div className="font-bold text-slate-900 text-sm">{rx.name}</div><div className="text-xs text-slate-500">{rx.dosage} for {rx.duration}</div></div></div><button onClick={() => setPrescriptions(prescriptions.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button></div>))}
-                            {prescriptions.length === 0 && <div className="text-center py-8 text-slate-400 text-sm">No medicines added yet.</div>}
-                        </div>
-                    </div>
-                )}
-                {activeTab === 'BODY' && (
-                    <div className="h-full flex flex-col items-center justify-center">
-                        <p className="text-sm text-slate-500 mb-4">Click to mark pain areas</p>
-                        <div className="relative h-72 sm:h-96 w-36 sm:w-48 bg-slate-100 rounded-full border-2 border-slate-200 cursor-crosshair shadow-inner" onClick={(e) => { const rect = e.currentTarget.getBoundingClientRect(); const x = ((e.clientX - rect.left) / rect.width) * 100; const y = ((e.clientY - rect.top) / rect.height) * 100; setPainPoints([...painPoints, { x, y }]); }}>
-                            <div className="absolute top-4 left-1/2 -translate-x-1/2 w-12 sm:w-16 h-12 sm:h-16 rounded-full border-2 border-slate-300"></div><div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 w-20 sm:w-24 h-24 sm:h-32 rounded-3xl border-2 border-slate-300"></div><div className="absolute top-40 sm:top-52 left-1/2 -translate-x-1/2 w-20 sm:w-24 h-32 sm:h-40 rounded-b-3xl border-2 border-slate-300"></div>
-                            {painPoints.map((p, i) => (<div key={i} className="absolute w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-sm transform -translate-x-1/2 -translate-y-1/2 animate-in zoom-in" style={{ left: `${p.x}%`, top: `${p.y}%` }}></div>))}
-                        </div>
-                        <button className="mt-4 text-xs text-red-500 hover:underline" onClick={() => setPainPoints([])}>Clear All Points</button>
+    <div className="h-full flex flex-col gap-6">
+        {/* Header Section */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-start">
+            <div>
+                <div className="flex items-center gap-3 mb-2">
+                    <h2 className="text-2xl font-bold text-slate-900">{currentPatient.name}</h2>
+                    <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-bold uppercase">{currentPatient.visitType}</span>
+                    {currentPatient.isEmergency && <span className="bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold uppercase">Emergency</span>}
+                </div>
+                <div className="flex gap-4 text-sm text-slate-500">
+                    <span>{currentPatient.age || 'Age --'} Yrs</span>
+                    <span>•</span>
+                    <span>{currentPatient.gender || '--'}</span>
+                    <span>•</span>
+                    <span className="font-mono">{currentPatient.phone}</span>
+                </div>
+                {currentPatient.symptoms && (
+                    <div className="mt-3 text-sm text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-100 inline-block">
+                        <span className="font-bold text-slate-500 mr-2">Symptoms:</span>
+                        {currentPatient.symptoms}
                     </div>
                 )}
             </div>
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3"><Button variant="secondary" className="w-full sm:w-auto justify-center" onClick={onHold}><PauseCircle className="h-4 w-4 mr-2" /> Hold Patient</Button><Button onClick={() => onComplete(notes, prescriptions, vitals, painPoints)} className="w-full sm:w-auto justify-center px-8 shadow-lg shadow-primary-200"><Check className="h-5 w-5 mr-2" /> Complete Visit</Button></div>
+            <div className="flex gap-2">
+                <Button variant="secondary" onClick={onHold} className="text-orange-600 border-orange-200 hover:bg-orange-50">
+                    <PauseCircle className="h-4 w-4 mr-2" /> Hold
+                </Button>
+                <Button onClick={() => onComplete(notes, prescriptions, vitals, painPoints)} className="bg-green-600 hover:bg-green-700 shadow-green-200 shadow-lg">
+                    <Save className="h-4 w-4 mr-2" /> Complete Visit
+                </Button>
+            </div>
+        </div>
+
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
+            
+            {/* LEFT COLUMN: Clinical Notes & Vitals */}
+            <div className="lg:col-span-2 flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar">
+                
+                {/* Vitals Input */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <Activity className="h-5 w-5 text-blue-500" /> Vitals
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-400">BP</label>
+                            <input className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 focus:ring-2 focus:ring-primary-500 outline-none" placeholder="120/80" value={vitals.bp} onChange={e => setVitals({...vitals, bp: e.target.value})} />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-400">Temp (°F)</label>
+                            <input className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 focus:ring-2 focus:ring-primary-500 outline-none" placeholder="98.6" value={vitals.temp} onChange={e => setVitals({...vitals, temp: e.target.value})} />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-400">Pulse (bpm)</label>
+                            <input className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 focus:ring-2 focus:ring-primary-500 outline-none" placeholder="72" value={vitals.pulse} onChange={e => setVitals({...vitals, pulse: e.target.value})} />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-400">SpO2 (%)</label>
+                            <input className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 focus:ring-2 focus:ring-primary-500 outline-none" placeholder="98" value={vitals.spo2} onChange={e => setVitals({...vitals, spo2: e.target.value})} />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-400">Weight (kg)</label>
+                            <input className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 focus:ring-2 focus:ring-primary-500 outline-none" placeholder="65" value={vitals.weight} onChange={e => setVitals({...vitals, weight: e.target.value})} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Clinical Notes */}
+                <div className="flex-1 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-primary-500" /> Clinical Notes
+                        </h3>
+                        <Button 
+                            size="sm" 
+                            variant="secondary" 
+                            onClick={handleGenerateSummary} 
+                            disabled={isGeneratingSummary || !notes}
+                            className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                        >
+                            {isGeneratingSummary ? 'Thinking...' : <><BrainCircuit className="h-4 w-4 mr-2" /> AI Summary</>}
+                        </Button>
+                    </div>
+                    
+                    {aiSummary && (
+                        <div className="mb-4 p-4 bg-purple-50 rounded-xl border border-purple-100 text-sm text-purple-900 relative animate-in fade-in">
+                            <button onClick={() => setAiSummary('')} className="absolute top-2 right-2 text-purple-400 hover:text-purple-700"><X className="h-4 w-4" /></button>
+                            <h4 className="font-bold mb-1 flex items-center gap-2"><BrainCircuit className="h-4 w-4" /> AI Suggestion</h4>
+                            <div className="whitespace-pre-line leading-relaxed">{aiSummary}</div>
+                        </div>
+                    )}
+
+                    <textarea 
+                        className="flex-1 w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:ring-2 focus:ring-primary-500 focus:bg-white outline-none resize-none font-mono text-sm leading-relaxed"
+                        placeholder="Type clinical observations, diagnosis, and plan..."
+                        value={notes}
+                        onChange={e => setNotes(e.target.value)}
+                    />
+                </div>
+            </div>
+
+            {/* RIGHT COLUMN: Prescription & Body Map */}
+            <div className="flex flex-col gap-6 overflow-y-auto custom-scrollbar">
+                
+                {/* Prescription Writer */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <Pill className="h-5 w-5 text-green-500" /> Rx
+                    </h3>
+                    
+                    <div className="space-y-3 mb-4">
+                        <input className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" placeholder="Medicine Name" value={newRx.name} onChange={e => setNewRx({...newRx, name: e.target.value})} />
+                        <div className="flex gap-2">
+                            <input className="w-1/2 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" placeholder="Dosage (e.g. 1-0-1)" value={newRx.dosage} onChange={e => setNewRx({...newRx, dosage: e.target.value})} />
+                            <input className="w-1/2 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" placeholder="Duration" value={newRx.duration} onChange={e => setNewRx({...newRx, duration: e.target.value})} />
+                        </div>
+                        <Button size="sm" onClick={handleAddRx} className="w-full" disabled={!newRx.name}><Plus className="h-4 w-4 mr-2" /> Add</Button>
+                    </div>
+
+                    <div className="space-y-2">
+                        {prescriptions.map((rx, idx) => (
+                            <div key={idx} className="flex justify-between items-center p-2 bg-slate-50 rounded-lg border border-slate-100 text-sm">
+                                <div>
+                                    <div className="font-bold text-slate-800">{rx.name}</div>
+                                    <div className="text-xs text-slate-500">{rx.dosage} • {rx.duration}</div>
+                                </div>
+                                <button onClick={() => setPrescriptions(prescriptions.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                            </div>
+                        ))}
+                        {prescriptions.length === 0 && <div className="text-center text-slate-400 text-xs py-4 italic">No medicines added</div>}
+                    </div>
+                </div>
+
+                {/* Body Map (Interactive Pain Points) */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex-1">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                            <Activity className="h-5 w-5 text-red-500" /> Body Map
+                        </h3>
+                        <button onClick={() => setPainPoints([])} className="text-xs text-slate-400 hover:text-red-500">Clear</button>
+                    </div>
+                    
+                    <div className="relative w-full aspect-[3/4] bg-slate-100 rounded-xl overflow-hidden cursor-crosshair border border-slate-200" onClick={handlePainPointClick}>
+                        {/* Abstract Body Shape Placeholder - In real app, use an SVG/Image */}
+                        <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
+                            <Activity className="w-full h-full text-slate-900 p-8" />
+                        </div>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-20">
+                            <div className="w-20 h-20 rounded-full bg-slate-400 mb-2"></div>
+                            <div className="w-32 h-40 bg-slate-400 rounded-3xl mb-2"></div>
+                            <div className="flex gap-2">
+                                <div className="w-10 h-40 bg-slate-400 rounded-full"></div>
+                                <div className="w-10 h-40 bg-slate-400 rounded-full"></div>
+                            </div>
+                        </div>
+
+                        {/* Pain Points */}
+                        {painPoints.map((pt, idx) => (
+                            <div 
+                                key={idx} 
+                                className="absolute w-6 h-6 -ml-3 -mt-3 bg-red-500/50 rounded-full border-2 border-red-600 animate-pulse flex items-center justify-center shadow-sm" 
+                                style={{ left: `${pt.x}%`, top: `${pt.y}%` }}
+                            >
+                                <div className="w-2 h-2 bg-red-600 rounded-full"></div>
+                            </div>
+                        ))}
+                    </div>
+                    <p className="text-center text-xs text-slate-400 mt-2">Tap to mark pain areas</p>
+                </div>
+
+            </div>
         </div>
     </div>
   );

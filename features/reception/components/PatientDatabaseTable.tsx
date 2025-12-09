@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Patient, Doctor } from '../../../types';
 import { History, Edit2, Trash2, CalendarDays, Phone, User } from 'lucide-react';

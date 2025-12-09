@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Patient, DoctorStatus } from '../../../types';
 import { Button } from '../../../components/Button';

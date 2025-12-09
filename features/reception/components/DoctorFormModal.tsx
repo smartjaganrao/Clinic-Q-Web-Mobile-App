@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Doctor, DaySchedule } from '../../../types';
 import { Button } from '../../../components/Button';
@@ -91,7 +90,7 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
 
   const addCommonSlot = (dayIndex: number, type: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT') => {
       const newSchedule = [...form.schedule];
-      const cur = newSchedule[dayIndex];
+      const cur = newSchedule[dayIndex]; 
       const existing = cur.slots ? [...cur.slots] : [];
       
       let newSlot = { startTime: '09:00', endTime: '13:00', active: true, label: 'Morning' };

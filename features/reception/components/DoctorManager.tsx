@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Doctor, DoctorStatus } from '../../../types';
 import { Button } from '../../../components/Button';

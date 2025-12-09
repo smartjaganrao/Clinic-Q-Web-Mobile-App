@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor } from '../types';
 import { Button } from '../components/Button';
@@ -10,6 +9,7 @@ import { AuthModal } from '../components/AuthModal';
 // Imported Modules
 import { ClinicCard } from '../features/patient/components/ClinicCard';
 import { MapPanel } from '../features/patient/components/MapPanel';
+import { DoctorProfileModal } from '../features/patient/components/DoctorProfileModal';
 import L from 'leaflet';
 
 import { 
@@ -228,6 +228,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [cancelModal, setCancelModal] = useState<{ isOpen: boolean; visit: any | null }>({ isOpen: false, visit: null });
   const [showLateWarningModal, setShowLateWarningModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // DOCTOR PROFILE MODAL STATE
+  const [viewingDoctor, setViewingDoctor] = useState<Doctor | null>(null);
 
   // --- HISTORY MANAGEMENT ---
   useEffect(() => {
@@ -544,6 +547,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       setBookingFor('MYSELF'); 
       setShowLateWarningModal(false); 
       setShowAuthModal(false);
+      setViewingDoctor(null); // Close doctor profile if open
 
       window.history.replaceState({
           appView: 'PATIENT_TRACKER',
@@ -572,6 +576,27 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const handleAuthSuccess = (phone: string, name: string, isExisting: boolean) => {
       if (onLoginClick) onLoginClick(phone, name);
       if (isExisting) { addToast(`Welcome back ${name}! Please confirm booking details.`, "info"); setShowAuthModal(false); } else { submitBooking(name, phone); }
+  };
+
+  const handleBookFromProfile = () => {
+      setViewingDoctor(null); // Close modal
+      if (!viewingDoctor) return;
+      
+      // Need to identify the clinic the doctor belongs to.
+      // In the context of ClinicCard interaction, the doctor belongs to the clinic being displayed.
+      // However, if we filter clinics, we need to ensure we have the correct clinic ID.
+      // We'll search through clinics to find which one this doctor instance belongs to.
+      // Note: A doctor might be in multiple clinics (via masterId), but `viewingDoctor` is a specific instance.
+      
+      const clinic = clinics.find(c => c.doctors.some(d => d.id === viewingDoctor.id));
+      
+      if (clinic) {
+          setSelectedClinicId(clinic.id);
+          setSelectedDoctorId(viewingDoctor.id);
+          navigateToView('FORM', clinic.id);
+      } else {
+          addToast("Could not find clinic details", "error");
+      }
   };
 
   // Map Handlers (Delegated to MapPanel via Props, or used here for state)
@@ -689,15 +714,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                   const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h; 
                   const displayStr = `${displayH}:${m.toString().padStart(2, '0')} ${suffix}`; 
                   const slotObj = { value: timeStr, label: displayStr }; 
-                  
-                  // Bucketing logic based on start hour
-                  // Night slots (e.g. 22:00+) go to Evening bucket for simplicity or new bucket?
-                  // Existing buckets: Morning < 12, Afternoon < 17, Evening >= 17
-                  // 22:00, 23:00, 00:00, 01:00... 
-                  // If it's next day early morning (00:00 - 06:00), technically "Night"
-                  // But our UI has Morning/Afternoon/Evening tabs. 
-                  // Let's put 00:00-04:00 into Evening (Late Night) or Morning?
-                  // Usually 00-04 is "Late Night" -> Evening bucket works best for UI
                   
                   if (h >= 4 && h < 12) groups.Morning.push(slotObj); 
                   else if (h >= 12 && h < 17) groups.Afternoon.push(slotObj); 
@@ -897,6 +913,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             onSelect={() => navigateToView('CLINIC_DETAILS', clinic.id)}
                                                             onBook={() => { navigateToView('CLINIC_DETAILS', clinic.id); setVisitType('APPOINTMENT'); }}
                                                             onQueue={() => { navigateToView('CLINIC_DETAILS', clinic.id); setVisitType('WALK_IN'); }}
+                                                            onViewDoctor={(doc) => setViewingDoctor(doc)}
                                                         />
                                                     );
                                                 })}
@@ -970,15 +987,18 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                     if (waitDetails.time > 20) waitColor = 'bg-yellow-100 text-yellow-700';
                                                     if (waitDetails.time > 45) waitColor = 'bg-red-100 text-red-700';
                                                     return (
-                                                        <div key={doc.id} className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm hover:shadow-lg transition-all hover:border-primary-200 group">
-                                                            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start">
+                                                        <div key={doc.id} className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm hover:shadow-lg transition-all hover:border-primary-200 group relative">
+                                                            <div 
+                                                                className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start cursor-pointer"
+                                                                onClick={() => setViewingDoctor(doc)}
+                                                            >
                                                                 <div className="relative flex-shrink-0"> <img src={doc.avatarUrl} alt={`Dr. ${doc.name}`} className="h-20 w-20 rounded-2xl object-cover bg-slate-100 border border-slate-100 shadow-inner" /> <span className={`absolute -bottom-1 -right-1 w-5 h-5 border-2 border-white rounded-full ${activeNow ? 'bg-emerald-500' : (canBook ? 'bg-yellow-400' : 'bg-slate-300')}`} title={availLabel}></span> </div>
                                                                 <div className="flex-1 min-w-0">
                                                                     <div className="flex items-start justify-between gap-2">
-                                                                        <div className="min-w-0"> <div className="flex items-center gap-3"><h4 className="font-bold text-slate-900 text-lg truncate">Dr. {doc.name}</h4></div> <div className="mt-1 text-sm text-slate-700 truncate">{doc.specialty}</div> </div>
+                                                                        <div className="min-w-0"> <div className="flex items-center gap-3"><h4 className="font-bold text-slate-900 text-lg truncate hover:text-primary-600 transition-colors">Dr. {doc.name}</h4></div> <div className="mt-1 text-sm text-slate-700 truncate">{doc.specialty}</div> </div>
                                                                         <div className="flex items-center gap-3 ml-2 sm:ml-0"><div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-50 border border-slate-100 text-sm font-semibold text-slate-700"><Star className="h-4 w-4 fill-current text-yellow-500" /> {doc.rating ?? '4.5'}</div></div>
                                                                     </div>
-                                                                    <div className="mt-2 flex items-center gap-4 text-xs text-slate-500"> <div className="flex items-center gap-1"><Clock className="h-3 w-3" /> {(doc as any).yearsExperience ?? '10'} yrs</div> <div className="flex items-center gap-1"><Globe className="h-3 w-3" /> {(doc as any).languages?.join(', ') || 'Eng, Hindi'}</div> </div>
+                                                                    <div className="mt-2 flex items-center gap-4 text-xs text-slate-500"> <div className="flex items-center gap-1"><Clock className="h-3 w-3" /> {(doc as any).experience ?? '10'} yrs</div> <div className="flex items-center gap-1"><Globe className="h-3 w-3" /> {(doc as any).languages?.join(', ') || 'Eng, Hindi'}</div> </div>
                                                                     <div className="mt-2"> <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${waitColor}`}> <Timer className="h-3 w-3" /> {waitDetails.time}m Wait ({waitDetails.count} Pts) </span> </div>
                                                                     {linked.length > 0 && ( <div className="mt-2 text-xs text-slate-500"> <span className="font-bold text-slate-400 uppercase tracking-wide text-[10px]">Also practices at:</span> <div className="flex flex-wrap gap-1 mt-1"> {linked.map(lc => ( <span key={lc.id} className="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600 cursor-default" title={`Switch clinic to view details`}>{lc.name}</span> ))} </div> </div> )}
                                                                 </div>
@@ -1256,6 +1276,14 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 initialAge={guestAge}
                 initialGender={guestGender}
                 addToast={addToast}
+            />
+
+            {/* Doctor Profile Modal */}
+            <DoctorProfileModal 
+                isOpen={!!viewingDoctor}
+                onClose={() => setViewingDoctor(null)}
+                doctor={viewingDoctor}
+                onBook={handleBookFromProfile}
             />
         </main>
     </div>

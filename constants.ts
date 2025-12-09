@@ -1,5 +1,4 @@
-
-import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient, TimeSlot } from './types';
+import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient, TimeSlot, Review } from './types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const genId = () => Math.random().toString(36).substr(2, 5);
@@ -27,6 +26,36 @@ const SURNAMES = [
   "Sharma", "Verma", "Gupta", "Malhotra", "Iyer", "Reddy", "Nair", "Patel",
   "Singh", "Kumar", "Das", "Rao", "Jain", "Mehta", "Desai", "Joshi", "Krishnan", "Raman"
 ];
+
+const BIOS = [
+    "A dedicated specialist with over a decade of experience in providing comprehensive care. Committed to patient well-being and using the latest medical advancements.",
+    "Compassionate and skilled physician focused on preventive care and long-term health management. Known for a patient-centric approach and clear communication.",
+    "Highly experienced specialist dealing with complex cases. Regularly attends international conferences to stay updated with cutting-edge treatments.",
+    "Friendly and approachable doctor who believes in treating the patient, not just the disease. Specializes in rapid diagnosis and effective treatment plans."
+];
+
+const DEGREES = ["MBBS", "MD", "MS", "DNB", "DM", "MCh", "FRCS", "MRCP"];
+const COLLEGES = ["AIIMS Delhi", "CMC Vellore", "Madras Medical College", "JIPMER", "KMC Manipal", "Stanley Medical College"];
+const LANGUAGES_SPOKEN = ["English", "Hindi", "Tamil", "Telugu", "Kannada", "Malayalam"];
+
+const REVIEW_COMMENTS = [
+    "Excellent doctor! Very patient and listened to all my concerns.",
+    "Wait time was a bit long, but the treatment was worth it.",
+    "Very professional and knowledgeable. Highly recommended.",
+    "Clinic is very clean and staff is helpful. Doctor is great.",
+    "Explained the diagnosis very clearly. Feeling much better now.",
+    "Best doctor in the area for this condition."
+];
+
+const generateReviews = (count: number): Review[] => {
+    return Array.from({ length: count }).map((_, i) => ({
+        id: genId(),
+        patientName: `${PATIENT_NAMES[Math.floor(Math.random() * PATIENT_NAMES.length)]} ${SURNAMES[Math.floor(Math.random() * SURNAMES.length)].charAt(0)}.`,
+        rating: 3 + Math.floor(Math.random() * 3), // 3 to 5
+        comment: REVIEW_COMMENTS[Math.floor(Math.random() * REVIEW_COMMENTS.length)],
+        date: new Date(Date.now() - Math.floor(Math.random() * 10000000000)).toLocaleDateString()
+    }));
+};
 
 const SYMPTOMS_BY_TYPE: Record<string, string[]> = {
   GENERAL: ["Fever and chills", "Severe headache", "Stomach ache", "Viral infection", "Body pain", "Food poisoning", "Cough and cold", "Typhoid follow-up", "Low BP"],
@@ -67,6 +96,14 @@ const createRealDoctors = (startId: number, count: number, specialty: string, fe
         masterId = MASTER_ID_RAVI;
         mobile = '9876543210';
     }
+
+    const exp = 5 + (rand % 20);
+    const bio = BIOS[(idVal + i) % BIOS.length];
+    const edu = [
+        `${DEGREES[(idVal) % DEGREES.length]} - ${COLLEGES[(idVal) % COLLEGES.length]}`,
+        `${DEGREES[(idVal + 1) % DEGREES.length]} - ${COLLEGES[(idVal + 1) % COLLEGES.length]}`
+    ];
+    const langs = ["English", LANGUAGES_SPOKEN[(idVal) % LANGUAGES_SPOKEN.length], LANGUAGES_SPOKEN[(idVal+2) % LANGUAGES_SPOKEN.length]];
     
     return {
         id: `doc_${specialty.substring(0,3)}_${idVal}`,
@@ -84,7 +121,13 @@ const createRealDoctors = (startId: number, count: number, specialty: string, fe
         consultationFee: fee - (fee % 50), // Round to 50
         consultationTime: 15, // Default 15 mins
         rating: parseFloat(rating),
-        reviewCount: 50 + (rand % 400)
+        reviewCount: 50 + (rand % 400),
+        // Rich Profile Data
+        bio: bio,
+        education: edu,
+        languages: [...new Set(langs)], // Unique
+        experience: exp,
+        reviews: generateReviews(3 + (rand % 5))
     };
   });
 };
@@ -185,7 +228,12 @@ const raviKumarCityGeneral: Doctor = {
     consultationFee: 300, // Different fee
     consultationTime: 10,
     rating: 4.2,
-    reviewCount: 150
+    reviewCount: 150,
+    bio: BIOS[0],
+    education: ['MBBS - Madras Medical College', 'MD - AIIMS Delhi'],
+    languages: ['English', 'Tamil', 'Hindi'],
+    experience: 12,
+    reviews: generateReviews(5)
 };
 
 const chennaiDocs10 = [raviKumarCityGeneral, ...createRealDoctors(1501, 3, 'General Physician', [400, 600])];
