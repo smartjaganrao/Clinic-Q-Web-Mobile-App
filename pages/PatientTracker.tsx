@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor } from '../types';
 import { Button } from '../components/Button';
@@ -526,23 +525,67 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           if (relevantDoctors.length === 0) relevantDoctors = clinic.doctors;
       }
 
-      if (relevantDoctors.length === 0) return { min: 0, max: 0, label: 'No Doctors', color: 'bg-slate-100 text-slate-500', raw: '0', mapColor: 'bg-slate-500' };
+      if (relevantDoctors.length === 0) {
+          return { 
+              min: 0, 
+              max: 0, 
+              label: 'No Doctors', 
+              bgColor: 'bg-slate-100', 
+              textColor: 'text-slate-500', 
+              borderColor: 'border-slate-200', 
+              raw: '0', 
+              mapColor: 'bg-slate-500', 
+              peopleCount: '0', 
+              dotColor: 'bg-slate-400' 
+          };
+      }
 
-      const waitTimes = relevantDoctors.map(d => getDoctorWaitDetails(clinic, d.id).time);
-      const min = Math.min(...waitTimes);
-      const max = Math.max(...waitTimes);
+      // Calculate total wait times
+      const waitTimes = relevantDoctors.map(d => getDoctorWaitDetails(clinic, d.id));
+      const times = waitTimes.map(w => w.time);
+      const counts = waitTimes.map(w => w.count);
+      
+      const min = Math.min(...times);
+      const max = Math.max(...times);
+      const minPeople = Math.min(...counts);
+      const maxPeople = Math.max(...counts);
       
       const avg = (min + max) / 2;
-      let color = 'bg-green-100 text-green-700';
-      let mapColor = 'bg-green-500';
-      let label = 'Fast';
       
-      if (avg > 20) { color = 'bg-yellow-100 text-yellow-700'; mapColor = 'bg-yellow-500'; label = 'Moderate'; }
-      if (avg > 45) { color = 'bg-red-100 text-red-700'; mapColor = 'bg-red-500'; label = 'Busy'; }
+      // UPDATED VISUAL INDICATORS
+      let color = 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      let mapColor = 'bg-emerald-500';
+      let label = 'Fast Moving';
+      let dotColor = 'bg-emerald-500';
+      
+      if (avg > 20) { 
+          color = 'bg-amber-100 text-amber-800 border-amber-200'; 
+          mapColor = 'bg-amber-500'; 
+          label = 'Moderate Queue';
+          dotColor = 'bg-amber-500';
+      }
+      if (avg > 45) { 
+          color = 'bg-rose-100 text-rose-800 border-rose-200'; 
+          mapColor = 'bg-rose-500'; 
+          label = 'High Demand'; 
+          dotColor = 'bg-rose-500';
+      }
 
       const raw = min === max ? `${min}` : `${min}-${max}`;
+      const peopleStr = minPeople === maxPeople ? `${minPeople}` : `${minPeople}-${maxPeople}`;
       
-      return { min, max, color, label, raw, mapColor };
+      return { 
+          min, 
+          max, 
+          label, 
+          bgColor: color.split(' ')[0], 
+          textColor: color.split(' ')[1], 
+          borderColor: color.split(' ')[2],
+          raw, 
+          mapColor, 
+          peopleCount: peopleStr,
+          dotColor
+      };
   };
 
   const getFeeRange = (clinic: Clinic) => { if (!clinic.doctors.length) return 'N/A'; const fees = clinic.doctors.map(d => d.consultationFee); const min = Math.min(...fees); const max = Math.max(...fees); return min === max ? `₹${min}` : `₹${min} - ₹${max}`; };

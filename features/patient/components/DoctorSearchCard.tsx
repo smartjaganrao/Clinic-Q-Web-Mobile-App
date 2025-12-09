@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { Doctor, Clinic } from '../../../types';
 import { Button } from '../../../components/Button';
-import { Star, MapPin, Clock, Timer, Calendar, Zap, Building2, ChevronRight, Stethoscope, Globe } from 'lucide-react';
+import { Star, Clock, Timer, Calendar, Zap, Building2, Stethoscope, Globe } from 'lucide-react';
 
 interface DoctorSearchCardProps {
   doctor: Doctor;
@@ -54,10 +53,24 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
                     <span className="text-slate-300">•</span>
                     <span>{distLabel}</span>
                 </p>
-                <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {doctor.experience || 5} Yrs Exp</span>
-                    <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> {doctor.languages?.slice(0,2).join(', ')}</span>
-                </div>
+                
+                {/* Live Status Row */}
+                {isWalkInAllowed ? (
+                    <div className="flex items-center gap-2 mt-1.5">
+                        <span className="flex items-center gap-1 text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-100 font-bold text-[10px]">
+                            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                            Live Queue
+                        </span>
+                        <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                            <Clock className="h-3 w-3" /> {doctor.experience || 5} Yrs Exp
+                        </span>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-3 mt-1">
+                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {doctor.experience || 5} Yrs Exp</span>
+                        <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> {doctor.languages?.slice(0,2).join(', ')}</span>
+                    </div>
+                )}
             </div>
         </div>
       </div>
@@ -66,7 +79,7 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
       <div className="bg-slate-50 border-t border-slate-100 p-3 flex items-center gap-2">
           <div className="flex-1">
               <div className={`text-xs font-bold flex items-center gap-1 ${isWalkInAllowed ? 'text-green-600' : 'text-slate-500'}`}>
-                  {isWalkInAllowed ? <Zap className="h-3 w-3 fill-current" /> : <Clock className="h-3 w-3" />}
+                  {isWalkInAllowed ? <Zap className="h-3 w-3 fill-current" /> : <Calendar className="h-3 w-3" />}
                   {nextSlotLabel}
               </div>
           </div>

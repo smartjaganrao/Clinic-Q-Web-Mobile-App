@@ -1,7 +1,7 @@
 import React from 'react';
 import { Clinic, Doctor } from '../../../types';
 import { Button } from '../../../components/Button';
-import { Building2, Star, MapPin, Clock, Timer, Calendar, Zap, ExternalLink, ChevronRight } from 'lucide-react';
+import { Building2, Star, MapPin, Clock, Calendar, Zap, ExternalLink } from 'lucide-react';
 
 function IndianRupeeIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -17,7 +17,16 @@ function IndianRupeeIcon(props: React.SVGProps<SVGSVGElement>) {
 
 interface ClinicCardProps {
   clinic: Clinic;
-  waitInfo: { label: string; color: string; mapColor: string; raw: string; };
+  waitInfo: { 
+      label: string; 
+      bgColor: string; 
+      textColor: string; 
+      borderColor: string; 
+      raw: string; 
+      mapColor: string;
+      peopleCount: string;
+      dotColor: string;
+  };
   feeRange: string;
   rating: string;
   distLabel: string;
@@ -48,8 +57,9 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                 ) : (
                     <Building2 className="h-6 w-6 md:h-8 md:w-8 text-slate-300" />
                 )}
-                <div className={`absolute bottom-0 inset-x-0 text-[9px] font-bold text-center py-1 text-white uppercase tracking-wider ${waitInfo.mapColor}`}>
-                    {waitInfo.label}
+                {/* Simplified Badge for Image Overlay */}
+                <div className={`absolute bottom-0 inset-x-0 text-[8px] font-bold text-center py-1 text-white uppercase tracking-wider ${waitInfo.mapColor}`}>
+                    {waitInfo.raw}m
                 </div>
             </div>
             <div className="flex-1 min-w-0">
@@ -58,7 +68,8 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                     <span className="flex items-center text-xs font-bold bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded border border-yellow-100 flex-shrink-0"><Star className="h-3 w-3 mr-1 fill-current" /> {rating}</span>
                 </div>
                 
-                <div className="mb-2">
+                {/* Doctor Avatars Row */}
+                <div className="mb-3">
                     {relevantDoctors.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
                             {relevantDoctors.slice(0, 3).map(d => (
@@ -78,18 +89,31 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                     )}
                 </div>
 
-                <div className="flex flex-col gap-1 mt-2">
-                    <div className="flex items-center gap-3 text-xs font-medium text-slate-500">
-                        <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {distLabel}</span>
-                        <span className="flex items-center gap-1"><IndianRupeeIcon className="h-3 w-3" /> {feeRange}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs font-medium text-slate-500">
-                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {clinic.operatingHours || '09:00 - 21:00'}</span>
-                            <span className="flex items-center gap-1"><Timer className="h-3 w-3" /> {waitInfo.raw}m Wait</span>
+                {/* Info Row: Distance & Fee */}
+                <div className="flex flex-wrap gap-3 text-xs font-medium text-slate-500 mb-3">
+                    <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {distLabel}</span>
+                    <span className="flex items-center gap-1"><IndianRupeeIcon className="h-3 w-3" /> {feeRange}</span>
+                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {clinic.operatingHours || '09:00 - 21:00'}</span>
+                </div>
+
+                {/* NEW: LIVE QUEUE STATUS BAR */}
+                <div className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${waitInfo.bgColor} ${waitInfo.borderColor} mt-2`}>
+                    <div className={`w-2.5 h-2.5 rounded-full ${waitInfo.dotColor} animate-pulse shadow-sm flex-shrink-0`} />
+                    <div className="flex flex-col leading-none">
+                        <span className={`text-[10px] font-black uppercase tracking-wide ${waitInfo.textColor}`}>
+                            {waitInfo.label}
+                        </span>
+                        <div className="flex items-center gap-1 text-xs font-semibold text-slate-700 mt-0.5">
+                            <span>~{waitInfo.raw} mins</span>
+                            <span className="w-1 h-1 bg-slate-300 rounded-full mx-0.5" />
+                            <span className="opacity-80">{waitInfo.peopleCount} people ahead</span>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
+        
+        {/* Action Footer */}
         <div className="bg-slate-50 border-t border-slate-100 p-3 flex items-center gap-2">
             <Button onClick={(e) => { e.stopPropagation(); onBook(); }} variant="secondary" size="sm" className="flex-1 bg-white border-slate-200 text-slate-700 hover:text-primary-700 hover:border-primary-200 text-xs font-bold h-9">
                 <Calendar className="h-3.5 w-3.5 mr-1.5" /> Book Appt
