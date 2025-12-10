@@ -237,6 +237,20 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   // DOCTOR PROFILE MODAL STATE
   const [viewingDoctor, setViewingDoctor] = useState<Doctor | null>(null);
 
+  const selectedClinic = clinics.find(c => c.id === selectedClinicId);
+  const selectedDoctor = selectedClinic?.doctors.find(d => d.id === selectedDoctorId);
+
+  // --- TRAVEL TIME ESTIMATE ---
+  const travelEstimate = useMemo(() => {
+      if (userLocation && selectedClinic?.geoLocation) {
+          const dist = calculateDistance(userLocation.lat, userLocation.lng, selectedClinic.geoLocation.lat, selectedClinic.geoLocation.lng);
+          // Heuristic: 2 mins per km (30km/h average city speed) + 5 mins buffer for parking/walking
+          const mins = Math.ceil(dist * 2 + 5);
+          return { dist: dist.toFixed(1), mins };
+      }
+      return null;
+  }, [userLocation, selectedClinic]);
+
   // --- HISTORY MANAGEMENT ---
   useEffect(() => {
     // Ensure initial state is set correctly
@@ -734,8 +748,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     setTimeout(() => { setHighlightedClinicId(null); }, 2000);
   };
 
-  const selectedClinic = clinics.find(c => c.id === selectedClinicId);
-  const selectedDoctor = selectedClinic?.doctors.find(d => d.id === selectedDoctorId);
+  
   const waitStats = selectedClinic && selectedDoctorId ? getDoctorWaitDetails(selectedClinic, selectedDoctorId) : { count: 0, time: 0 };
   
   const isWalkInAllowed = useMemo(() => { 
@@ -1159,7 +1172,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                         <div className="min-w-0"> <div className="flex items-center gap-3"><h4 className="font-bold text-slate-900 text-lg truncate hover:text-primary-600 transition-colors">Dr. {doc.name}</h4></div> <div className="mt-1 text-sm text-slate-700 truncate">{doc.specialty}</div> </div>
                                                                         <div className="flex items-center gap-3 ml-2 sm:ml-0"><div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-50 border border-slate-100 text-sm font-semibold text-slate-700"><Star className="h-4 w-4 fill-current text-yellow-500" /> {doc.rating ?? '4.5'}</div></div>
                                                                     </div>
-                                                                    <div className="mt-2 flex items-center gap-4 text-xs text-slate-500"> <div className="flex items-center gap-1"><Clock className="h-3 w-3" /> {(doc as any).experience ?? '10'} yrs</div> <div className="flex items-center gap-1"><Globe className="h-3 w-3" /> {(doc as any).languages?.join(', ') || 'Eng, Hindi'}</div> </div>
+                                                                    <div className="mt-2 flex items-center gap-4 text-xs text-slate-500"> <div className="flex items-center gap-1"><Clock className="h-3 w-3" /> {(doc as any).experience ?? '10'} yrs</div> <div className="flex items-center gap-1"><Globe className="h-3 w-3" /> {(doc as any).languages?.join(', ')}</div> </div>
                                                                     <div className="mt-2"> <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${waitColor}`}> <Timer className="h-3 w-3" /> {waitDetails.time}m Wait ({waitDetails.count} Pts) </span> </div>
                                                                     {linked.length > 0 && ( <div className="mt-2 text-xs text-slate-500"> <span className="font-bold text-slate-400 uppercase tracking-wide text-[10px]">Also practices at:</span> <div className="flex flex-wrap gap-1 mt-1"> {linked.map(lc => ( <span key={lc.id} className="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600 cursor-default" title={`Switch clinic to view details`}>{lc.name}</span> ))} </div> </div> )}
                                                                 </div>
@@ -1307,7 +1320,39 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                 </div>
                                             </div>
                                         )}
-                                        {visitType === 'WALK_IN' && (<div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><label className="block text-sm font-medium text-slate-700 mb-2">Time to reach clinic?</label><select className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm" value={travelTime} onChange={(e) => setTravelTime(e.target.value)}><option value="5">5 mins</option><option value="15">15 mins</option><option value="30">30 mins</option><option value="45">45 mins</option><option value="60">1 Hour+</option></select></div>)}
+                                        {visitType === 'WALK_IN' && (<div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <label className="block text-sm font-medium text-slate-700">Time to reach clinic?</label>
+                                                {userLocation && selectedClinic?.geoLocation ? (
+                                                    <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                                                        GPS Est: ~{travelEstimate?.mins} mins ({travelEstimate?.dist} km)
+                                                    </span>
+                                                ) : (
+                                                    <button 
+                                                        onClick={handleLocateMe} 
+                                                        className="text-xs text-primary-600 font-bold flex items-center gap-1 hover:underline disabled:opacity-50"
+                                                        type="button"
+                                                        disabled={isLocating}
+                                                    >
+                                                        {isLocating ? <span className="animate-spin h-3 w-3 border-2 border-primary-600 border-t-transparent rounded-full"></span> : <Crosshair className="h-3 w-3" />}
+                                                        {isLocating ? 'Locating...' : 'Verify with GPS'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <select className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm" value={travelTime} onChange={(e) => setTravelTime(e.target.value)}>
+                                                <option value="5">5 mins</option>
+                                                <option value="15">15 mins</option>
+                                                <option value="30">30 mins</option>
+                                                <option value="45">45 mins</option>
+                                                <option value="60">1 Hour+</option>
+                                            </select>
+                                            {travelEstimate && parseInt(travelTime) < travelEstimate.mins && (
+                                                <div className="mt-2 text-xs text-orange-600 bg-orange-50 p-2 rounded flex items-start gap-2 border border-orange-100">
+                                                    <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                                                    <span>Your selected time is less than estimated GPS travel time (~{travelEstimate.mins}m). You might be skipped if late.</span>
+                                                </div>
+                                            )}
+                                        </div>)}
                                         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><Input label="Reason for Visit (Symptoms)" placeholder="e.g. High fever, stomach ache" value={symptoms} onChange={e => setSymptoms(e.target.value)} /></div>
                                         <div className="bg-blue-50 p-4 rounded-xl border border-blue-100"><div className="flex justify-between text-sm mb-2"><span className="text-slate-500">Patient</span><span className="font-bold text-slate-900">{isGuest ? (guestName || 'Guest User') : (bookingFor === 'MYSELF' ? userProfile?.name : bookingFor)}</span></div><div className="flex justify-between text-sm mb-2"><span className="text-slate-500">Doctor</span><span className="font-bold text-slate-900">{selectedClinic.doctors.find(d => d.id === selectedDoctorId)?.name}</span></div><div className="flex justify-between text-sm pt-2 border-t border-blue-200"><span className="text-slate-600 font-medium">Consultation Fee</span><span className="font-bold text-primary-700">₹{selectedClinic.doctors.find(d => d.id === selectedDoctorId)?.consultationFee}</span></div></div>
                                     </div>

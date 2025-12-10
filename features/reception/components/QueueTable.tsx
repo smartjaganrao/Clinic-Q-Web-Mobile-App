@@ -77,7 +77,12 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                               </div>
                               <div className="flex flex-wrap gap-2 mt-2">
                                   <span className={`text-[10px] px-1.5 py-0.5 rounded border ${patient.visitType === 'APPOINTMENT' ? 'bg-purple-50 text-purple-700 border-purple-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                                      {patient.visitType === 'APPOINTMENT' ? `Appt ${patient.appointmentTime}` : 'Walk-in'}
+                                      {patient.visitType === 'APPOINTMENT' ? (
+                                          <div className="flex flex-col leading-none">
+                                              <span className="font-bold">{patient.appointmentTime}</span>
+                                              <span className="text-[9px] opacity-75">{patient.appointmentDate}</span>
+                                          </div>
+                                      ) : 'Walk-in'}
                                   </span>
                                   {!isCheckedIn && <span className="text-[10px] px-1.5 py-0.5 rounded border bg-orange-50 text-orange-700 border-orange-100">Not Here</span>}
                               </div>
@@ -87,21 +92,26 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                       {/* Mobile Actions Toolbar */}
                       <div className="mt-4 pt-3 border-t border-slate-100 flex gap-2 overflow-x-auto no-scrollbar">
                           {isServing ? (
-                              <button onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)} className="flex-1 bg-green-600 text-white h-10 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform min-w-[100px]">
-                                  <CheckSquare className="h-4 w-4" /> Finish
-                              </button>
+                              <>
+                                <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.COMPLETED); }} className="flex-1 bg-green-600 text-white h-10 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform min-w-[100px]">
+                                    <CheckSquare className="h-4 w-4" /> Finish
+                                </button>
+                                <button onClick={(e) => { e.stopPropagation(); if(window.confirm('Cancel this active visit?')) onCancelPatient(patient.id); }} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-red-100 text-red-500 bg-red-50 hover:bg-red-100">
+                                    <XCircle className="h-4 w-4" />
+                                </button>
+                              </>
                           ) : (
                               (isWaiting && !isOnHold) ? (isCheckedIn ? (
-                                  <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR)} className="flex-1 bg-blue-600 text-white h-10 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform min-w-[100px]">
+                                  <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR); }} className="flex-1 bg-blue-600 text-white h-10 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform min-w-[100px]">
                                       <PlayCircle className="h-4 w-4" /> Call
                                   </button>
                               ) : (
-                                  <button onClick={() => onManualCheckIn(patient.id)} className="flex-1 bg-emerald-600 text-white h-10 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform min-w-[100px]">
+                                  <button onClick={(e) => { e.stopPropagation(); onManualCheckIn(patient.id); }} className="flex-1 bg-emerald-600 text-white h-10 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform min-w-[100px]">
                                       <UserCheck className="h-4 w-4" /> Arrive
                                   </button>
                               )) : (
                                   isOnHold && (
-                                    <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WAITING)} className="flex-1 bg-orange-500 text-white h-10 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform min-w-[100px]">
+                                    <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.WAITING); }} className="flex-1 bg-orange-500 text-white h-10 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform min-w-[100px]">
                                       <PlayCircle className="h-4 w-4" /> Resume
                                     </button>
                                   )
@@ -111,23 +121,25 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                           {/* Quick Actions: Zap & Hold */}
                           {(isWaiting || isOnHold) && (
                             <>
-                                <button onClick={() => onToggleEmergency(patient.id)} className={`h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border ${patient.isEmergency ? 'bg-red-100 border-red-200 text-red-600' : 'bg-white border-slate-200 text-slate-400'}`}>
+                                <button onClick={(e) => { e.stopPropagation(); onToggleEmergency(patient.id); }} className={`h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border ${patient.isEmergency ? 'bg-red-100 border-red-200 text-red-600' : 'bg-white border-slate-200 text-slate-400'}`}>
                                     <Zap className={`h-4 w-4 ${patient.isEmergency ? 'fill-current' : ''}`} />
                                 </button>
                                 {isWaiting && (
-                                    <button onClick={() => onUpdateStatus(patient.id, PatientStatus.ON_HOLD)} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 bg-white hover:text-orange-500">
+                                    <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.ON_HOLD); }} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 bg-white hover:text-orange-500">
                                         <PauseCircle className="h-4 w-4" />
                                     </button>
                                 )}
                             </>
                           )}
 
-                          <button onClick={() => onEditPatient(patient)} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 bg-white hover:bg-slate-50">
+                          <button onClick={(e) => { e.stopPropagation(); onEditPatient(patient); }} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 bg-white hover:bg-slate-50">
                               <Edit2 className="h-4 w-4" />
                           </button>
-                          <button onClick={() => onCancelPatient(patient.id)} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-red-100 text-red-500 bg-red-50 hover:bg-red-100">
-                              <XCircle className="h-4 w-4" />
-                          </button>
+                          {(isWaiting || isOnHold) && (
+                            <button onClick={(e) => { e.stopPropagation(); if(window.confirm('Cancel visit?')) onCancelPatient(patient.id); }} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-red-100 text-red-500 bg-red-50 hover:bg-red-100">
+                                <XCircle className="h-4 w-4" />
+                            </button>
+                          )}
                       </div>
                   </div>
               );
@@ -220,43 +232,122 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                   </td>
 
                   <td className="px-3 py-1.5">
-                      {patient.visitType === 'APPOINTMENT' ? <span className="text-[9px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100 font-bold flex w-fit items-center gap-1"><Calendar className="h-2.5 w-2.5" /> {patient.appointmentTime}</span> : <span className="text-[9px] text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 font-bold flex w-fit items-center gap-1"><User className="h-2.5 w-2.5" /> Walk-in</span>}
+                      {patient.visitType === 'APPOINTMENT' ? (
+                          <div className="flex flex-col items-start gap-1">
+                              <span className="text-[9px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100 font-bold flex w-fit items-center gap-1">
+                                  <Clock className="h-2.5 w-2.5" /> {patient.appointmentTime}
+                              </span>
+                              <span className="text-[9px] text-slate-500 font-medium flex items-center gap-1 ml-0.5">
+                                  <Calendar className="h-2.5 w-2.5 text-slate-400" /> {patient.appointmentDate}
+                              </span>
+                          </div>
+                      ) : (
+                          <span className="text-[9px] text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 font-bold flex w-fit items-center gap-1">
+                              <User className="h-2.5 w-2.5" /> Walk-in
+                          </span>
+                      )}
                   </td>
 
-                  <td className="px-3 py-1.5 text-right rounded-r-lg">
+                  <td className="px-3 py-1.5 text-right rounded-r-lg relative z-20">
                     <div className="flex justify-end gap-1 items-center">
                       {/* Emergency Toggle */}
                       {(isWaiting || isOnHold) && (
-                          <button onClick={() => onToggleEmergency(patient.id)} className={`p-1 rounded transition-colors ${patient.isEmergency ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-slate-100 text-slate-400 hover:bg-yellow-50 hover:text-yellow-600'}`} title="Toggle Emergency">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); onToggleEmergency(patient.id); }} 
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className={`p-1 rounded transition-colors ${patient.isEmergency ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-slate-100 text-slate-400 hover:bg-yellow-50 hover:text-yellow-600'}`} 
+                            title="Toggle Emergency"
+                          >
                               <Zap className={`h-3.5 w-3.5 ${patient.isEmergency ? 'fill-current' : ''}`} />
                           </button>
                       )}
 
                       {/* Hold Toggle */}
                       {isWaiting && (
-                          <button onClick={() => onUpdateStatus(patient.id, PatientStatus.ON_HOLD)} className="p-1 bg-slate-100 text-slate-400 hover:bg-orange-50 hover:text-orange-600 rounded transition-colors" title="Put On Hold">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.ON_HOLD); }} 
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="p-1 bg-slate-100 text-slate-400 hover:bg-orange-50 hover:text-orange-600 rounded transition-colors" 
+                            title="Put On Hold"
+                          >
                               <PauseCircle className="h-3.5 w-3.5" />
                           </button>
                       )}
                       {isOnHold && (
-                          <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WAITING)} className="p-1 bg-orange-50 text-orange-600 hover:bg-green-50 hover:text-green-600 rounded transition-colors border border-orange-100" title="Resume">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.WAITING); }} 
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="p-1 bg-orange-50 text-orange-600 hover:bg-green-50 hover:text-green-600 rounded transition-colors border border-orange-100" 
+                            title="Resume"
+                          >
                               <PlayCircle className="h-3.5 w-3.5" />
                           </button>
                       )}
 
                       {/* Primary Actions */}
                       {isWaiting && !isOnHold && (patient.isCheckedIn ? 
-                        <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR)} className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded shadow-sm transition-all active:scale-95 text-[10px] font-bold"><PlayCircle className="h-3 w-3" /> Call</button> : 
-                        <button onClick={() => onManualCheckIn(patient.id)} className="flex items-center gap-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded shadow-sm transition-all active:scale-95 text-[10px] font-bold"><UserCheck className="h-3 w-3" /> Arrive</button>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR); }} 
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded shadow-sm transition-all active:scale-95 text-[10px] font-bold"
+                        >
+                            <PlayCircle className="h-3 w-3" /> Call
+                        </button> : 
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onManualCheckIn(patient.id); }} 
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded shadow-sm transition-all active:scale-95 text-[10px] font-bold"
+                        >
+                            <UserCheck className="h-3 w-3" /> Arrive
+                        </button>
                       )}
                       
-                      {isServing && <button onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)} className="flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded shadow-sm transition-all active:scale-95 text-[10px] font-bold"><CheckSquare className="h-3 w-3" /> Done</button>}
+                      {isServing && (
+                        <>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.COMPLETED); }} 
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className="flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded shadow-sm transition-all active:scale-95 text-[10px] font-bold"
+                            >
+                                <CheckSquare className="h-3 w-3" /> Done
+                            </button>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); if(window.confirm('Cancel active visit?')) onCancelPatient(patient.id); }} 
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className="p-1 bg-red-50 text-red-600 hover:bg-red-100 rounded transition-colors ml-1 border border-red-200" 
+                                title="Cancel Visit"
+                            >
+                                <XCircle className="h-3.5 w-3.5" />
+                            </button>
+                        </>
+                      )}
                       
                       {(isWaiting || isOnHold) && (
                         <>
-                            <button onClick={() => onVitalsClick(patient)} className={`p-1 rounded transition-colors ${patient.vitals ? 'bg-pink-50 text-pink-600 border border-pink-100' : 'bg-slate-100 text-slate-400 hover:bg-pink-50 hover:text-pink-500'}`} title="Vitals"><Activity className="h-3.5 w-3.5" /></button>
-                            <button onClick={() => onEditPatient(patient)} className="p-1 bg-slate-100 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded transition-colors" title="Edit"><Edit2 className="h-3.5 w-3.5" /></button>
-                            <button onClick={() => { if(window.confirm('Cancel visit?')) onCancelPatient(patient.id); }} className="p-1 bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded transition-colors" title="Cancel"><XCircle className="h-3.5 w-3.5" /></button>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onVitalsClick(patient); }} 
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className={`p-1 rounded transition-colors ${patient.vitals ? 'bg-pink-50 text-pink-600 border border-pink-100' : 'bg-slate-100 text-slate-400 hover:bg-pink-50 hover:text-pink-500'}`} 
+                                title="Vitals"
+                            >
+                                <Activity className="h-3.5 w-3.5" />
+                            </button>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onEditPatient(patient); }} 
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className="p-1 bg-slate-100 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded transition-colors" 
+                                title="Edit"
+                            >
+                                <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); if(window.confirm('Cancel visit?')) onCancelPatient(patient.id); }} 
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className="p-1 bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded transition-colors" 
+                                title="Cancel"
+                            >
+                                <XCircle className="h-3.5 w-3.5" />
+                            </button>
                         </>
                       )}
                     </div>

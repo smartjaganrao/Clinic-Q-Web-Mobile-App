@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { Patient, PainPoint } from '../../../types';
 import { Button } from '../../../components/Button';
 import { generatePatientSummary } from '../../../services/geminiService';
 import { 
-    Activity, FileText, Pill, Save, PauseCircle, BrainCircuit, Plus, Trash2, X
+    Activity, FileText, Pill, Save, PauseCircle, BrainCircuit, Plus, Trash2, X, Move
 } from 'lucide-react';
 
 interface ConsultationWorkspaceProps {
@@ -29,6 +30,8 @@ export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ cu
   });
 
   const [painPoints, setPainPoints] = useState<PainPoint[]>(currentPatient.painPoints || []);
+  const [draggingPointIndex, setDraggingPointIndex] = useState<number | null>(null);
+  const bodyMapRef = useRef<HTMLDivElement>(null);
 
   // Reset state when patient changes
   useEffect(() => {
@@ -61,10 +64,47 @@ export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ cu
   };
 
   const handlePainPointClick = (e: React.MouseEvent<HTMLDivElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      setPainPoints([...painPoints, { x, y }]);
+      // Prevent adding a new point if we just finished dragging
+      if (draggingPointIndex !== null) return;
+
+      if (bodyMapRef.current) {
+          const rect = bodyMapRef.current.getBoundingClientRect();
+          const x = ((e.clientX - rect.left) / rect.width) * 100;
+          const y = ((e.clientY - rect.top) / rect.height) * 100;
+          setPainPoints([...painPoints, { x, y }]);
+      }
+  };
+
+  const handlePointMouseDown = (index: number, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setDraggingPointIndex(index);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+      if (draggingPointIndex !== null && bodyMapRef.current) {
+          const rect = bodyMapRef.current.getBoundingClientRect();
+          // Calculate new position
+          let x = ((e.clientX - rect.left) / rect.width) * 100;
+          let y = ((e.clientY - rect.top) / rect.height) * 100;
+          
+          // Constrain to container
+          x = Math.max(0, Math.min(100, x));
+          y = Math.max(0, Math.min(100, y));
+
+          const updatedPoints = [...painPoints];
+          updatedPoints[draggingPointIndex] = { x, y };
+          setPainPoints(updatedPoints);
+      }
+  };
+
+  const handleMouseUp = () => {
+      setDraggingPointIndex(null);
+  };
+
+  const handleRemovePoint = (e: React.MouseEvent, index: number) => {
+      e.stopPropagation();
+      const updatedPoints = painPoints.filter((_, i) => i !== index);
+      setPainPoints(updatedPoints);
   };
 
   return (
@@ -207,10 +247,19 @@ export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ cu
                         <h3 className="font-bold text-slate-800 flex items-center gap-2">
                             <Activity className="h-5 w-5 text-red-500" /> Body Map
                         </h3>
-                        <button onClick={() => setPainPoints([])} className="text-xs text-slate-400 hover:text-red-500">Clear</button>
+                        <div className="flex gap-2">
+                            <button onClick={() => setPainPoints([])} className="text-xs text-slate-400 hover:text-red-500">Clear All</button>
+                        </div>
                     </div>
                     
-                    <div className="relative w-full aspect-[3/4] bg-slate-100 rounded-xl overflow-hidden cursor-crosshair border border-slate-200" onClick={handlePainPointClick}>
+                    <div 
+                        ref={bodyMapRef}
+                        className={`relative w-full aspect-[3/4] bg-slate-100 rounded-xl overflow-hidden border border-slate-200 ${draggingPointIndex !== null ? 'cursor-grabbing' : 'cursor-crosshair'}`} 
+                        onClick={handlePainPointClick}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseUp}
+                    >
                         {/* Abstract Body Shape Placeholder - In real app, use an SVG/Image */}
                         <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
                             <Activity className="w-full h-full text-slate-900 p-8" />
@@ -228,14 +277,30 @@ export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ cu
                         {painPoints.map((pt, idx) => (
                             <div 
                                 key={idx} 
-                                className="absolute w-6 h-6 -ml-3 -mt-3 bg-red-500/50 rounded-full border-2 border-red-600 animate-pulse flex items-center justify-center shadow-sm" 
+                                onMouseDown={(e) => handlePointMouseDown(idx, e)}
+                                className={`absolute w-6 h-6 -ml-3 -mt-3 rounded-full border-2 border-red-600 flex items-center justify-center shadow-sm transition-transform hover:scale-110 cursor-grab active:cursor-grabbing z-10 group ${draggingPointIndex === idx ? 'scale-125 bg-red-600/30' : 'bg-red-500/50 animate-pulse'}`}
                                 style={{ left: `${pt.x}%`, top: `${pt.y}%` }}
                             >
                                 <div className="w-2 h-2 bg-red-600 rounded-full"></div>
+                                {/* Tooltip / Remove */}
+                                <div 
+                                    className="absolute -top-6 bg-slate-800 text-white text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                                >
+                                    Drag
+                                </div>
+                                <button 
+                                    className="absolute -top-2 -right-2 bg-slate-900 text-white rounded-full p-0.5 w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-all"
+                                    onClick={(e) => handleRemovePoint(e, idx)}
+                                    title="Remove"
+                                >
+                                    <X className="h-2 w-2" />
+                                </button>
                             </div>
                         ))}
                     </div>
-                    <p className="text-center text-xs text-slate-400 mt-2">Tap to mark pain areas</p>
+                    <p className="text-center text-xs text-slate-400 mt-2">
+                        Click to add. Drag to move. Hover to remove.
+                    </p>
                 </div>
 
             </div>

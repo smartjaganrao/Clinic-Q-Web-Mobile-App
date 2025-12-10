@@ -398,12 +398,40 @@ export default function App() {
   const handleNextPatient = () => {
       if (!currentClinic || !currentUser) return;
       
+      // Effective sort time helper (Appointment vs Arrival)
+      const getSortTime = (p: Patient) => {
+          if (p.visitType === 'APPOINTMENT' && p.appointmentDate && p.appointmentTime) {
+              return new Date(`${p.appointmentDate}T${p.appointmentTime}:00`).getTime();
+          }
+          return p.timeAdded;
+      };
+
+      // Sophisticated Sorting matching Dashboard logic
       const queue = currentClinic.patients
-          .filter(p => p.doctorId === currentUser.id && p.status === PatientStatus.WAITING)
-          .sort((a,b) => {
-              // Basic sort: Emergency > Appointment > Walk-in
+          .filter(p => p.doctorId === currentUser.id && (p.status === PatientStatus.WAITING || p.status === PatientStatus.ON_HOLD))
+          .sort((a, b) => {
+              // 1. Manual Queue Order (Overrides Priority)
+              if (a.queueOrder !== undefined || b.queueOrder !== undefined) {
+                  const orderA = a.queueOrder ?? Number.MAX_SAFE_INTEGER;
+                  const orderB = b.queueOrder ?? Number.MAX_SAFE_INTEGER;
+                  if (orderA !== orderB) return orderA - orderB;
+              }
+
+              // 2. Emergency Priority
               if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
-              return a.timeAdded - b.timeAdded;
+
+              // 3. Status Priority: ON_HOLD > WAITING
+              const getStatusPriority = (s: PatientStatus) => {
+                  if (s === PatientStatus.ON_HOLD) return 0;
+                  if (s === PatientStatus.WAITING) return 1;
+                  return 2;
+              };
+              const pA = getStatusPriority(a.status);
+              const pB = getStatusPriority(b.status);
+              if (pA !== pB) return pA - pB;
+
+              // 4. Time-based sort
+              return getSortTime(a) - getSortTime(b);
           });
       
       if (queue.length === 0) {

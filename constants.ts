@@ -1,3 +1,4 @@
+
 import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient, TimeSlot, Review } from './types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -6,8 +7,9 @@ const genId = () => Math.random().toString(36).substr(2, 5);
 const createDefaultSchedule = (): DaySchedule[] => {
   return DAYS.map(day => ({
     day,
-    slots: day === 'Sunday' ? [] : [{ id: genId(), startTime: '09:00', endTime: '17:00', label: 'Regular', active: true }],
-    isOff: day === 'Sunday'
+    // Updated: 24/7 Schedule for all doctors
+    slots: [{ id: genId(), startTime: '00:00', endTime: '23:59', label: '24 Hours', active: true }],
+    isOff: false
   }));
 };
 
@@ -252,7 +254,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     city: 'Chennai',
     address: 'Plot 12, 4th Avenue, Shanthi Colony, Anna Nagar',
     pincode: '600040',
-    operatingHours: '08:00 AM - 09:00 PM',
+    operatingHours: '24 Hours',
     imageUrl: 'https://images.unsplash.com/photo-1531983412531-1f49a365ffed?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0850, lng: 80.2100 },
     about: 'A multi-specialty clinic providing comprehensive healthcare services with state-of-the-art diagnostic facilities and expert doctors.',
@@ -269,7 +271,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     city: 'Chennai',
     address: '41, College Road, Nungambakkam',
     pincode: '600006',
-    operatingHours: '08:00 AM - 06:00 PM',
+    operatingHours: '24 Hours',
     imageUrl: 'https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0629, lng: 80.2495 },
     about: 'World-class eye care hospital dedicated to providing equitable and efficient eye care to all sections of society.',
@@ -320,7 +322,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     city: 'Chennai',
     address: '11, 3rd Cross St, Kasturba Nagar, Adyar',
     pincode: '600020',
-    operatingHours: '10:00 AM - 08:00 PM',
+    operatingHours: '24 Hours',
     imageUrl: 'https://images.unsplash.com/photo-1606811971618-4486d14f3f99?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0012, lng: 80.2565 },
     about: 'Advanced dental care center specializing in implants, root canals, and cosmetic dentistry with modern equipment.',
@@ -354,7 +356,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     city: 'Chennai',
     address: '2nd Floor, TTK Road, Alwarpet',
     pincode: '600018',
-    operatingHours: '10:00 AM - 08:00 PM',
+    operatingHours: '24 Hours',
     imageUrl: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0330, lng: 80.2550 },
     about: 'Expert dermatologists providing advanced skin and hair treatments including laser hair removal and acne treatment.',
@@ -371,7 +373,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     city: 'Chennai',
     address: '827, Poonamallee High Rd, Kilpauk',
     pincode: '600010',
-    operatingHours: '09:00 AM - 07:00 PM',
+    operatingHours: '24 Hours',
     imageUrl: 'https://images.unsplash.com/photo-1581594693702-fbdc51b2763b?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0780, lng: 80.2400 },
     about: 'Specialized ENT care hospital known for Micro Ear Surgery, Endoscopic Sinus Surgery, and Cochlear Implants.',
@@ -458,7 +460,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     city: 'Bangalore',
     address: '12th Main Rd, Indiranagar',
     pincode: '560038',
-    operatingHours: '10:00 AM - 08:00 PM',
+    operatingHours: '24 Hours',
     imageUrl: 'https://images.unsplash.com/photo-1609840114035-1c290b777f3f?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 12.9716, lng: 77.6412 },
     about: 'India’s largest dental chain offering quality dental care with modern technology and hygiene standards.',

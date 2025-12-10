@@ -139,6 +139,7 @@ export interface Patient {
   age?: string;
   gender?: 'Male' | 'Female' | 'Other';
   symptoms?: string; // Reason for visit
+  queueOrder?: number; // Manual override for sorting
 }
 
 export interface ClinicStats {
