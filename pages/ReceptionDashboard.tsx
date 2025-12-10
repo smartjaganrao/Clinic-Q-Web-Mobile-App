@@ -6,7 +6,7 @@ import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
 import { 
   UserPlus, Search, Filter, Stethoscope, List, Database, Calendar, 
-  Clock, XCircle, RefreshCw, History, User, Phone, Activity, PlayCircle, PauseCircle, ChevronRight, Thermometer, Heart, Weight, Zap, Droplets
+  Clock, XCircle, RefreshCw, History, User, Phone, Activity, PlayCircle, PauseCircle, ChevronRight, Thermometer, Heart, Weight, Zap, Droplets, Menu, BarChart3
 } from 'lucide-react';
 // Modular Features
 import { QueueTable } from '../features/reception/components/QueueTable';
@@ -14,6 +14,7 @@ import { PatientDatabaseTable } from '../features/reception/components/PatientDa
 import { DoctorManager } from '../features/reception/components/DoctorManager';
 import { AddPatientModal } from '../features/reception/components/AddPatientModal';
 import { DoctorFormModal } from '../features/reception/components/DoctorFormModal';
+import { ReceptionStats } from '../features/reception/components/ReceptionStats';
 
 interface ReceptionDashboardProps {
   doctors: Doctor[];
@@ -40,8 +41,6 @@ interface ReceptionDashboardProps {
 
 // --- SORTING HELPERS ---
 const getSortTime = (p: Patient) => {
-    // For Appointments, effective queue time is their Scheduled Time.
-    // For Walk-ins, effective queue time is their Arrival Time (timeAdded).
     if (p.visitType === 'APPOINTMENT' && p.appointmentDate && p.appointmentTime) {
         return new Date(`${p.appointmentDate}T${p.appointmentTime}:00`).getTime();
     }
@@ -49,7 +48,6 @@ const getSortTime = (p: Patient) => {
 };
 
 const comparePatients = (a: Patient, b: Patient) => {
-    // 1. Status Priority: WITH_DOCTOR > WAITING > ON_HOLD > COMPLETED/CANCELLED
     const statusScore = (s: PatientStatus) => {
         if (s === PatientStatus.WITH_DOCTOR) return 0;
         if (s === PatientStatus.WAITING) return 1;
@@ -61,20 +59,13 @@ const comparePatients = (a: Patient, b: Patient) => {
         return statusScore(a.status) - statusScore(b.status);
     }
     
-    // 2. Emergency Priority (Only applies to active queue: WAITING or WITH_DOCTOR)
-    // Emergency patients bump to the top of their status group.
     if (a.status === PatientStatus.WAITING || a.status === PatientStatus.WITH_DOCTOR) {
         if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
     }
     
-    // 3. Time-based Sorting (The Hybrid Queue)
-    // Compares "Scheduled Time" vs "Arrival Time"
-    // e.g., A Walk-in at 9:00 AM comes before an Appointment at 9:15 AM.
-    // e.g., An Appointment at 9:00 AM (even if late) comes before a Walk-in at 9:05 AM.
     return getSortTime(a) - getSortTime(b);
 };
 
-// Helper to get local date string YYYY-MM-DD
 const getLocalTodayStr = () => {
     const d = new Date();
     const year = d.getFullYear();
@@ -88,13 +79,13 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     onAddDoctor, onCheckMasterDoctor, onEditDoctor, onDeleteDoctor, onUpdateStatus, onCancelPatient, onUpdateClinicName, 
     onToggleEmergency, onManualReorder, onDragDrop, onManualCheckIn, addToast
 }) => {
-  const [activeTab, setActiveTab] = useState<'QUEUE' | 'DATABASE' | 'DOCTORS' | 'SCHEDULE'>('QUEUE');
+  const [activeTab, setActiveTab] = useState<'QUEUE' | 'DATABASE' | 'DOCTORS' | 'REPORTS'>('QUEUE');
   
   // Filters State
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDoctorId, setFilterDoctorId] = useState<string>('ALL');
-  const [filterStatus, setFilterStatus] = useState<string>('ACTIVE'); // ACTIVE (Wait+WithDoc), ALL, COMPLETED...
-  const [filterType, setFilterType] = useState<string>('ALL'); // ALL, WALK_IN, APPOINTMENT
+  const [filterStatus, setFilterStatus] = useState<string>('ACTIVE'); 
+  const [filterType, setFilterType] = useState<string>('ALL');
   
   // Modal States
   const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
@@ -117,7 +108,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
   const doctorQueueStats = useMemo(() => {
       const todayStr = getLocalTodayStr();
       return doctors.map(doc => {
-          // Get all active patients for this doctor today
           const docPatients = patients.filter(p => {
               if (p.doctorId !== doc.id) return false;
               if (p.visitType === 'APPOINTMENT' && p.appointmentDate !== todayStr) return false;
@@ -207,7 +197,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
       .sort(comparePatients);
   }, [patients, filterDoctorId, searchQuery, filterStatus, filterType, currentTime]);
 
-  // Identify "Next" patient for highlighting in the table
   const nextUpPatientIds = useMemo(() => {
       const ids = new Set<string>();
       doctorQueueStats.forEach(stat => {
@@ -231,7 +220,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     return result;
   }, [patients, activeTab, searchQuery]);
 
-  // Handlers
   const handleSaveDoctor = (data: any) => {
       if (doctorModalMode === 'ADD') {
           onAddDoctor(data.name, data.specialty, data.room, data.schedule, data.mobile, data.regNo, data.masterId, data.avatarUrl, parseInt(data.fee), parseInt(data.consultationTime));
@@ -271,28 +259,16 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
   const handleSaveEditedPatient = (e: React.FormEvent) => {
       e.preventDefault();
       if (!editingPatient) return;
-      
       const originalRecord = patients.find(p => p.id === editingPatient.id);
       if (!originalRecord) return;
-      
-      // Bulk update demographics for all records of this patient
       const originalPhone = originalRecord.phone;
       const matchingIds = patients.filter(p => p.phone === originalPhone).map(p => p.id);
-      
       matchingIds.forEach(id => {
-          onEditPatient(id, {
-              name: editingPatient.name,
-              age: editingPatient.age,
-              gender: editingPatient.gender,
-              phone: editingPatient.phone // Propagate phone change if any
-          });
+          onEditPatient(id, { name: editingPatient.name, age: editingPatient.age, gender: editingPatient.gender, phone: editingPatient.phone });
       });
-
-      // Update visit-specific details (symptoms) only for the specific record being edited
       if (editingPatient.symptoms !== originalRecord.symptoms) {
           onEditPatient(editingPatient.id, { symptoms: editingPatient.symptoms });
       }
-
       setEditingPatient(null);
       addToast(`Updated profile and linked ${matchingIds.length} records`, "success");
   };
@@ -300,7 +276,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
   const handleSaveVitals = (e: React.FormEvent) => {
       e.preventDefault();
       if (!vitalsPatient) return;
-      
       onEditPatient(vitalsPatient.id, { vitals: vitalsPatient.vitals });
       setVitalsPatient(null);
       addToast('Vitals updated', 'success');
@@ -322,173 +297,130 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
   const isFiltered = searchQuery !== '' || filterDoctorId !== 'ALL' || filterStatus !== 'ACTIVE' || filterType !== 'ALL';
 
   return (
-    <div className="h-full flex flex-col p-4 sm:p-6 overflow-hidden">
+    <div className="h-[100dvh] flex flex-col bg-slate-50">
         {/* HEADER & TABS */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 flex-shrink-0 gap-4">
-            <div>
-                <div className="flex items-center gap-2">
-                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900">{clinicName}</h1>
+        <div className="flex flex-col flex-shrink-0 bg-white shadow-sm z-30">
+            <div className="px-4 py-3 flex justify-between items-center border-b border-slate-100">
+                <div>
+                    <h1 className="text-lg sm:text-xl font-bold text-slate-900 truncate">{clinicName}</h1>
+                    <div className="hidden sm:flex flex-wrap gap-3 mt-0.5 text-xs text-slate-500">
+                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Avg Wait: 15m</span>
+                        <span>•</span>
+                        <span>{patients.filter(p => p.status === PatientStatus.WAITING).length} Waiting</span>
+                    </div>
                 </div>
-                <div className="flex flex-wrap gap-4 mt-1 text-sm text-slate-500">
-                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Avg Wait: 15m</span>
-                    <span>•</span>
-                    <span>{patients.filter(p => p.status === PatientStatus.WAITING).length} Waiting</span>
-                    <span>•</span>
-                    <span>{doctors.filter(d => d.isAvailable).length} Active Doctors</span>
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                    <button onClick={() => setActiveTab('QUEUE')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'QUEUE' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><List className="h-3 w-3" /> Queue</button>
+                    <button onClick={() => setActiveTab('DATABASE')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'DATABASE' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Database className="h-3 w-3" /> Patients</button>
+                    <button onClick={() => setActiveTab('DOCTORS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'DOCTORS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Stethoscope className="h-3 w-3" /> Staff</button>
+                    <button onClick={() => setActiveTab('REPORTS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'REPORTS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><BarChart3 className="h-3 w-3" /> Reports</button>
                 </div>
             </div>
-            <div className="flex gap-2 sm:gap-3 overflow-x-auto w-full md:w-auto pb-1 no-scrollbar">
-                <Button variant={activeTab === 'QUEUE' ? 'primary' : 'secondary'} onClick={() => setActiveTab('QUEUE')} className="flex-shrink-0"> <List className="h-4 w-4 mr-2" /> Live Queue </Button>
-                <Button variant={activeTab === 'DATABASE' ? 'primary' : 'secondary'} onClick={() => setActiveTab('DATABASE')} className="flex-shrink-0"> <Database className="h-4 w-4 mr-2" /> Patients </Button>
-                <Button variant={activeTab === 'DOCTORS' ? 'primary' : 'secondary'} onClick={() => setActiveTab('DOCTORS')} className="flex-shrink-0"> <Stethoscope className="h-4 w-4 mr-2" /> Doctors </Button>
-            </div>
-        </div>
 
-        <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
-            {/* DOCTOR OPERATIONS DECK (QUEUE ONLY) */}
+            {/* DOCTOR STATUS DECK (SCROLLABLE) */}
             {activeTab === 'QUEUE' && (
-                <div className="bg-slate-50 border-b border-slate-200 pt-4 pb-0 px-4">
-                    <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4">
+                <div className="bg-slate-50/50 border-b border-slate-200 py-2 px-2 sm:px-4">
+                    <div className="flex gap-2 sm:gap-3 overflow-x-auto no-scrollbar snap-x">
                         {/* "All" Card */}
                         <button 
                             onClick={() => setFilterDoctorId('ALL')} 
-                            className={`flex-shrink-0 w-64 p-3 rounded-xl border-2 transition-all text-left relative overflow-hidden group ${filterDoctorId === 'ALL' ? 'bg-white border-primary-500 shadow-md ring-1 ring-primary-100' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
+                            className={`snap-start flex-shrink-0 min-w-[140px] sm:w-64 p-2 sm:p-3 rounded-lg sm:rounded-xl border transition-all text-left group ${filterDoctorId === 'ALL' ? 'bg-white border-primary-500 shadow-md ring-1 ring-primary-100' : 'bg-white border-slate-200 opacity-80 hover:opacity-100'}`}
                         >
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="font-bold text-slate-900 text-sm">All Doctors</span>
-                                <span className="text-xs bg-slate-100 px-2 py-0.5 rounded-full font-bold text-slate-600">{patients.filter(p => p.status === PatientStatus.WAITING).length} Waiting</span>
+                            <div className="flex justify-between items-start mb-1 sm:mb-2">
+                                <span className="font-bold text-slate-900 text-xs sm:text-sm">All Doctors</span>
+                                <span className="text-[10px] sm:text-xs bg-slate-100 px-1.5 py-0.5 rounded-full font-bold text-slate-600">{patients.filter(p => p.status === PatientStatus.WAITING).length}</span>
                             </div>
-                            <div className="flex -space-x-2 mb-2">
+                            <div className="hidden sm:flex -space-x-2 mb-2">
                                 {doctors.slice(0,4).map(d => <img key={d.id} src={d.avatarUrl} className="w-6 h-6 rounded-full border-2 border-white bg-slate-200" />)}
-                                {doctors.length > 4 && <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] text-slate-500 font-bold">+{doctors.length - 4}</div>}
                             </div>
-                            <div className="text-[10px] text-slate-400">View master list</div>
+                            <div className="text-[10px] text-slate-400 truncate">Total Active Queue</div>
                         </button>
 
                         {/* Individual Doctor Cards */}
                         {doctorQueueStats.map(({ doc, current, next, count }) => {
                             const isSelected = filterDoctorId === doc.id;
-                            const isActive = doc.status === DoctorStatus.AVAILABLE;
-                            
                             return (
                                 <button 
                                     key={doc.id}
                                     onClick={() => setFilterDoctorId(isSelected ? 'ALL' : doc.id)}
-                                    className={`flex-shrink-0 w-72 p-3 rounded-xl border-2 transition-all text-left relative group ${isSelected ? 'bg-white border-primary-500 shadow-md ring-1 ring-primary-100' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
+                                    className={`snap-start flex-shrink-0 w-[160px] sm:w-72 p-2 sm:p-3 rounded-lg sm:rounded-xl border transition-all text-left relative group ${isSelected ? 'bg-white border-primary-500 shadow-md ring-1 ring-primary-100' : 'bg-white border-slate-200 hover:border-slate-300'}`}
                                 >
-                                    <div className="flex items-center gap-3 mb-3">
+                                    <div className="flex items-center gap-2 sm:gap-3 mb-2">
                                         <div className="relative">
-                                            <img src={doc.avatarUrl} className="w-10 h-10 rounded-full bg-slate-100 object-cover" />
-                                            <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white rounded-full ${doc.status === DoctorStatus.AVAILABLE ? 'bg-green-500' : doc.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-300'}`}></div>
+                                            <img src={doc.avatarUrl} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-100 object-cover" />
+                                            <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 sm:w-3 sm:h-3 border-2 border-white rounded-full ${doc.status === DoctorStatus.AVAILABLE ? 'bg-green-500' : 'bg-slate-300'}`}></div>
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="font-bold text-slate-900 text-sm truncate">{doc.name}</div>
+                                            <div className="font-bold text-slate-900 text-xs sm:text-sm truncate">{doc.name}</div>
                                             <div className="text-[10px] text-slate-500 truncate">{doc.specialty}</div>
                                         </div>
-                                        <div className={`text-xs px-2 py-1 rounded font-bold ${count > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
-                                            {count} Wait
+                                        <div className={`text-[10px] sm:text-xs px-1.5 py-0.5 rounded font-bold ${count > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                                            {count}W
                                         </div>
                                     </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-2 text-center">
-                                        <div className={`rounded-lg p-1.5 border ${current ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-slate-100'}`}>
-                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Serving</div>
-                                            <div className={`text-lg font-black leading-none ${current ? 'text-blue-600' : 'text-slate-300'}`}>{current ? `#${current.tokenNumber}` : '--'}</div>
+                                    <div className="grid grid-cols-2 gap-1 sm:gap-2 text-center">
+                                        <div className={`rounded p-1 border bg-slate-50 border-slate-100`}>
+                                            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Serving</div>
+                                            <div className={`text-sm sm:text-lg font-black leading-none ${current ? 'text-blue-600' : 'text-slate-300'}`}>{current ? `#${current.tokenNumber}` : '--'}</div>
                                         </div>
-                                        <div className={`rounded-lg p-1.5 border ${next ? 'bg-slate-50 border-slate-200' : 'bg-slate-50 border-slate-100'}`}>
-                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Next</div>
-                                            <div className={`text-lg font-bold leading-none ${next ? 'text-slate-700' : 'text-slate-300'}`}>{next ? `#${next.tokenNumber}` : '--'}</div>
+                                        <div className={`rounded p-1 border bg-slate-50 border-slate-100`}>
+                                            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Next</div>
+                                            <div className={`text-sm sm:text-lg font-bold leading-none ${next ? 'text-slate-700' : 'text-slate-300'}`}>{next ? `#${next.tokenNumber}` : '--'}</div>
                                         </div>
                                     </div>
-                                    
-                                    {/* Action Hover (Optional: Could add "Call Next" here) */}
-                                    {isSelected && isActive && next && !current && (
-                                        <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <div className="font-bold text-primary-600 text-sm flex items-center gap-1">Click Call Next in Table <ChevronRight className="h-4 w-4" /></div>
-                                        </div>
-                                    )}
                                 </button>
                             );
                         })}
                     </div>
                 </div>
             )}
+        </div>
 
-            {/* TOOLBAR */}
-            {(activeTab === 'QUEUE' || activeTab === 'DATABASE') && (
-                <div className="p-4 border-b border-slate-200 bg-white space-y-4">
-                    {/* Top Row: Search & Add */}
-                    <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-                         <div className="relative w-full sm:max-w-md">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                            <input className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" 
-                                placeholder={activeTab === 'QUEUE' ? "Search by name, token or phone..." : "Search patient database..."} 
-                                value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} 
-                            />
-                        </div>
-                        <div className="flex gap-2 w-full sm:w-auto">
-                            {activeTab === 'QUEUE' && filterDoctorId !== 'ALL' && (
-                                <Button variant="secondary" onClick={() => setFilterDoctorId('ALL')} className="flex-1 sm:flex-none">Show All</Button>
-                            )}
-                            <Button className="flex-1 sm:flex-none shadow-sm" onClick={() => setIsPatientModalOpen(true)}> <UserPlus className="h-4 w-4 mr-2" /> Add Patient </Button>
-                        </div>
-                    </div>
-
-                    {/* Bottom Row: Filters (Queue Only) */}
-                    {activeTab === 'QUEUE' && (
-                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100">
-                            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wide mr-2">
-                                <Filter className="h-3 w-3" /> Filters:
-                            </div>
-                            
-                            {/* Doctor Filter (Dropdown syncs with Deck) */}
-                            <select 
-                                className="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2 min-w-[140px]"
-                                value={filterDoctorId} 
-                                onChange={(e) => setFilterDoctorId(e.target.value)}
-                            >
-                                <option value="ALL">All Doctors</option>
-                                {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                            </select>
-
-                            <select 
-                                className="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2"
-                                value={filterStatus} 
-                                onChange={(e) => setFilterStatus(e.target.value)}
-                            >
-                                <option value="ACTIVE">Active (Wait + Consult)</option>
-                                <option value="ALL">All Statuses</option>
-                                <option value={PatientStatus.WAITING}>Waiting Only</option>
-                                <option value={PatientStatus.WITH_DOCTOR}>Consulting</option>
-                                <option value={PatientStatus.COMPLETED}>Completed</option>
-                                <option value={PatientStatus.CANCELLED}>Cancelled</option>
-                                <option value={PatientStatus.ON_HOLD}>On Hold</option>
-                            </select>
-
-                            <select 
-                                className="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2"
-                                value={filterType} 
-                                onChange={(e) => setFilterType(e.target.value)}
-                            >
-                                <option value="ALL">All Types</option>
-                                <option value="WALK_IN">Walk-in</option>
-                                <option value="APPOINTMENT">Appointments</option>
-                            </select>
-
-                            {isFiltered && (
-                                <button 
-                                    onClick={clearFilters}
-                                    className="text-xs text-red-600 hover:text-red-800 font-medium flex items-center gap-1 ml-auto sm:ml-2"
-                                >
-                                    <XCircle className="h-3 w-3" /> Clear
-                                </button>
-                            )}
-                        </div>
-                    )}
+        {/* TOOLBAR (MERGED) */}
+        {(activeTab === 'QUEUE' || activeTab === 'DATABASE') && (
+            <div className="px-2 py-2 sm:px-4 sm:py-3 border-b border-slate-200 bg-white flex items-center gap-2 sticky top-0 z-20 shadow-sm">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input 
+                        className="w-full pl-9 pr-3 h-10 rounded-lg border border-slate-300 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500" 
+                        placeholder={activeTab === 'QUEUE' ? "Search patient..." : "Search database..."} 
+                        value={searchQuery} 
+                        onChange={(e) => setSearchQuery(e.target.value)} 
+                    />
                 </div>
-            )}
 
-            {/* CONTENT */}
+                {/* Filters Group */}
+                {activeTab === 'QUEUE' && (
+                    <div className="hidden sm:flex gap-2">
+                        <select className="h-10 bg-white border border-slate-300 text-slate-700 text-sm rounded-lg px-2 max-w-[120px] focus:ring-primary-500 focus:border-primary-500" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                            <option value="ACTIVE">Active</option>
+                            <option value="ALL">All</option>
+                            <option value={PatientStatus.WAITING}>Waiting</option>
+                            <option value={PatientStatus.WITH_DOCTOR}>Serving</option>
+                        </select>
+                    </div>
+                )}
+
+                {/* Mobile Filter Icon (Simplified) */}
+                <button className="sm:hidden h-10 w-10 flex items-center justify-center border border-slate-300 rounded-lg text-slate-600 active:bg-slate-100">
+                    <Filter className="h-4 w-4" />
+                </button>
+
+                <Button className="h-10 px-4 whitespace-nowrap shadow-sm bg-slate-900 text-white hover:bg-slate-800" onClick={() => setIsPatientModalOpen(true)}>
+                    <UserPlus className="h-4 w-4 sm:mr-2" /> 
+                    <span className="hidden sm:inline">Add Patient</span>
+                </Button>
+
+                {isFiltered && (
+                    <button onClick={clearFilters} className="h-10 w-10 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded-lg transition-colors">
+                        <XCircle className="h-5 w-5" />
+                    </button>
+                )}
+            </div>
+        )}
+
+        {/* MAIN CONTENT AREA */}
+        <div className="flex-1 overflow-hidden relative bg-slate-100">
             {activeTab === 'QUEUE' && (
                 <QueueTable 
                     patients={filteredPatients}
@@ -513,7 +445,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     doctors={doctors}
                     onHistoryClick={(p) => setHistoryPatient(p)}
                     onEditClick={(p) => setEditingPatient(p)}
-                    onDeleteClick={(p) => { if(window.confirm(`WARNING: This will permanently delete all history for ${p.name}. Continue?`)) onDeleteMultiplePatients(patients.filter(pat => pat.phone === p.phone).map(pat => pat.id)); }}
+                    onDeleteClick={(p) => { if(window.confirm(`Delete history for ${p.name}?`)) onDeleteMultiplePatients(patients.filter(pat => pat.phone === p.phone).map(pat => pat.id)); }}
                 />
             )}
 
@@ -527,170 +459,64 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     onStatusChange={(id, status) => onEditDoctor(id, { status })}
                 />
             )}
+
+            {activeTab === 'REPORTS' && (
+                <ReceptionStats patients={patients} doctors={doctors} />
+            )}
         </div>
 
         {/* MODALS */}
-        <AddPatientModal 
-            isOpen={isPatientModalOpen}
-            onClose={() => setIsPatientModalOpen(false)}
-            onAdd={onAddPatient}
-            doctors={doctors}
-            patients={patients}
-            addToast={addToast}
-        />
-
-        <DoctorFormModal 
-            isOpen={isDoctorModalOpen}
-            onClose={() => setIsDoctorModalOpen(false)}
-            mode={doctorModalMode}
-            initialData={editingDoctorData}
-            onSave={handleSaveDoctor}
-            onCheckMasterDoctor={onCheckMasterDoctor}
-            addToast={addToast}
-        />
-        
-        {/* EDIT PATIENT MODAL */}
+        <AddPatientModal isOpen={isPatientModalOpen} onClose={() => setIsPatientModalOpen(false)} onAdd={onAddPatient} doctors={doctors} patients={patients} addToast={addToast} />
+        <DoctorFormModal isOpen={isDoctorModalOpen} onClose={() => setIsDoctorModalOpen(false)} mode={doctorModalMode} initialData={editingDoctorData} onSave={handleSaveDoctor} onCheckMasterDoctor={onCheckMasterDoctor} addToast={addToast} />
         <Modal isOpen={!!editingPatient} onClose={() => setEditingPatient(null)} title="Edit Patient Profile" maxWidth="max-w-md">
              {editingPatient && (
                  <form onSubmit={handleSaveEditedPatient} className="space-y-4">
-                     <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 mb-2 border border-blue-100 flex gap-2">
-                         <Activity className="h-5 w-5 flex-shrink-0" />
-                         <p>Changes to Name, Age, Gender, and Phone will apply to <strong>all past visits</strong> for this patient.</p>
-                     </div>
-                     <Input label="Full Name" value={editingPatient.name} onChange={(e) => setEditingPatient({...editingPatient, name: e.target.value})} required />
+                     <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 mb-2 border border-blue-100 flex gap-2"><Activity className="h-5 w-5 flex-shrink-0" /><p>Changes apply to <strong>all visits</strong>.</p></div>
+                     <Input label="Name" value={editingPatient.name} onChange={(e) => setEditingPatient({...editingPatient, name: e.target.value})} required />
                      <div className="grid grid-cols-2 gap-4">
                          <Input label="Age" value={editingPatient.age || ''} onChange={(e) => setEditingPatient({...editingPatient, age: e.target.value})} />
-                         <div>
-                             <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
-                             <select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={editingPatient.gender} onChange={(e) => setEditingPatient({...editingPatient, gender: e.target.value as any})}><option>Male</option><option>Female</option><option>Other</option></select>
-                         </div>
+                         <div><label className="block text-sm font-medium text-slate-700 mb-1">Gender</label><select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={editingPatient.gender} onChange={(e) => setEditingPatient({...editingPatient, gender: e.target.value as any})}><option>Male</option><option>Female</option><option>Other</option></select></div>
                      </div>
-                     <Input label="Phone Number" value={editingPatient.phone} onChange={(e) => setEditingPatient({...editingPatient, phone: e.target.value})} required />
-                     <div>
-                         <label className="block text-sm font-medium text-slate-700 mb-1">Symptoms (Current Visit)</label>
-                         <textarea className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm h-20 resize-none" value={editingPatient.symptoms || ''} onChange={(e) => setEditingPatient({...editingPatient, symptoms: e.target.value})} placeholder="e.g. Fever, Cough" />
-                     </div>
-                     <div className="pt-2 flex justify-end gap-3">
-                         <Button variant="secondary" type="button" onClick={() => setEditingPatient(null)}>Cancel</Button>
-                         <Button type="submit">Save Changes</Button>
-                     </div>
+                     <Input label="Phone" value={editingPatient.phone} onChange={(e) => setEditingPatient({...editingPatient, phone: e.target.value})} required />
+                     <div className="pt-2 flex justify-end gap-3"><Button variant="secondary" type="button" onClick={() => setEditingPatient(null)}>Cancel</Button><Button type="submit">Save</Button></div>
                  </form>
              )}
         </Modal>
-
-        {/* VITALS MODAL */}
         <Modal isOpen={!!vitalsPatient} onClose={() => setVitalsPatient(null)} title="Record Vitals" maxWidth="max-w-2xl">
             {vitalsPatient && (
                 <form onSubmit={handleSaveVitals} className="space-y-6">
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 bg-white rounded-full flex items-center justify-center text-slate-500 font-bold border border-slate-200">
-                                {vitalsPatient.tokenNumber}
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-slate-900">{vitalsPatient.name}</h3>
-                                <p className="text-xs text-slate-500">{vitalsPatient.age} Yrs • {vitalsPatient.gender}</p>
-                            </div>
-                        </div>
-                        <div className="text-right">
-                            <div className="text-xs font-bold text-slate-400 uppercase">Status</div>
-                            <span className={`text-sm font-bold ${vitalsPatient.status === PatientStatus.WAITING ? 'text-orange-600' : 'text-blue-600'}`}>{vitalsPatient.status}</span>
-                        </div>
-                    </div>
-
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center"><div className="flex items-center gap-3"><div className="h-10 w-10 bg-white rounded-full flex items-center justify-center text-slate-500 font-bold border border-slate-200">{vitalsPatient.tokenNumber}</div><div><h3 className="font-bold text-slate-900">{vitalsPatient.name}</h3><p className="text-xs text-slate-500">{vitalsPatient.age} Yrs • {vitalsPatient.gender}</p></div></div></div>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Activity className="h-3 w-3" /> Blood Pressure</label>
-                            <div className="relative">
-                                <Input placeholder="120/80" value={vitalsPatient.vitals?.bp || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, bp: e.target.value}})} className="pl-3" />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">mmHg</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Thermometer className="h-3 w-3" /> Temperature</label>
-                            <div className="relative">
-                                <Input placeholder="98.6" value={vitalsPatient.vitals?.temp || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, temp: e.target.value}})} />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">°F</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Heart className="h-3 w-3" /> Pulse Rate</label>
-                            <div className="relative">
-                                <Input placeholder="72" value={vitalsPatient.vitals?.pulse || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, pulse: e.target.value}})} />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">bpm</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Weight className="h-3 w-3" /> Weight</label>
-                            <div className="relative">
-                                <Input placeholder="65" value={vitalsPatient.vitals?.weight || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, weight: e.target.value}})} />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">kg</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Zap className="h-3 w-3" /> SpO2</label>
-                            <div className="relative">
-                                <Input placeholder="98" value={vitalsPatient.vitals?.spo2 || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, spo2: e.target.value}})} />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Droplets className="h-3 w-3" /> Blood Sugar</label>
-                            <div className="relative">
-                                <Input placeholder="100" value={vitalsPatient.vitals?.sugar || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, sugar: e.target.value}})} />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">mg/dL</span>
-                            </div>
-                        </div>
+                        <div className="space-y-1"><label className="text-xs font-bold text-slate-500">BP (mmHg)</label><Input placeholder="120/80" value={vitalsPatient.vitals?.bp || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, bp: e.target.value}})} /></div>
+                        <div className="space-y-1"><label className="text-xs font-bold text-slate-500">Temp (°F)</label><Input placeholder="98.6" value={vitalsPatient.vitals?.temp || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, temp: e.target.value}})} /></div>
+                        <div className="space-y-1"><label className="text-xs font-bold text-slate-500">Pulse (bpm)</label><Input placeholder="72" value={vitalsPatient.vitals?.pulse || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, pulse: e.target.value}})} /></div>
+                        <div className="space-y-1"><label className="text-xs font-bold text-slate-500">Weight (kg)</label><Input placeholder="65" value={vitalsPatient.vitals?.weight || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, weight: e.target.value}})} /></div>
+                        <div className="space-y-1"><label className="text-xs font-bold text-slate-500">SpO2 (%)</label><Input placeholder="98" value={vitalsPatient.vitals?.spo2 || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, spo2: e.target.value}})} /></div>
                     </div>
-
-                    <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
-                        <Button variant="secondary" type="button" onClick={() => setVitalsPatient(null)}>Cancel</Button>
-                        <Button type="submit">Save Vitals</Button>
-                    </div>
+                    <div className="pt-4 flex justify-end gap-3"><Button variant="secondary" type="button" onClick={() => setVitalsPatient(null)}>Cancel</Button><Button type="submit">Save Vitals</Button></div>
                 </form>
             )}
         </Modal>
-
-        {/* HISTORY MODAL */}
         <Modal isOpen={!!historyPatient} onClose={() => setHistoryPatient(null)} title="Patient History" maxWidth="max-w-2xl">
             {historyPatient && (() => {
                 const history = getPatientHistory(historyPatient);
                 return (
-                    <div className="space-y-6">
-                        <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                            <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg">{historyPatient.name.charAt(0)}</div>
-                            <div>
-                                <h4 className="font-bold text-slate-900 text-lg">{historyPatient.name}</h4>
-                                <div className="flex items-center gap-3 text-sm text-slate-500">
-                                    <span className="flex items-center gap-1"><User className="h-3 w-3" /> {historyPatient.age} Yrs • {historyPatient.gender}</span>
-                                    <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {historyPatient.phone}</span>
+                    <div className="space-y-4">
+                        {history.map(visit => (
+                            <div key={visit.id} className="relative pl-6 pb-4 border-l border-slate-200 ml-2">
+                                <div className="absolute left-[-5px] top-0 w-2.5 h-2.5 rounded-full bg-slate-300 border-2 border-white"></div>
+                                <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <div><span className="text-xs font-bold text-slate-500">{new Date(visit.timeAdded).toLocaleDateString()}</span><h5 className="font-bold text-slate-900 text-sm">Dr. {doctors.find(d => d.id === visit.doctorId)?.name}</h5></div>
+                                        <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-bold">{visit.status}</span>
+                                    </div>
+                                    {visit.symptoms && <p className="text-xs text-slate-600"><strong>Sx:</strong> {visit.symptoms}</p>}
+                                    {visit.diagnosis && <p className="text-xs text-slate-600"><strong>Dx:</strong> {visit.diagnosis}</p>}
+                                    {visit.notes && <div className="mt-2 bg-slate-50 p-2 rounded text-[10px] text-slate-500 italic">{visit.notes}</div>}
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div className="space-y-4 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
-                            {history.map(visit => {
-                                const doc = doctors.find(d => d.id === visit.doctorId);
-                                return (
-                                    <div key={visit.id} className="relative pl-10">
-                                        <div className="absolute left-2.5 top-3 w-3 h-3 rounded-full bg-slate-400 ring-4 ring-white"></div>
-                                        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:border-primary-200 transition-colors">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div>
-                                                    <span className="text-xs font-bold text-slate-500 uppercase">{new Date(visit.timeAdded).toLocaleDateString()}</span>
-                                                    <h5 className="font-bold text-slate-900">Dr. {doc?.name || 'Unknown'}</h5>
-                                                </div>
-                                                <span className={`px-2 py-1 rounded text-[10px] font-bold ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>{visit.status}</span>
-                                            </div>
-                                            {visit.symptoms && <p className="text-sm text-slate-600 mb-2"><strong>Reason:</strong> {visit.symptoms}</p>}
-                                            {visit.diagnosis && <p className="text-sm text-slate-600 mb-2"><strong>Diagnosis:</strong> {visit.diagnosis}</p>}
-                                            {visit.notes && <div className="bg-slate-50 p-2 rounded text-xs text-slate-500 italic border border-slate-100">{visit.notes}</div>}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                        {history.length === 0 && <p className="text-center text-slate-400 py-8">No history found.</p>}
+                        ))}
+                        {history.length === 0 && <p className="text-center text-slate-400 py-4">No history found.</p>}
                     </div>
                 );
             })()}
