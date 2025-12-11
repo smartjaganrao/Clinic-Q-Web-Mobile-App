@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor } from '../types';
 import { Button } from '../components/Button';
@@ -250,6 +251,19 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       }
       return null;
   }, [userLocation, selectedClinic]);
+
+  // Use travel estimate as default if available
+  useEffect(() => {
+      if (travelEstimate) {
+          // Find closest bucket
+          const mins = travelEstimate.mins;
+          if (mins <= 10) setTravelTime('5');
+          else if (mins <= 20) setTravelTime('15');
+          else if (mins <= 40) setTravelTime('30');
+          else if (mins <= 55) setTravelTime('45');
+          else setTravelTime('60');
+      }
+  }, [travelEstimate]);
 
   // --- HISTORY MANAGEMENT ---
   useEffect(() => {
@@ -680,7 +694,13 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       const waitDetails = clinic && selectedDoctorId ? getDoctorWaitDetails(clinic, selectedDoctorId) : { count: 0, time: 0 };
       const estimatedWaitMins = waitDetails.time;
       const travelMins = parseInt(travelTime) || 0;
-      if (visitType === 'WALK_IN' && travelMins > estimatedWaitMins + 10) { setShowLateWarningModal(true); return; }
+      
+      // Check for late arrival risks
+      if (visitType === 'WALK_IN' && travelMins > estimatedWaitMins + 10) { 
+          setShowLateWarningModal(true); 
+          return; 
+      }
+      
       submitBooking();
   };
 
@@ -1346,10 +1366,28 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                 <option value="45">45 mins</option>
                                                 <option value="60">1 Hour+</option>
                                             </select>
-                                            {travelEstimate && parseInt(travelTime) < travelEstimate.mins && (
-                                                <div className="mt-2 text-xs text-orange-600 bg-orange-50 p-2 rounded flex items-start gap-2 border border-orange-100">
-                                                    <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                                                    <span>Your selected time is less than estimated GPS travel time (~{travelEstimate.mins}m). You might be skipped if late.</span>
+                                            
+                                            {/* Conflict Logic for Remote Booking */}
+                                            {(parseInt(travelTime) > waitStats.time + 10) && (
+                                                <div className="mt-3 text-xs text-amber-700 bg-amber-50 p-3 rounded-lg flex items-start gap-2 border border-amber-100">
+                                                    <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                                    <div className="flex-1">
+                                                        <p className="font-bold mb-1">Late Arrival Risk</p>
+                                                        <p>Your travel time ({travelTime}m) is longer than the current queue ({waitStats.time}m). You may be placed at the end of the line upon arrival.</p>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {(waitStats.time < 15 && parseInt(travelTime) > 30) && (
+                                                <div className="mt-3 text-xs text-red-700 bg-red-50 p-3 rounded-lg flex items-start gap-2 border border-red-100">
+                                                    <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                                    <div className="flex-1">
+                                                        <p className="font-bold mb-1">Doctor is Waiting</p>
+                                                        <p className="mb-2">The queue is almost empty, but you are far away. We cannot hold the doctor for 30+ mins.</p>
+                                                        <Button size="sm" variant="secondary" className="w-full h-8 text-xs bg-white border-red-200 text-red-700 hover:bg-red-50" onClick={() => setVisitType('APPOINTMENT')}>
+                                                            Switch to Appointment
+                                                        </Button>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>)}
@@ -1357,7 +1395,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                         <div className="bg-blue-50 p-4 rounded-xl border border-blue-100"><div className="flex justify-between text-sm mb-2"><span className="text-slate-500">Patient</span><span className="font-bold text-slate-900">{isGuest ? (guestName || 'Guest User') : (bookingFor === 'MYSELF' ? userProfile?.name : bookingFor)}</span></div><div className="flex justify-between text-sm mb-2"><span className="text-slate-500">Doctor</span><span className="font-bold text-slate-900">{selectedClinic.doctors.find(d => d.id === selectedDoctorId)?.name}</span></div><div className="flex justify-between text-sm pt-2 border-t border-blue-200"><span className="text-slate-600 font-medium">Consultation Fee</span><span className="font-bold text-primary-700">₹{selectedClinic.doctors.find(d => d.id === selectedDoctorId)?.consultationFee}</span></div></div>
                                     </div>
                                     <div className="p-4 md:p-6 bg-white border-t border-slate-200 flex-shrink-0 sticky bottom-0 z-10">
-                                        <Button type="button" className="w-full h-12 text-lg shadow-xl shadow-primary-100" onClick={() => handleBookToken()}>{isGuest ? 'Verify Mobile & Confirm' : 'Confirm Booking'}</Button>
+                                        <Button type="button" className="w-full h-12 text-lg shadow-xl shadow-primary-100" onClick={(e) => handleBookToken(e)}>{isGuest ? 'Verify Mobile & Confirm' : 'Confirm Booking'}</Button>
                                     </div>
                                 </div>
                             </div>
@@ -1461,13 +1499,15 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         <div className="bg-amber-100 h-12 w-12 rounded-full flex items-center justify-center mx-auto mb-4">
                             <AlertTriangle className="h-6 w-6 text-amber-600" />
                         </div>
-                        <h3 className="text-lg font-bold text-slate-900 mb-2">Late Arrival Warning</h3>
-                        <p className="text-sm text-slate-500 mb-6">
-                            The current wait time is shorter than your travel time ({travelTime} mins). You might be skipped or placed ON HOLD when you arrive.
+                        <h3 className="text-lg font-bold text-slate-900 mb-2">Late Arrival Risk</h3>
+                        <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+                            Your travel time (<strong>{travelTime}m</strong>) is longer than the estimated wait (<strong>{waitStats.time}m</strong>).
+                            <br/><br/>
+                            You will likely be skipped or placed at the back of the queue when you arrive.
                         </p>
                         <div className="flex gap-3 justify-center">
                             <Button variant="secondary" onClick={() => setShowLateWarningModal(false)}>Cancel</Button>
-                            <Button className="bg-amber-600 hover:bg-amber-700 border-amber-600" onClick={() => submitBooking()}>Proceed Anyway</Button>
+                            <Button className="bg-amber-600 hover:bg-amber-700 border-amber-600" onClick={() => submitBooking()}>I Understand</Button>
                         </div>
                     </div>
                 </div>

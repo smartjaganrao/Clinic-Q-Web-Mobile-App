@@ -111,6 +111,11 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 if (hasNokA !== hasNokB) return hasNokA ? 1 : -1; 
             }
 
+            // NEW: Prioritize Checked In
+            const checkInA = a.isCheckedIn ? 1 : 0;
+            const checkInB = b.isCheckedIn ? 1 : 0;
+            if (checkInA !== checkInB) return checkInB - checkInA;
+
             const getStatusPriority = (s: PatientStatus) => {
                 if (s === PatientStatus.ON_HOLD) return 0;
                 if (s === PatientStatus.WAITING) return 1;
@@ -198,15 +203,9 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
     // Sorted Deck Logic
     const sortedDeckStats = useMemo(() => {
-        let stats = [...doctorQueueStats];
-        // If filtering by a doctor, bring them to front
-        if (filterDoctorId !== 'ALL') {
-            const selected = stats.find(s => s.doc.id === filterDoctorId);
-            const others = stats.filter(s => s.doc.id !== filterDoctorId);
-            if (selected) stats = [selected, ...others];
-        }
-        return stats;
-    }, [doctorQueueStats, filterDoctorId]);
+        // Return original order to prevent layout shifts on selection
+        return [...doctorQueueStats];
+    }, [doctorQueueStats]);
 
     const visibleDeckStats = useMemo(() => {
         if (isDeckExpanded) return sortedDeckStats;
