@@ -48,9 +48,11 @@ export const QueueTable: React.FC<QueueTableProps> = ({
               const isWaiting = patient.status === PatientStatus.WAITING;
               const isOnHold = patient.status === PatientStatus.ON_HOLD;
               const isCheckedIn = patient.isCheckedIn;
+              const isNextUp = nextUpPatientIds ? nextUpPatientIds.has(patient.id) : false;
               
               let cardClass = "bg-white border-slate-200";
               if (isServing) cardClass = "border-blue-500 shadow-blue-100 ring-1 ring-blue-500";
+              else if (isNextUp) cardClass = "border-indigo-500 shadow-indigo-50 ring-1 ring-indigo-500 relative";
               else if (patient.isEmergency) cardClass = "border-red-200 bg-red-50/30";
               else if (isOnHold) cardClass = "border-orange-200 bg-orange-50/30 opacity-90";
 
@@ -58,11 +60,16 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                   <div key={patient.id} className={`rounded-xl p-4 shadow-sm border relative overflow-hidden ${cardClass}`}>
                       {isServing && <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>}
                       {isOnHold && <div className="absolute top-0 left-0 w-1 h-full bg-orange-400"></div>}
-                      {patient.isEmergency && <div className="absolute top-0 right-0 bg-red-100 text-red-600 text-[10px] font-bold px-2 py-1 rounded-bl-lg flex items-center gap-1"><Zap className="h-3 w-3 fill-current" /> URGENT</div>}
-                      {isOnHold && !patient.isEmergency && <div className="absolute top-0 right-0 bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-1 rounded-bl-lg flex items-center gap-1"><PauseCircle className="h-3 w-3" /> ON HOLD</div>}
+                      
+                      {/* Top Right Badges */}
+                      <div className="absolute top-0 right-0 flex items-start">
+                          {isNextUp && <div className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg flex items-center gap-1 shadow-sm z-10">NEXT</div>}
+                          {patient.isEmergency && !isNextUp && <div className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-1 rounded-bl-lg flex items-center gap-1"><Zap className="h-3 w-3 fill-current" /> URGENT</div>}
+                          {isOnHold && !patient.isEmergency && !isNextUp && <div className="bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-1 rounded-bl-lg flex items-center gap-1"><PauseCircle className="h-3 w-3" /> ON HOLD</div>}
+                      </div>
                       
                       <div className="flex items-start gap-4">
-                          <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 flex-shrink-0 ${isServing ? 'bg-blue-600 text-white border-blue-600' : ''}`}>
+                          <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 flex-shrink-0 ${isServing ? 'bg-blue-600 text-white border-blue-600' : isNextUp ? 'bg-indigo-600 text-white border-indigo-600' : ''}`}>
                               <span className="text-xl font-black">{patient.tokenNumber}</span>
                           </div>
                           
@@ -191,7 +198,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                     <div className="flex flex-col items-center justify-center gap-1">
                       {isWaiting && !isFiltered && <GripVertical className="h-3 w-3 text-slate-300 cursor-move hover:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />}
                       <div className="relative">
-                        <div className={`inline-flex items-center justify-center h-8 w-8 rounded-lg font-black text-sm shadow-sm border ${patient.isEmergency ? 'bg-red-500 text-white border-red-600' : isServing ? 'bg-blue-600 text-white border-blue-700 animate-pulse' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
+                        <div className={`inline-flex items-center justify-center h-8 w-8 rounded-lg font-black text-sm shadow-sm border ${patient.isEmergency ? 'bg-red-500 text-white border-red-600' : isServing ? 'bg-blue-600 text-white border-blue-700 animate-pulse' : isNextUp ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
                           {patient.tokenNumber}
                         </div>
                         {patient.isEmergency && <div className="absolute -top-1.5 -right-1.5 bg-red-100 text-red-600 p-0.5 rounded-full border border-red-200 shadow-sm z-10"><Zap className="h-2.5 w-2.5 fill-current" /></div>}
@@ -201,7 +208,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                   
                   <td className="px-3 py-1.5">
                     <div className="flex flex-col">
-                      <div className={`font-bold text-sm truncate max-w-[180px] ${isServing ? 'text-blue-900' : 'text-slate-900'}`}>{patient.name}</div>
+                      <div className={`font-bold text-sm truncate max-w-[180px] ${isServing ? 'text-blue-900' : isNextUp ? 'text-indigo-900' : 'text-slate-900'}`}>{patient.name}</div>
                       <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium leading-none mt-0.5">
                         <span>{patient.age}Y</span><span className="text-slate-300">•</span><span>{patient.gender}</span><span className="text-slate-300">•</span><span className="font-mono">{patient.phone}</span>
                       </div>
@@ -223,6 +230,8 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                           <div className="flex flex-col gap-0.5">
                               {isOnHold ? (
                                   <div className="flex items-center gap-1.5 text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100 w-fit font-bold text-[10px]"><PauseCircle className="h-3 w-3" /> ON HOLD</div>
+                              ) : isNextUp ? (
+                                  <div className="flex items-center gap-1.5 text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 w-fit font-bold text-[10px]"><Play className="h-3 w-3 fill-current" /> NEXT</div>
                               ) : (
                                   <div className="flex items-center gap-1.5"><Clock className="h-3 w-3 text-slate-400" /><span className="text-xs font-bold text-slate-700">~{waitMins}m</span></div>
                               )}
