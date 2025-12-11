@@ -1,0 +1,181 @@
+
+import { Clinic, Patient, Doctor, PatientStatus, DoctorStatus, PlanType, DaySchedule, ClinicType } from '../types';
+import { INITIAL_CLINICS } from '../constants';
+
+const STORAGE_KEY = 'clinicq_db_v2';
+
+// Helper to simulate network latency
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+class StorageService {
+  private clinics: Clinic[] = [];
+  private listeners: ((clinics: Clinic[]) => void)[] = [];
+
+  constructor() {
+    this.load();
+  }
+
+  private load() {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          this.clinics = JSON.parse(stored);
+        } else {
+          this.clinics = INITIAL_CLINICS;
+          this.save();
+        }
+      }
+    } catch (e) {
+      console.error("Storage Load Error", e);
+      this.clinics = INITIAL_CLINICS;
+    }
+  }
+
+  private save() {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.clinics));
+        this.notify();
+      }
+    } catch (e) {
+      console.error("Storage Save Error", e);
+    }
+  }
+
+  private notify() {
+    this.listeners.forEach(listener => listener([...this.clinics]));
+  }
+
+  // --- PUBLIC API (Mimics Firebase/DB Interface) ---
+
+  subscribe(listener: (clinics: Clinic[]) => void) {
+    this.listeners.push(listener);
+    listener([...this.clinics]); // Initial data
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== listener);
+    };
+  }
+
+  async getClinics(): Promise<Clinic[]> {
+    await delay(50); // Simulate fetch
+    return [...this.clinics];
+  }
+
+  // --- PATIENT OPERATIONS ---
+
+  async addPatient(clinicId: string, patient: Patient) {
+    await delay(100);
+    this.clinics = this.clinics.map(c => 
+      c.id === clinicId ? { ...c, patients: [...c.patients, patient] } : c
+    );
+    this.save();
+  }
+
+  async updatePatient(clinicId: string, patientId: string, updates: Partial<Patient>) {
+    await delay(50);
+    this.clinics = this.clinics.map(c => 
+      c.id === clinicId 
+      ? { ...c, patients: c.patients.map(p => p.id === patientId ? { ...p, ...updates } : p) }
+      : c
+    );
+    this.save();
+  }
+
+  async updatePatientStatus(clinicId: string, patientId: string, status: PatientStatus) {
+    await delay(50);
+    this.clinics = this.clinics.map(c => 
+        c.id === clinicId 
+        ? { ...c, patients: c.patients.map(p => p.id === patientId ? { ...p, status, timeCompleted: status === PatientStatus.COMPLETED ? Date.now() : p.timeCompleted } : p) }
+        : c
+    );
+    this.save();
+  }
+
+  async bulkUpdatePatientStatus(clinicId: string, patientIds: string[], status: PatientStatus) {
+      await delay(100);
+      this.clinics = this.clinics.map(c => 
+          c.id === clinicId
+          ? { ...c, patients: c.patients.map(p => patientIds.includes(p.id) ? { ...p, status } : p) }
+          : c
+      );
+      this.save();
+  }
+
+  async deletePatient(clinicId: string, patientId: string) {
+    await delay(50);
+    this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, patients: c.patients.filter(p => p.id !== patientId) } : c);
+    this.save();
+  }
+
+  async deleteMultiplePatients(clinicId: string, patientIds: string[]) {
+      await delay(100);
+      this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, patients: c.patients.filter(p => !patientIds.includes(p.id)) } : c);
+      this.save();
+  }
+
+  // --- DOCTOR OPERATIONS ---
+
+  async addDoctor(clinicId: string, doctor: Doctor) {
+      await delay(100);
+      this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, doctors: [...c.doctors, doctor] } : c);
+      this.save();
+  }
+
+  async updateDoctor(clinicId: string, doctorId: string, updates: Partial<Doctor>) {
+      await delay(50);
+      this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, doctors: c.doctors.map(d => d.id === doctorId ? { ...d, ...updates } : d) } : c);
+      this.save();
+  }
+
+  async deleteDoctor(clinicId: string, doctorId: string) {
+      await delay(50);
+      this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, doctors: c.doctors.filter(d => d.id !== doctorId) } : c);
+      this.save();
+  }
+
+  async updateDoctorStatus(clinicId: string, doctorId: string, status: DoctorStatus, delayMinutes: number) {
+      await delay(50);
+      this.clinics = this.clinics.map(c => c.id === clinicId ? {
+          ...c,
+          doctors: c.doctors.map(d => d.id === doctorId ? { 
+              ...d, 
+              status, 
+              delayMinutes: delayMinutes,
+              statusUpdateTime: Date.now(),
+              delayStartTime: delayMinutes > 0 ? Date.now() : undefined
+          } : d)
+      } : c);
+      this.save();
+  }
+
+  // --- CLINIC OPERATIONS ---
+
+  async createClinic(clinic: Clinic) {
+      await delay(200);
+      this.clinics = [...this.clinics, clinic];
+      this.save();
+  }
+
+  async updateClinic(clinicId: string, updates: Partial<Clinic>) {
+      await delay(100);
+      this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, ...updates } : c);
+      this.save();
+  }
+
+  async deleteClinic(clinicId: string) {
+      await delay(100);
+      this.clinics = this.clinics.filter(c => c.id !== clinicId);
+      this.save();
+  }
+
+  async resetSystem() {
+      await delay(500);
+      localStorage.removeItem('clinicq_db_v2');
+      localStorage.removeItem('clinicq_session_v2');
+      this.clinics = INITIAL_CLINICS;
+      this.save();
+  }
+}
+
+export const storage = new StorageService();

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Patient, Doctor, PatientStatus } from '../../../types';
 import { Badge } from '../../../components/Badge';
-import { PlayCircle, CheckSquare, Edit2, UserCheck, Activity, AlertTriangle, XCircle, ArrowUp, Calendar, User, CheckCircle, GripVertical, Clock, ChevronRight, Timer, Stethoscope, PauseCircle, Play, Phone, Zap } from 'lucide-react';
+import { PlayCircle, CheckSquare, Edit2, UserCheck, Activity, AlertTriangle, XCircle, ArrowUp, Calendar, User, CheckCircle, GripVertical, Clock, ChevronRight, Timer, Stethoscope, PauseCircle, Play, Phone, Zap, PhoneCall } from 'lucide-react';
 
 interface QueueTableProps {
   patients: Patient[];
@@ -82,6 +82,22 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                                   <span>•</span>
                                   <span className={waitMins > 30 ? 'text-red-500 font-bold' : ''}>~{waitMins}m Wait</span>
                               </div>
+                              
+                              {/* Next of Kin Display (Mobile) */}
+                              {patient.nextOfKin && (
+                                  <div className="flex items-center gap-1 mt-2 text-[10px] text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100 w-fit">
+                                      <PhoneCall className="h-3 w-3 text-slate-400" />
+                                      <span className="font-bold">ICE:</span> {patient.nextOfKin.name} ({patient.nextOfKin.phone})
+                                  </div>
+                              )}
+                              
+                              {/* Missing NOK Warning for Emergency */}
+                              {patient.isEmergency && !patient.nextOfKin && (
+                                  <div className="flex items-center gap-1 mt-2 text-[10px] text-red-600 bg-red-50 px-2 py-1 rounded border border-red-100 w-fit animate-pulse">
+                                      <AlertTriangle className="h-3 w-3" /> No Emergency Contact
+                                  </div>
+                              )}
+
                               <div className="flex flex-wrap gap-2 mt-2">
                                   <span className={`text-[10px] px-1.5 py-0.5 rounded border ${patient.visitType === 'APPOINTMENT' ? 'bg-purple-50 text-purple-700 border-purple-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
                                       {patient.visitType === 'APPOINTMENT' ? (
@@ -212,6 +228,20 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                       <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium leading-none mt-0.5">
                         <span>{patient.age}Y</span><span className="text-slate-300">•</span><span>{patient.gender}</span><span className="text-slate-300">•</span><span className="font-mono">{patient.phone}</span>
                       </div>
+                      
+                      {/* Next of Kin Display Desktop */}
+                      {patient.nextOfKin && (
+                          <div className="mt-1 flex items-center gap-1 text-[9px] text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 w-fit">
+                              <PhoneCall className="h-2.5 w-2.5 text-slate-400" />
+                              <span className="font-semibold">ICE:</span> {patient.nextOfKin.name}
+                          </div>
+                      )}
+                      {patient.isEmergency && !patient.nextOfKin && (
+                          <div className="mt-1 flex items-center gap-1 text-[9px] text-red-600 font-bold animate-pulse">
+                              <AlertTriangle className="h-2.5 w-2.5" /> No Emergency Contact
+                          </div>
+                      )}
+
                       {patient.symptoms && <div className="mt-0.5 text-[9px] text-slate-600 bg-slate-50 px-1 py-0.5 rounded w-fit max-w-[180px] truncate border border-slate-100">{patient.symptoms}</div>}
                     </div>
                   </td>

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals } from '../types';
 import { Button } from '../components/Button';
@@ -18,7 +19,7 @@ interface ReceptionDashboardProps {
     patients: Patient[];
     clinicName: string;
     clinicType?: ClinicType;
-    onAddPatient: (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string) => void;
+    onAddPatient: (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string, nextOfKin?: {name: string, phone: string}) => void;
     onEditPatient: (id: string, updates: Partial<Patient>) => void;
     onDeletePatient: (id: string) => void;
     onDeleteMultiplePatients: (ids: string[]) => void;
@@ -33,13 +34,14 @@ interface ReceptionDashboardProps {
     onManualReorder: (id: string, direction: 'UP' | 'DOWN') => void;
     onDragDrop: (draggedId: string, targetId: string) => void;
     onManualCheckIn: (id: string) => void;
+    onBulkUpdateStatus?: (ids: string[], status: PatientStatus) => void;
     addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
 export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     doctors, patients, clinicName, onAddPatient, onEditPatient, onDeletePatient, onDeleteMultiplePatients, 
     onAddDoctor, onCheckMasterDoctor, onEditDoctor, onDeleteDoctor, onUpdateStatus, onCancelPatient, onUpdateClinicName, 
-    onToggleEmergency, onManualReorder, onDragDrop, onManualCheckIn, addToast
+    onToggleEmergency, onManualReorder, onDragDrop, onManualCheckIn, onBulkUpdateStatus, addToast
 }) => {
     const [activeTab, setActiveTab] = useState<'QUEUE' | 'DATABASE' | 'DOCTORS' | 'REPORTS'>('QUEUE');
     const [searchQuery, setSearchQuery] = useState('');
@@ -102,6 +104,13 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 if (orderA !== orderB) return orderA - orderB;
             }
             if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
+            
+            if (a.isEmergency && b.isEmergency) {
+                const hasNokA = a.nextOfKin?.name && a.nextOfKin?.phone;
+                const hasNokB = b.nextOfKin?.name && b.nextOfKin?.phone;
+                if (hasNokA !== hasNokB) return hasNokA ? 1 : -1; 
+            }
+
             const getStatusPriority = (s: PatientStatus) => {
                 if (s === PatientStatus.ON_HOLD) return 0;
                 if (s === PatientStatus.WAITING) return 1;
@@ -277,6 +286,38 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         return patients.filter(p => p.phone === patient.phone).sort((a, b) => b.timeAdded - a.timeAdded);
     };
 
+    // BULK HANDLERS FOR DATABASE TABLE
+    const handleBulkDelete = (selectedPatients: Patient[]) => {
+        // Collect all IDs for the selected unique patients
+        const idsToDelete: string[] = [];
+        selectedPatients.forEach(p => {
+            const matched = patients.filter(pat => pat.phone === p.phone).map(pat => pat.id);
+            idsToDelete.push(...matched);
+        });
+        if (idsToDelete.length > 0) {
+            onDeleteMultiplePatients(idsToDelete);
+        }
+    };
+
+    const handleBulkStatusChange = (selectedPatients: Patient[], status: PatientStatus) => {
+        if (!onBulkUpdateStatus) return;
+        const idsToUpdate: string[] = [];
+        selectedPatients.forEach(p => {
+            // Find active/latest visit for this patient
+            const latest = patients
+                .filter(pat => pat.phone === p.phone && pat.status !== PatientStatus.COMPLETED && pat.status !== PatientStatus.CANCELLED)
+                .sort((a, b) => b.timeAdded - a.timeAdded)[0];
+            
+            if (latest) idsToUpdate.push(latest.id);
+        });
+        
+        if (idsToUpdate.length > 0) {
+            onBulkUpdateStatus(idsToUpdate, status);
+        } else {
+            addToast("No active visits found for selected patients", "warning");
+        }
+    };
+
     const isFiltered = searchQuery !== '' || filterDoctorId !== 'ALL' || filterStatus !== 'ACTIVE' || filterType !== 'ALL';
 
     return (
@@ -301,7 +342,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     </div>
                 </div>
 
-                {/* DOCTOR STATUS DECK (COMPACT COLLAPSIBLE GRID) */}
+                {/* DOCTOR STATUS DECK */}
                 {activeTab === 'QUEUE' && (
                     <div className="bg-white border-b border-slate-200 w-full overflow-hidden transition-all duration-300">
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 gap-2 p-2 max-w-[1920px] mx-auto">
@@ -396,7 +437,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 )}
             </div>
 
-            {/* TOOLBAR (MERGED) */}
+            {/* TOOLBAR */}
             {(activeTab === 'QUEUE' || activeTab === 'DATABASE') && (
                 <div className="px-2 py-2 sm:px-4 sm:py-3 border-b border-slate-200 bg-white flex items-center gap-2 sticky top-0 z-20 shadow-sm">
                     <div className="relative flex-1">
@@ -421,7 +462,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         </div>
                     )}
 
-                    {/* Mobile Filter Icon (Simplified) */}
+                    {/* Mobile Filter Icon */}
                     <button className="sm:hidden h-10 w-10 flex items-center justify-center border border-slate-300 rounded-lg text-slate-600 active:bg-slate-100">
                         <Filter className="h-4 w-4" />
                     </button>
@@ -439,7 +480,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 </div>
             )}
 
-            {/* MAIN CONTENT AREA - Added bottom padding for mobile nav */}
+            {/* MAIN CONTENT AREA */}
             <div className="flex-1 overflow-hidden relative bg-slate-100 pb-16 sm:pb-0">
                 {activeTab === 'QUEUE' && (
                     <QueueTable 
@@ -466,6 +507,8 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         onHistoryClick={(p) => setHistoryPatient(p)}
                         onEditClick={(p) => setEditingPatient(p)}
                         onDeleteClick={(p) => { if(window.confirm(`Delete history for ${p.name}?`)) onDeleteMultiplePatients(patients.filter(pat => pat.phone === p.phone).map(pat => pat.id)); }}
+                        onBulkDelete={handleBulkDelete}
+                        onBulkStatusChange={handleBulkStatusChange}
                     />
                 )}
 

@@ -140,6 +140,10 @@ export interface Patient {
   gender?: 'Male' | 'Female' | 'Other';
   symptoms?: string; // Reason for visit
   queueOrder?: number; // Manual override for sorting
+  nextOfKin?: { // New: Emergency Contact
+      name: string;
+      phone: string;
+  };
 }
 
 export interface ClinicStats {

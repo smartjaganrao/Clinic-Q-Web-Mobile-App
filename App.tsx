@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, AppNotification, ClinicStats, TimeSlot, ClinicType, Vitals, PainPoint } from './types';
-import { INITIAL_CLINICS } from './constants';
+// Removed INITIAL_CLINICS import as it's now handled in storage.ts
 import { LandingPage } from './pages/LandingPage';
 import { StaffLogin } from './pages/StaffLogin';
 import { ClinicAuth } from './pages/ClinicAuth';
@@ -16,6 +16,7 @@ import { ToastContainer } from './components/Toast';
 import { Logo } from './components/Logo';
 import { Button } from './components/Button';
 import { LogOut } from 'lucide-react';
+import { storage } from './services/storage';
 
 // Utility to generate IDs
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -70,17 +71,8 @@ export default function App() {
   const [currentView, setCurrentView] = useState<AppView>(session?.currentView || 'LANDING');
   const [userRole, setUserRole] = useState<UserRole | null>(session?.userRole || null);
   
-  // Data State - Initialize with Persistence Logic
-  // Simplified: Seeding is now handled in index.tsx via services/mockData.ts
-  const [clinics, setClinics] = useState<Clinic[]>(() => {
-      try {
-          const saved = localStorage.getItem('clinicq_db_v2');
-          return saved ? JSON.parse(saved) : INITIAL_CLINICS;
-      } catch (e) {
-          console.error("Failed to load data", e);
-          return INITIAL_CLINICS;
-      }
-  });
+  // Data State - Now managed via Storage Subscription
+  const [clinics, setClinics] = useState<Clinic[]>([]);
 
   const [currentClinicId, setCurrentClinicId] = useState<string | null>(session?.selectedClinicId || null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(session?.currentUser?.id || null); // Store ID, derive object
@@ -97,54 +89,33 @@ export default function App() {
 
   // Derived State
   const currentClinic = clinics.find(c => c.id === currentClinicId) || null;
-  // Derive current user (Doctor) from fresh clinics data to ensure state updates reflect immediately
+  // Derive current user (Doctor) from fresh clinics data
   const currentUser = (userRole === UserRole.DOCTOR && currentClinic && currentUserId) 
       ? currentClinic.doctors.find(d => d.id === currentUserId) || null 
       : null;
 
   // ------------------------------------------------------------------
-  // PERSISTENCE EFFECTS
+  // SUBSCRIPTION TO DATA LAYER
+  // ------------------------------------------------------------------
+  useEffect(() => {
+      const unsubscribe = storage.subscribe((data) => {
+          setClinics(data);
+      });
+      return () => unsubscribe();
+  }, []);
+
+  // ------------------------------------------------------------------
+  // SESSION EFFECTS
   // ------------------------------------------------------------------
   
   // Safety Redirect
   useEffect(() => {
       const needsClinic = ['DASHBOARD_RECEPTION', 'DASHBOARD_DOCTOR', 'KIOSK', 'DOCTOR_LOGIN'].includes(currentView);
-      if (needsClinic && !currentClinic) {
+      // Wait for clinics to load before redirecting
+      if (clinics.length > 0 && needsClinic && !currentClinic) {
           setCurrentView(userRole ? 'CLINIC_AUTH' : 'LANDING');
       }
-  }, [currentView, currentClinic, userRole]);
-
-  // Sync Data Across Tabs (Concurrency)
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-        if (e.key === 'clinicq_db_v2' && e.newValue) {
-            try {
-                const updatedClinics = JSON.parse(e.newValue);
-                // Updating state will trigger the save effect below, but since the value
-                // in state will match localStorage, the save effect's equality check prevents a loop.
-                setClinics(updatedClinics);
-            } catch (err) {
-                console.error("Failed to sync external changes:", err);
-            }
-        }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  // Save Database on ANY change
-  useEffect(() => {
-    if (clinics.length > 0) {
-      const key = 'clinicq_db_v2';
-      const current = localStorage.getItem(key);
-      const next = JSON.stringify(clinics);
-      // Prevent loop by checking if value actually changed
-      if (current !== next) {
-        localStorage.setItem(key, next);
-      }
-    }
-  }, [clinics]);
+  }, [currentView, currentClinic, userRole, clinics.length]);
 
   // Save Session
   useEffect(() => {
@@ -172,13 +143,12 @@ export default function App() {
   };
 
   // ------------------------------------------------------------------
-  // HANDLERS
+  // HANDLERS (Now delegation to Storage Service)
   // ------------------------------------------------------------------
 
   // Navigation
   const handleStaffLogin = () => setCurrentView('STAFF_LOGIN');
   
-  // UPDATED: Go straight to Tracker even if not logged in (Guest Mode)
   const handlePatientEnter = (mode?: 'DOCTOR' | 'CLINIC') => {
       setInitialSearchMode(mode || 'CLINIC');
       setCurrentView('PATIENT_TRACKER');
@@ -212,7 +182,6 @@ export default function App() {
   // PATIENT LOGIN & AUTO-BOOKING LOGIC
   const handlePatientLogin = (phone: string, name: string) => {
     setPatientAuth({ phone, name });
-    // IMPORTANT: Do not force navigation if we are already in tracker (prevents unmount)
     if (currentView !== 'PATIENT_TRACKER') {
         setCurrentView('PATIENT_TRACKER');
     }
@@ -222,12 +191,9 @@ export default function App() {
             handlePatientCheckIn(pendingAction.clinicId, pendingAction.patientId);
             addToast("Check-in confirmed!", "success");
         } else if (pendingAction.type === 'BOOKING') {
-            // AUTO-EXECUTE BOOKING
             const b = pendingAction.data;
             handleGetToken(
-                b.name, // Use booking name which might be guest name or family member
-                phone,  // Use verified phone
-                b.doctorId, b.clinicId, b.apptTime, b.apptDate, b.age, b.gender, b.symptoms
+                b.name, phone, b.doctorId, b.clinicId, b.apptTime, b.apptDate, b.age, b.gender, b.symptoms
             );
             addToast("Booking Confirmed Successfully!", "success");
         }
@@ -247,29 +213,24 @@ export default function App() {
     localStorage.removeItem('clinicq_session_v2');
   };
 
-  // Handle Guest Booking Hand-off
   const handleGuestBookingAttempt = (bookingData: PendingBooking) => {
       setPendingAction({ type: 'BOOKING', data: bookingData });
       setCurrentView('PATIENT_LOGIN');
       addToast("Please verify mobile to confirm booking", "info");
   };
   
-  // Smart Back Handler for Patient Login
   const handlePatientLoginBack = () => {
       if (pendingAction) {
-          // If we were trying to do something (like guest booking), cancel it and go back to tracker
           setPendingAction(null);
           setCurrentView('PATIENT_TRACKER');
       } else {
-          // Normal login attempt, go back to Landing
           setCurrentView('LANDING');
       }
   };
 
   // RECEPTION HANDLERS
-  const handleAddPatient = (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string) => {
+  const handleAddPatient = async (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string, nextOfKin?: {name: string, phone: string}) => {
     if (!currentClinicId) return;
-    
     const clinic = clinics.find(c => c.id === currentClinicId);
     if (!clinic) return;
 
@@ -294,15 +255,16 @@ export default function App() {
       visitType: date && time ? 'APPOINTMENT' : 'WALK_IN',
       appointmentDate: date || getLocalToday(),
       appointmentTime: time,
-      isCheckedIn: !date, // Walk-ins are checked in by default (physically present)
-      age, gender, symptoms
+      isCheckedIn: !date, // Walk-ins checked in by default
+      age, gender, symptoms,
+      nextOfKin
     };
 
-    setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, patients: [...c.patients, newPatient] } : c));
+    await storage.addPatient(currentClinicId, newPatient);
     addToast(`Token #${newPatient.tokenNumber} generated`, 'success');
   };
 
-  const handleUpdateStatus = (patientId: string, status: PatientStatus) => {
+  const handleUpdateStatus = async (patientId: string, status: PatientStatus) => {
     if (!currentClinicId) return;
     
     // Constraint: One patient with doctor at a time
@@ -318,32 +280,34 @@ export default function App() {
         }
     }
 
-    setClinics(prev => prev.map(c => 
-        c.id === currentClinicId 
-        ? { ...c, patients: c.patients.map(p => p.id === patientId ? { ...p, status, timeCompleted: status === PatientStatus.COMPLETED ? Date.now() : p.timeCompleted } : p) }
-        : c
-    ));
+    await storage.updatePatientStatus(currentClinicId, patientId, status);
   };
 
-  const handleEditPatient = (id: string, updates: Partial<Patient>) => {
-    if (!currentClinicId) return;
-    setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, patients: c.patients.map(p => p.id === id ? { ...p, ...updates } : p) } : c));
+  const handleBulkUpdateStatus = async (ids: string[], status: PatientStatus) => {
+      if (!currentClinicId) return;
+      await storage.bulkUpdatePatientStatus(currentClinicId, ids, status);
+      addToast(`${ids.length} patients updated`, "success");
   };
 
-  const handleDeletePatient = (id: string) => {
+  const handleEditPatient = async (id: string, updates: Partial<Patient>) => {
     if (!currentClinicId) return;
-    setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, patients: c.patients.filter(p => p.id !== id) } : c));
+    await storage.updatePatient(currentClinicId, id, updates);
+  };
+
+  const handleDeletePatient = async (id: string) => {
+    if (!currentClinicId) return;
+    await storage.deletePatient(currentClinicId, id);
     addToast('Patient deleted', 'info');
   };
 
-  const handleDeleteMultiplePatients = (ids: string[]) => {
+  const handleDeleteMultiplePatients = async (ids: string[]) => {
       if (!currentClinicId) return;
-      setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, patients: c.patients.filter(p => !ids.includes(p.id)) } : c));
+      await storage.deleteMultiplePatients(currentClinicId, ids);
       addToast(`${ids.length} records deleted`, 'info');
   };
 
   // DOCTOR MANAGEMENT
-  const handleAddDoctor = (name: string, specialty: string, room: string, schedule: DaySchedule[], mobile?: string, regNo?: string, masterId?: string, avatarUrl?: string, fee?: number, time?: number) => {
+  const handleAddDoctor = async (name: string, specialty: string, room: string, schedule: DaySchedule[], mobile?: string, regNo?: string, masterId?: string, avatarUrl?: string, fee?: number, time?: number) => {
       if (!currentClinicId) return;
       const newMasterId = masterId || `master_${Date.now()}`;
       const newDoc: Doctor = {
@@ -358,17 +322,17 @@ export default function App() {
           consultationTime: time || 15,
           avatarUrl: avatarUrl || `https://i.pravatar.cc/150?u=${newMasterId}`
       };
-      setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, doctors: [...c.doctors, newDoc] } : c));
+      await storage.addDoctor(currentClinicId, newDoc);
   };
 
-  const handleEditDoctor = (id: string, updates: Partial<Doctor>) => {
+  const handleEditDoctor = async (id: string, updates: Partial<Doctor>) => {
       if (!currentClinicId) return;
-      setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, doctors: c.doctors.map(d => d.id === id ? { ...d, ...updates } : d) } : c));
+      await storage.updateDoctor(currentClinicId, id, updates);
   };
 
-  const handleDeleteDoctor = (id: string) => {
+  const handleDeleteDoctor = async (id: string) => {
       if (!currentClinicId) return;
-      setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, doctors: c.doctors.filter(d => d.id !== id) } : c));
+      await storage.deleteDoctor(currentClinicId, id);
       addToast('Doctor removed', 'info');
   };
 
@@ -381,24 +345,14 @@ export default function App() {
   };
 
   // DOCTOR DASHBOARD
-  const handleUpdateDoctorStatus = (doctorId: string, status: DoctorStatus, delay: number) => {
+  const handleUpdateDoctorStatus = async (doctorId: string, status: DoctorStatus, delay: number) => {
       if (!currentClinicId) return;
-      setClinics(prev => prev.map(c => c.id === currentClinicId ? {
-          ...c,
-          doctors: c.doctors.map(d => d.id === doctorId ? { 
-              ...d, 
-              status, 
-              delayMinutes: delay,
-              statusUpdateTime: Date.now(),
-              delayStartTime: delay > 0 ? Date.now() : undefined
-          } : d)
-      } : c));
+      await storage.updateDoctorStatus(currentClinicId, doctorId, status, delay);
   };
 
-  const handleNextPatient = () => {
+  const handleNextPatient = async () => {
       if (!currentClinic || !currentUser) return;
       
-      // Effective sort time helper (Appointment vs Arrival)
       const getSortTime = (p: Patient) => {
           if (p.visitType === 'APPOINTMENT' && p.appointmentDate && p.appointmentTime) {
               return new Date(`${p.appointmentDate}T${p.appointmentTime}:00`).getTime();
@@ -406,21 +360,20 @@ export default function App() {
           return p.timeAdded;
       };
 
-      // Sophisticated Sorting matching Dashboard logic
       const queue = currentClinic.patients
           .filter(p => p.doctorId === currentUser.id && (p.status === PatientStatus.WAITING || p.status === PatientStatus.ON_HOLD))
           .sort((a, b) => {
-              // 1. Manual Queue Order (Overrides Priority)
               if (a.queueOrder !== undefined || b.queueOrder !== undefined) {
                   const orderA = a.queueOrder ?? Number.MAX_SAFE_INTEGER;
                   const orderB = b.queueOrder ?? Number.MAX_SAFE_INTEGER;
                   if (orderA !== orderB) return orderA - orderB;
               }
-
-              // 2. Emergency Priority
               if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
-
-              // 3. Status Priority: ON_HOLD > WAITING
+              if (a.isEmergency && b.isEmergency) {
+                  const hasNokA = a.nextOfKin?.name && a.nextOfKin?.phone;
+                  const hasNokB = b.nextOfKin?.name && b.nextOfKin?.phone;
+                  if (hasNokA !== hasNokB) return hasNokA ? 1 : -1; 
+              }
               const getStatusPriority = (s: PatientStatus) => {
                   if (s === PatientStatus.ON_HOLD) return 0;
                   if (s === PatientStatus.WAITING) return 1;
@@ -429,8 +382,6 @@ export default function App() {
               const pA = getStatusPriority(a.status);
               const pB = getStatusPriority(b.status);
               if (pA !== pB) return pA - pB;
-
-              // 4. Time-based sort
               return getSortTime(a) - getSortTime(b);
           });
       
@@ -439,38 +390,33 @@ export default function App() {
           return;
       }
       
-      // Complete current if any
       const active = currentClinic.patients.find(p => p.doctorId === currentUser.id && p.status === PatientStatus.WITH_DOCTOR);
-      if (active) handleUpdateStatus(active.id, PatientStatus.COMPLETED);
+      if (active) await storage.updatePatientStatus(currentClinic.id, active.id, PatientStatus.COMPLETED);
       
-      handleUpdateStatus(queue[0].id, PatientStatus.WITH_DOCTOR);
+      await storage.updatePatientStatus(currentClinic.id, queue[0].id, PatientStatus.WITH_DOCTOR);
   };
 
-  const handleCompletePatient = (id: string, notes: string) => {
+  const handleCompletePatient = async (id: string, notes: string) => {
       if (!currentClinicId) return;
-      setClinics(prev => prev.map(c => c.id === currentClinicId ? {
-          ...c,
-          patients: c.patients.map(p => p.id === id ? { ...p, status: PatientStatus.COMPLETED, notes, timeCompleted: Date.now() } : p)
-      } : c));
+      await storage.updatePatient(currentClinicId, id, { status: PatientStatus.COMPLETED, notes, timeCompleted: Date.now() });
       addToast("Visit completed", "success");
   };
   
-  const handleHoldPatient = (id: string) => {
-      handleUpdateStatus(id, PatientStatus.ON_HOLD);
+  const handleHoldPatient = async (id: string) => {
+      if (!currentClinicId) return;
+      await storage.updatePatientStatus(currentClinicId, id, PatientStatus.ON_HOLD);
       addToast("Patient held", "warning");
   };
 
-  const handleResumePatient = (id: string) => {
-      handleUpdateStatus(id, PatientStatus.WAITING);
-      // Hack: Update timeAdded to move to front? Or just status. 
-      // For now just status change makes them show up in queue again.
+  const handleResumePatient = async (id: string) => {
+      if (!currentClinicId) return;
+      await storage.updatePatientStatus(currentClinicId, id, PatientStatus.WAITING);
       addToast("Patient back in queue", "info");
   };
 
   // DOCTOR: Switch Clinic
   const handleSwitchClinic = (targetClinicId: string) => {
       if (!currentUser) return;
-      // Need to find the doctor ID in the new clinic that matches the current master ID
       const newClinic = clinics.find(c => c.id === targetClinicId);
       if (newClinic && currentUser) {
           const linkedDoc = newClinic.doctors.find(d => d.masterId === currentUser.masterId);
@@ -485,7 +431,7 @@ export default function App() {
   };
 
   // PATIENT TRACKER
-  const handleGetToken = (name: string, phone: string, doctorId: string, clinicId: string, time?: string, date?: string, age?: string, gender?: any, symptoms?: string) => {
+  const handleGetToken = async (name: string, phone: string, doctorId: string, clinicId: string, time?: string, date?: string, age?: string, gender?: any, symptoms?: string) => {
       const clinic = clinics.find(c => c.id === clinicId);
       if (!clinic) return;
       
@@ -498,40 +444,27 @@ export default function App() {
           visitType: date && time ? 'APPOINTMENT' : 'WALK_IN',
           appointmentDate: date, appointmentTime: time,
           age, gender, symptoms,
-          isCheckedIn: false // Remote bookings not checked in
+          isCheckedIn: false 
       };
       
-      setClinics(prev => prev.map(c => c.id === clinicId ? { ...c, patients: [...c.patients, newPatient] } : c));
+      await storage.addPatient(clinicId, newPatient);
       addToast(date ? 'Appointment Booked!' : 'Token Generated!', 'success');
   };
 
-  const handlePatientCheckIn = (clinicId: string, patientId: string) => {
-      setClinics(prev => prev.map(c => {
-          if (c.id !== clinicId) return c;
-          return {
-              ...c,
-              patients: c.patients.map(p => p.id === patientId ? { ...p, isCheckedIn: true } : p)
-          };
-      }));
+  const handlePatientCheckIn = async (clinicId: string, patientId: string) => {
+      await storage.updatePatient(clinicId, patientId, { isCheckedIn: true });
   };
 
-  const handleCancelVisit = (clinicId: string, patientId: string) => {
-      setClinics(prev => prev.map(c => {
-          if (c.id !== clinicId) return c;
-          return {
-              ...c,
-              patients: c.patients.map(p => p.id === patientId ? { ...p, status: PatientStatus.CANCELLED } : p)
-          };
-      }));
+  const handleCancelVisit = async (clinicId: string, patientId: string) => {
+      await storage.updatePatientStatus(clinicId, patientId, PatientStatus.CANCELLED);
   };
 
   const handleSimulateQRScan = (clinicId: string) => {
       if (!patientAuth) {
-          setPendingAction({ type: 'CHECK_IN', clinicId, patientId: 'current' }); // Placeholder ID logic
+          setPendingAction({ type: 'CHECK_IN', clinicId, patientId: 'current' }); 
           setCurrentView('PATIENT_LOGIN');
           addToast("Login to check-in", "info");
       } else {
-          // Logic to find user's active appointment in this clinic
           const clinic = clinics.find(c => c.id === clinicId);
           const visit = clinic?.patients.find(p => p.phone === patientAuth.phone && p.status === PatientStatus.WAITING);
           
@@ -540,7 +473,7 @@ export default function App() {
               addToast("Checked In Successfully!", "success");
               setCurrentView('PATIENT_TRACKER');
           } else {
-              setCurrentClinicId(clinicId); // Pre-select clinic for booking
+              setCurrentClinicId(clinicId);
               setCurrentView('PATIENT_TRACKER');
               addToast("No active visit found. Book now.", "info");
           }
@@ -548,23 +481,22 @@ export default function App() {
   };
 
   // ADMIN HANDLERS
-  const handleUpdateClinicPlan = (clinicId: string, plan: PlanType) => {
-      setClinics(prev => prev.map(c => c.id === clinicId ? { ...c, plan } : c));
+  const handleUpdateClinicPlan = async (clinicId: string, plan: PlanType) => {
+      await storage.updateClinic(clinicId, { plan });
       addToast("Plan updated", "success");
   };
-  const handleToggleClinicStatus = (clinicId: string) => {
-      setClinics(prev => prev.map(c => c.id === clinicId ? { ...c, subscriptionStatus: c.subscriptionStatus === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED' } : c));
+  const handleToggleClinicStatus = async (clinicId: string) => {
+      const clinic = clinics.find(c => c.id === clinicId);
+      if(clinic) await storage.updateClinic(clinicId, { subscriptionStatus: clinic.subscriptionStatus === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED' });
   };
-  const handleDeleteClinic = (clinicId: string) => {
-      setClinics(prev => prev.filter(c => c.id !== clinicId));
+  const handleDeleteClinic = async (clinicId: string) => {
+      await storage.deleteClinic(clinicId);
   };
-  const handleEditClinic = (clinicId: string, updates: Partial<Clinic>) => {
-      setClinics(prev => prev.map(c => c.id === clinicId ? { ...c, ...updates } : c));
+  const handleEditClinic = async (clinicId: string, updates: Partial<Clinic>) => {
+      await storage.updateClinic(clinicId, updates);
   };
-  const handleResetSystem = () => {
-      localStorage.removeItem('clinicq_db_v2');
-      localStorage.removeItem('clinicq_session_v2');
-      setClinics(INITIAL_CLINICS);
+  const handleResetSystem = async () => {
+      await storage.resetSystem();
       handleLogout();
       addToast("System reset complete", "warning");
   };
@@ -588,7 +520,7 @@ export default function App() {
         <ClinicAuth 
           clinics={clinics}
           onSelectClinic={handleClinicSelect}
-          onCreateClinic={(name, plan, address, city, pincode, services) => {
+          onCreateClinic={async (name, plan, address, city, pincode, services) => {
             const newClinic: Clinic = {
               id: `clinic_${Date.now()}`,
               name,
@@ -602,7 +534,7 @@ export default function App() {
               pincode: pincode,
               amenities: services
             };
-            setClinics([...clinics, newClinic]);
+            await storage.createClinic(newClinic);
             handleClinicSelect(newClinic.id);
           }}
           onBack={() => setCurrentView('STAFF_LOGIN')}
@@ -618,7 +550,7 @@ export default function App() {
         />
       )}
 
-      {/* 5. DASHBOARDS */}
+      {/* DASHBOARDS */}
       
       {/* RECEPTION */}
       {currentView === 'DASHBOARD_RECEPTION' && currentClinic && (
@@ -657,7 +589,7 @@ export default function App() {
               onDeleteDoctor={handleDeleteDoctor}
               onUpdateStatus={handleUpdateStatus}
               onCancelPatient={(id) => handleUpdateStatus(id, PatientStatus.CANCELLED)}
-              onUpdateClinicName={(name) => setClinics(prev => prev.map(c => c.id === currentClinicId ? { ...c, name } : c))}
+              onUpdateClinicName={(name) => storage.updateClinic(currentClinic.id, { name })}
               onToggleEmergency={(id) => {
                   const p = currentClinic.patients.find(pat => pat.id === id);
                   if (p) handleEditPatient(id, { isEmergency: !p.isEmergency });
@@ -669,6 +601,7 @@ export default function App() {
                    addToast("Reordering updated", "success");
               }}
               onManualCheckIn={(id) => handlePatientCheckIn(currentClinic.id, id)}
+              onBulkUpdateStatus={handleBulkUpdateStatus}
               addToast={addToast}
             />
           </div>
@@ -678,7 +611,6 @@ export default function App() {
       {/* DOCTOR */}
       {currentView === 'DASHBOARD_DOCTOR' && currentClinic && currentUser && (() => {
         const activeDoctor = currentClinic.doctors.find(d => d.id === currentUser.id) || currentUser;
-        // Find linked clinics for switcher
         const linkedClinics = activeDoctor.masterId 
             ? clinics.filter(c => c.doctors.some(d => d.masterId === activeDoctor.masterId))
             : [];
@@ -713,7 +645,7 @@ export default function App() {
               onNextPatient={handleNextPatient}
               onCompletePatient={handleCompletePatient}
               onUpdateStatus={handleUpdateDoctorStatus}
-              onUpdatePatientDetails={handleEditPatient}
+              onUpdatePatientDetails={(id, updates) => storage.updatePatient(currentClinic.id, id, updates)}
               onHoldPatient={handleHoldPatient}
               onResumePatient={handleResumePatient}
             />
@@ -761,7 +693,7 @@ export default function App() {
           onBack={handlePatientLoginBack}
           addToast={addToast}
           pendingActionMessage={pendingAction?.type === 'CHECK_IN' ? 'Login to confirm your arrival' : pendingAction?.type === 'BOOKING' ? 'Verify mobile number to confirm booking' : undefined}
-          pendingBookingDetails={pendingAction?.type === 'BOOKING' ? pendingAction.data : undefined} // Pass booking data
+          pendingBookingDetails={pendingAction?.type === 'BOOKING' ? pendingAction.data : undefined}
         />
       )}
 
@@ -773,18 +705,16 @@ export default function App() {
           isGuest={!patientAuth}
           onLoginClick={(phone, name) => {
               if (phone && name) {
-                  // In-place login from Tracker modal
                   handlePatientLogin(phone, name);
               } else {
-                  // Manual navigation to login page
                   setCurrentView('PATIENT_LOGIN');
               }
           }}
-          onGuestBook={handleGuestBookingAttempt} // Pass new handler
+          onGuestBook={handleGuestBookingAttempt}
           onBack={handleLogout}
           onGetToken={handleGetToken}
           addToast={addToast}
-          onUpdateDetails={handleEditPatient}
+          onUpdateDetails={(id, updates) => { if(currentClinicId) storage.updatePatient(currentClinicId, id, updates) }}
           onCancelVisit={handleCancelVisit}
           onCheckIn={handlePatientCheckIn}
           preSelectedClinicId={currentClinicId || undefined}

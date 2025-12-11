@@ -4,12 +4,12 @@ import { Doctor, Patient, PatientStatus } from '../../../types';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { Modal } from '../../../components/Modal';
-import { User, Calendar, Clock, ChevronRight, Check } from 'lucide-react';
+import { User, Calendar, Clock, ChevronRight, Check, Phone } from 'lucide-react';
 
 interface AddPatientModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string) => void;
+  onAdd: (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string, nextOfKin?: {name: string, phone: string}) => void;
   doctors: Doctor[];
   patients: Patient[];
   addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
@@ -51,6 +51,10 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
   const [type, setType] = useState<'WALK_IN' | 'APPOINTMENT'>('WALK_IN');
   const [symptoms, setSymptoms] = useState('');
   const [existingProfiles, setExistingProfiles] = useState<Patient[]>([]);
+  
+  // Next of Kin
+  const [nokName, setNokName] = useState('');
+  const [nokPhone, setNokPhone] = useState('');
 
   // Appointment Logic
   const [selectedDate, setSelectedDate] = useState(getLocalToday());
@@ -148,6 +152,10 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
       setName(p.name);
       setAge(p.age || '');
       setGender(p.gender || 'Male');
+      if (p.nextOfKin) {
+          setNokName(p.nextOfKin.name);
+          setNokPhone(p.nextOfKin.phone);
+      }
       setExistingProfiles([]);
   };
 
@@ -169,11 +177,13 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
 
       if (isDuplicate) { addToast(`${name} already has an active visit or booking!`, 'error'); return; }
       
-      onAdd(name, phone, doctorId, type === 'APPOINTMENT' ? selectedDate : undefined, type === 'APPOINTMENT' ? selectedSlot : undefined, age, gender, symptoms);
+      const nok = (nokName && nokPhone) ? { name: nokName, phone: nokPhone } : undefined;
+
+      onAdd(name, phone, doctorId, type === 'APPOINTMENT' ? selectedDate : undefined, type === 'APPOINTMENT' ? selectedSlot : undefined, age, gender, symptoms, nok);
       onClose();
       
       // Reset Form
-      setName(''); setPhone(''); setDoctorId(''); setAge(''); setSymptoms(''); setType('WALK_IN'); setSelectedSlot('');
+      setName(''); setPhone(''); setDoctorId(''); setAge(''); setSymptoms(''); setType('WALK_IN'); setSelectedSlot(''); setNokName(''); setNokPhone('');
   };
 
   return (
@@ -214,6 +224,15 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
                             <option>Other</option>
                         </select>
                     </div>
+                </div>
+            </div>
+
+            {/* Next of Kin (Optional) */}
+            <div className="bg-orange-50/50 p-3 rounded-lg border border-orange-100">
+                <label className="block text-xs font-bold text-orange-800 uppercase tracking-wide mb-2">Emergency Contact (Next of Kin)</label>
+                <div className="grid grid-cols-2 gap-3">
+                    <Input placeholder="Contact Name" value={nokName} onChange={e => setNokName(e.target.value)} className="bg-white text-xs h-9" />
+                    <Input placeholder="Contact Phone" value={nokPhone} onChange={e => setNokPhone(e.target.value)} className="bg-white text-xs h-9" />
                 </div>
             </div>
 
