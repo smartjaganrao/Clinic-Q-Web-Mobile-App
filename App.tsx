@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, AppNotification, ClinicStats, TimeSlot, ClinicType, Vitals, PainPoint, Staff } from './types';
 // Removed INITIAL_CLINICS import as it's now handled in storage.ts
 import { LandingPage } from './pages/LandingPage';
+import { ClinicLandingPage } from './pages/ClinicLandingPage'; // New Import
 import { StaffLogin } from './pages/StaffLogin';
 import { ClinicAuth } from './pages/ClinicAuth';
 import { DoctorLogin } from './pages/DoctorLogin';
@@ -32,6 +33,7 @@ const getLocalToday = () => {
 
 type AppView = 
   | 'LANDING' 
+  | 'CLINIC_LANDING' // New View
   | 'STAFF_LOGIN'
   | 'PATIENT_LOGIN'
   | 'PATIENT_TRACKER' 
@@ -542,13 +544,22 @@ export default function App() {
       {currentView === 'LANDING' && (
         <LandingPage 
           onPatientEnter={handlePatientEnter} 
+          onClinicMarketing={() => setCurrentView('CLINIC_LANDING')} // Nav to separate page
           onStaffLogin={handleStaffLogin}
           onSimulateQRScan={handleSimulateQRScan}
           clinics={clinics}
         />
       )}
 
-      {currentView === 'STAFF_LOGIN' && <StaffLogin onSelectRole={handleRoleSelect} onBack={handleLogout} />}
+      {currentView === 'CLINIC_LANDING' && (
+        <ClinicLandingPage
+          onStartFreeTrial={() => setCurrentView('STAFF_LOGIN')} // Or create a generic 'REGISTER' view if desired
+          onLogin={handleStaffLogin}
+          onBackToPatient={() => setCurrentView('LANDING')}
+        />
+      )}
+
+      {currentView === 'STAFF_LOGIN' && <StaffLogin onSelectRole={handleRoleSelect} onBack={() => setCurrentView('CLINIC_LANDING')} />}
 
       {currentView === 'CLINIC_AUTH' && userRole && (
         <ClinicAuth 
