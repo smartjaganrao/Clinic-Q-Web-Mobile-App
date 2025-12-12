@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Clinic } from '../types';
 import { 
@@ -6,7 +7,7 @@ import {
   Activity, Monitor, ArrowRight, Bell, Star,
   Users, LayoutGrid,
   AlertTriangle, Zap, Smartphone, CheckCircle2, ShieldCheck,
-  ChevronRight, Timer, Building2
+  Building2, ChevronDown
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Logo } from '../components/Logo';
@@ -24,7 +25,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
   // --- LIVE QUEUE SIMULATION STATE ---
   const [mockQueue, setMockQueue] = useState(8);
   const [mockEta, setMockEta] = useState(22);
-  const [isDelayed, setIsDelayed] = useState(true);
+  
+  // --- SEARCH WIDGET STATE ---
+  const [searchMode, setSearchMode] = useState<'DOCTOR' | 'CLINIC'>('CLINIC');
+  const [location, setLocation] = useState('Chennai');
 
   // Simulate a living system
   useEffect(() => {
@@ -58,7 +62,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
 
             <div className="flex items-center gap-3">
                <Button variant="ghost" onClick={onStaffLogin} className="text-slate-600 font-medium hidden sm:flex">Partner Login</Button>
-               <Button onClick={() => onPatientEnter()} className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 shadow-lg shadow-teal-100 font-bold">Find a Doctor</Button>
+               <Button onClick={() => onPatientEnter('CLINIC')} className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 shadow-lg shadow-teal-100 font-bold">Find Care</Button>
             </div>
           </div>
         </div>
@@ -89,42 +93,64 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
                           Your clinic visit just became smarter. Real-time queue tracking, hybrid appointments, and instant walk-ins — all in one place.
                       </p>
 
-                      {/* NEW: Distinct Find Cards */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto lg:mx-0">
-                          <button 
-                             onClick={() => onPatientEnter('DOCTOR')}
-                             className="group flex flex-col p-5 bg-white border-2 border-slate-200 rounded-2xl hover:border-teal-500 hover:shadow-xl hover:shadow-teal-50 transition-all text-left relative overflow-hidden"
-                          >
-                              <div className="absolute top-0 right-0 bg-teal-50 rounded-bl-2xl p-2 text-teal-600 group-hover:bg-teal-600 group-hover:text-white transition-colors">
-                                  <ArrowRight className="h-5 w-5" />
-                              </div>
-                              <div className="w-12 h-12 bg-teal-100 rounded-full flex items-center justify-center text-teal-600 mb-4 group-hover:scale-110 transition-transform">
-                                  <Stethoscope className="h-6 w-6" />
-                              </div>
-                              <h3 className="font-bold text-lg text-slate-900 group-hover:text-teal-700">Find Doctors</h3>
-                              <p className="text-sm text-slate-500 mt-1">Search by name, specialty, or condition.</p>
-                          </button>
+                      {/* --- SEARCH WIDGET (REPLACED BUTTONS) --- */}
+                      <div className="bg-white p-2 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200 max-w-lg mx-auto lg:mx-0 transform transition-all hover:scale-[1.01]">
+                          {/* Tabs */}
+                          <div className="flex p-1 bg-slate-100 rounded-2xl mb-2">
+                              <button 
+                                  onClick={() => setSearchMode('CLINIC')}
+                                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${searchMode === 'CLINIC' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                              >
+                                  <Building2 className="h-4 w-4" /> Clinics
+                              </button>
+                              <button 
+                                  onClick={() => setSearchMode('DOCTOR')}
+                                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${searchMode === 'DOCTOR' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                              >
+                                  <Stethoscope className="h-4 w-4" /> Doctors
+                              </button>
+                          </div>
 
-                          <button 
-                             onClick={() => onPatientEnter('CLINIC')}
-                             className="group flex flex-col p-5 bg-white border-2 border-slate-200 rounded-2xl hover:border-blue-500 hover:shadow-xl hover:shadow-blue-50 transition-all text-left relative overflow-hidden"
-                          >
-                              <div className="absolute top-0 right-0 bg-blue-50 rounded-bl-2xl p-2 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                  <ArrowRight className="h-5 w-5" />
+                          {/* Inputs Row */}
+                          <div className="flex flex-col sm:flex-row gap-2">
+                              <div className="relative flex-1 group">
+                                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
+                                  <input 
+                                      type="text" 
+                                      value={location}
+                                      onChange={(e) => setLocation(e.target.value)}
+                                      className="w-full pl-12 pr-4 h-14 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 outline-none font-medium text-slate-900 transition-all placeholder:text-slate-400"
+                                      placeholder="City or Area"
+                                  />
                               </div>
-                              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4 group-hover:scale-110 transition-transform">
-                                  <Building2 className="h-6 w-6" />
-                              </div>
-                              <h3 className="font-bold text-lg text-slate-900 group-hover:text-blue-700">Find Clinics</h3>
-                              <p className="text-sm text-slate-500 mt-1">Locate nearby hospitals and care centers.</p>
-                          </button>
+                              <Button 
+                                  onClick={() => onPatientEnter(searchMode)} 
+                                  className="h-14 rounded-2xl px-8 bg-teal-600 hover:bg-teal-700 shadow-lg shadow-teal-200 text-lg font-bold flex items-center justify-center gap-2 shrink-0"
+                              >
+                                  <Search className="h-5 w-5" /> Search
+                              </Button>
+                          </div>
+                          
+                          {/* Quick Tags */}
+                          <div className="mt-3 px-2 flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider self-center mr-1">Popular:</span>
+                              {['General', 'Dentist', 'Pediatric', 'Skin'].map(tag => (
+                                  <button 
+                                      key={tag}
+                                      onClick={() => onPatientEnter(searchMode)}
+                                      className="px-3 py-1 bg-slate-50 border border-slate-100 rounded-lg text-xs font-medium text-slate-600 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-100 transition-colors whitespace-nowrap"
+                                  >
+                                      {tag}
+                                  </button>
+                              ))}
+                          </div>
                       </div>
 
                       <p className="mt-6 text-sm text-slate-400 font-medium">Used by 500+ Clinics • 4.9/5 Patient Rating</p>
                   </div>
 
                   {/* Right: Live Queue Simulator Widget */}
-                  <div className="relative mx-auto lg:ml-auto w-full max-w-md mt-10 lg:mt-0">
+                  <div className="relative mx-auto lg:ml-auto w-full max-w-md mt-10 lg:mt-0 hidden md:block">
                       {/* Floating Elements */}
                       <div className="absolute -top-6 -right-6 bg-white p-3 rounded-xl shadow-lg border border-slate-100 flex items-center gap-3 animate-bounce-slow z-20">
                            <div className="bg-red-100 p-2 rounded-lg"><Bell className="h-5 w-5 text-red-500" /></div>
@@ -132,7 +158,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
                       </div>
 
                       {/* Main Card */}
-                      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden relative z-10">
+                      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden relative z-10 transform rotate-1 hover:rotate-0 transition-transform duration-500">
                           {/* Card Header */}
                           <div className="bg-slate-900 p-6 text-white">
                               <div className="flex justify-between items-start mb-4">
@@ -159,15 +185,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onStaf
                           {/* Card Body */}
                           <div className="p-6 space-y-4">
                               <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-100 rounded-xl">
-                                  <Timer className="h-5 w-5 text-red-500 flex-shrink-0" />
+                                  <Clock className="h-5 w-5 text-red-500 flex-shrink-0" />
                                   <p className="text-xs text-red-700 font-medium">Doctor is running slightly late. Queue times adjusted automatically.</p>
                               </div>
                               
                               <div className="space-y-3">
-                                  <button onClick={() => onPatientEnter()} className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold shadow-lg shadow-teal-100 transition-all flex items-center justify-center gap-2">
+                                  <button onClick={() => onPatientEnter('CLINIC')} className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold shadow-lg shadow-teal-100 transition-all flex items-center justify-center gap-2">
                                       <Zap className="h-4 w-4 fill-current" /> Join Walk-in Queue Now
                                   </button>
-                                  <button onClick={() => onPatientEnter()} className="w-full py-3 bg-white border-2 border-slate-200 hover:border-slate-800 text-slate-700 rounded-xl font-bold transition-all flex items-center justify-center gap-2">
+                                  <button onClick={() => onPatientEnter('DOCTOR')} className="w-full py-3 bg-white border-2 border-slate-200 hover:border-slate-800 text-slate-700 rounded-xl font-bold transition-all flex items-center justify-center gap-2">
                                       <Calendar className="h-4 w-4" /> Book Appointment Slot
                                   </button>
                               </div>

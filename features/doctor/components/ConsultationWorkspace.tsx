@@ -4,7 +4,7 @@ import { Patient, PainPoint } from '../../../types';
 import { Button } from '../../../components/Button';
 import { generatePatientSummary } from '../../../services/geminiService';
 import { 
-    Activity, FileText, Pill, Save, PauseCircle, BrainCircuit, Plus, Trash2, X, Move
+    Activity, FileText, Pill, Save, PauseCircle, BrainCircuit, Plus, Trash2, X, Move, Sparkles, ChevronDown
 } from 'lucide-react';
 
 interface ConsultationWorkspaceProps {
@@ -13,6 +13,37 @@ interface ConsultationWorkspaceProps {
   onHold: () => void;
 }
 
+const COMMON_MEDICINES = [
+    { name: 'Paracetamol 650mg', type: 'Tablet', tags: ['fever', 'pain', 'headache'] },
+    { name: 'Amoxicillin 500mg', type: 'Capsule', tags: ['infection', 'antibiotic', 'throat'] },
+    { name: 'Cetirizine 10mg', type: 'Tablet', tags: ['allergy', 'cold', 'runny nose'] },
+    { name: 'Pantoprazole 40mg', type: 'Tablet', tags: ['gastritis', 'acidity', 'stomach'] },
+    { name: 'Ibuprofen 400mg', type: 'Tablet', tags: ['pain', 'inflammation', 'joint'] },
+    { name: 'Azithromycin 500mg', type: 'Tablet', tags: ['infection', 'throat', 'chest'] },
+    { name: 'Metformin 500mg', type: 'Tablet', tags: ['diabetes', 'sugar'] },
+    { name: 'Atorvastatin 10mg', type: 'Tablet', tags: ['cholesterol', 'heart'] },
+    { name: 'Amlodipine 5mg', type: 'Tablet', tags: ['bp', 'hypertension'] },
+    { name: 'Ranitidine 150mg', type: 'Tablet', tags: ['gastritis', 'ulcer'] },
+    { name: 'Dolo 650', type: 'Tablet', tags: ['fever', 'pain'] },
+    { name: 'Augmentin 625', type: 'Tablet', tags: ['infection', 'severe'] },
+    { name: 'Montelukast 10mg', type: 'Tablet', tags: ['asthma', 'allergy', 'cough'] },
+    { name: 'Thyroxine 50mcg', type: 'Tablet', tags: ['thyroid'] },
+    { name: 'Shelcal 500', type: 'Tablet', tags: ['calcium', 'bone', 'weakness'] },
+    { name: 'Ascoril LS', type: 'Syrup', tags: ['cough', 'wet cough'] },
+    { name: 'Benadryl', type: 'Syrup', tags: ['cough', 'dry cough'] },
+    { name: 'Ondansetron 4mg', type: 'Tablet', tags: ['vomiting', 'nausea'] },
+    { name: 'ORS Sachet', type: 'Powder', tags: ['dehydration', 'diarrhea'] },
+    { name: 'Volini Gel', type: 'Gel', tags: ['pain', 'muscle'] },
+];
+
+const DOSAGE_FREQUENCIES = [
+    { label: '1-0-0', desc: 'Morn' },
+    { label: '1-0-1', desc: 'BD' },
+    { label: '1-1-1', desc: 'TDS' },
+    { label: '0-0-1', desc: 'Night' },
+    { label: 'SOS', desc: 'Need' },
+];
+
 export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ currentPatient, onComplete, onHold }) => {
   const [notes, setNotes] = useState(currentPatient.notes || '');
   const [aiSummary, setAiSummary] = useState('');
@@ -20,6 +51,10 @@ export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ cu
   
   const [prescriptions, setPrescriptions] = useState<{name: string, dosage: string, duration: string}[]>([]);
   const [newRx, setNewRx] = useState({name: '', dosage: '', duration: ''});
+  
+  // Suggestion State
+  const [filteredMeds, setFilteredMeds] = useState<typeof COMMON_MEDICINES>([]);
+  const [showMedSuggestions, setShowMedSuggestions] = useState(false);
   
   const [vitals, setVitals] = useState({
       bp: currentPatient.vitals?.bp || '',
@@ -32,6 +67,7 @@ export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ cu
   const [painPoints, setPainPoints] = useState<PainPoint[]>(currentPatient.painPoints || []);
   const [draggingPointIndex, setDraggingPointIndex] = useState<number | null>(null);
   const bodyMapRef = useRef<HTMLDivElement>(null);
+  const rxInputRef = useRef<HTMLInputElement>(null);
 
   // Reset state when patient changes
   useEffect(() => {
@@ -46,7 +82,27 @@ export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ cu
           spo2: currentPatient.vitals?.spo2 || ''
       });
       setPainPoints(currentPatient.painPoints || []);
+      setNewRx({name: '', dosage: '', duration: ''});
   }, [currentPatient.id]);
+
+  // Update suggestions based on input and notes
+  useEffect(() => {
+      if (!newRx.name.trim()) {
+          // Smart suggestions based on notes
+          if (notes.trim()) {
+              const noteLower = notes.toLowerCase();
+              const relevant = COMMON_MEDICINES.filter(m => m.tags.some(t => noteLower.includes(t)));
+              setFilteredMeds(relevant);
+          } else {
+              setFilteredMeds([]);
+          }
+          return;
+      }
+      
+      const q = newRx.name.toLowerCase();
+      const matches = COMMON_MEDICINES.filter(m => m.name.toLowerCase().includes(q));
+      setFilteredMeds(matches);
+  }, [newRx.name, notes]);
 
   const handleGenerateSummary = async () => {
       if (!notes.trim()) return;
@@ -60,7 +116,13 @@ export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ cu
       if (newRx.name && newRx.dosage) {
           setPrescriptions([...prescriptions, newRx]);
           setNewRx({name: '', dosage: '', duration: ''});
+          setShowMedSuggestions(false);
       }
+  };
+
+  const selectMedicine = (name: string) => {
+      setNewRx({ ...newRx, name });
+      setShowMedSuggestions(false);
   };
 
   const handlePainPointClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -213,16 +275,64 @@ export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ cu
             <div className="flex flex-col gap-6 overflow-y-auto custom-scrollbar">
                 
                 {/* Prescription Writer */}
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative">
                     <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                         <Pill className="h-5 w-5 text-green-500" /> Rx
                     </h3>
                     
                     <div className="space-y-3 mb-4">
-                        <input className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" placeholder="Medicine Name" value={newRx.name} onChange={e => setNewRx({...newRx, name: e.target.value})} />
+                        <div className="relative">
+                            <input 
+                                ref={rxInputRef}
+                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none" 
+                                placeholder="Medicine Name" 
+                                value={newRx.name} 
+                                onChange={e => { setNewRx({...newRx, name: e.target.value}); setShowMedSuggestions(true); }}
+                                onFocus={() => setShowMedSuggestions(true)}
+                            />
+                            {showMedSuggestions && filteredMeds.length > 0 && (
+                                <div className="absolute top-full left-0 w-full bg-white border border-slate-200 rounded-lg shadow-xl mt-1 z-20 max-h-48 overflow-y-auto custom-scrollbar">
+                                    {!newRx.name.trim() && <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 border-b border-slate-100 flex items-center gap-1"><Sparkles className="h-3 w-3 text-purple-500" /> Suggested based on notes</div>}
+                                    {filteredMeds.map((med, idx) => (
+                                        <button 
+                                            key={idx} 
+                                            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex justify-between items-center group"
+                                            onClick={() => selectMedicine(med.name)}
+                                        >
+                                            <span className="text-slate-800 font-medium group-hover:text-primary-700">{med.name}</span>
+                                            <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded uppercase">{med.type}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
                         <div className="flex gap-2">
-                            <input className="w-1/2 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" placeholder="Dosage (e.g. 1-0-1)" value={newRx.dosage} onChange={e => setNewRx({...newRx, dosage: e.target.value})} />
-                            <input className="w-1/2 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm" placeholder="Duration" value={newRx.duration} onChange={e => setNewRx({...newRx, duration: e.target.value})} />
+                            <div className="flex-1">
+                                <input 
+                                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none" 
+                                    placeholder="Dosage (e.g. 1-0-1)" 
+                                    value={newRx.dosage} 
+                                    onChange={e => setNewRx({...newRx, dosage: e.target.value})} 
+                                />
+                                {/* Quick Dosage Chips */}
+                                <div className="flex gap-1 mt-1.5 flex-wrap">
+                                    {DOSAGE_FREQUENCIES.map((freq) => (
+                                        <button
+                                            key={freq.label}
+                                            type="button"
+                                            onClick={() => setNewRx({ ...newRx, dosage: freq.label })}
+                                            className={`text-[9px] px-1.5 py-0.5 rounded border transition-colors ${newRx.dosage === freq.label ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}
+                                            title={freq.desc}
+                                        >
+                                            {freq.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="w-1/3">
+                                <input className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none" placeholder="Days" value={newRx.duration} onChange={e => setNewRx({...newRx, duration: e.target.value})} />
+                            </div>
                         </div>
                         <Button size="sm" onClick={handleAddRx} className="w-full" disabled={!newRx.name}><Plus className="h-4 w-4 mr-2" /> Add</Button>
                     </div>

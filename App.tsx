@@ -229,7 +229,7 @@ export default function App() {
   };
 
   // RECEPTION HANDLERS
-  const handleAddPatient = async (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string, nextOfKin?: {name: string, phone: string}) => {
+  const handleAddPatient = async (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string, nextOfKin?: {name: string, phone: string}, address?: string, city?: string, country?: string, location?: {lat: number, lng: number}) => {
     if (!currentClinicId) return;
     const clinic = clinics.find(c => c.id === currentClinicId);
     if (!clinic) return;
@@ -257,7 +257,8 @@ export default function App() {
       appointmentTime: time,
       isCheckedIn: !date, // Walk-ins checked in by default
       age, gender, symptoms,
-      nextOfKin
+      nextOfKin,
+      address, city, country, location
     };
 
     await storage.addPatient(currentClinicId, newPatient);

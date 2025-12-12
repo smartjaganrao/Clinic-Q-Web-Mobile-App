@@ -5,7 +5,7 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
 import { 
-    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users
+    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin
 } from 'lucide-react';
 import { QueueTable } from '../features/reception/components/QueueTable';
 import { PatientDatabaseTable } from '../features/reception/components/PatientDatabaseTable';
@@ -21,7 +21,7 @@ interface ReceptionDashboardProps {
     staff?: Staff[];
     clinicName: string;
     clinicType?: ClinicType;
-    onAddPatient: (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string, nextOfKin?: {name: string, phone: string}) => void;
+    onAddPatient: (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string, nextOfKin?: {name: string, phone: string}, address?: string, city?: string, country?: string, location?: {lat: number, lng: number}) => void;
     onEditPatient: (id: string, updates: Partial<Patient>) => void;
     onDeletePatient: (id: string) => void;
     onDeleteMultiplePatients: (ids: string[]) => void;
@@ -272,7 +272,10 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 name: editingPatient.name,
                 age: editingPatient.age,
                 gender: editingPatient.gender,
-                phone: editingPatient.phone
+                phone: editingPatient.phone,
+                address: editingPatient.address,
+                city: editingPatient.city,
+                country: editingPatient.country
             });
             setEditingPatient(null);
             addToast('Patient updated', 'success');
@@ -586,6 +589,16 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             <div><label className="block text-sm font-medium text-slate-700 mb-1">Gender</label><select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={editingPatient.gender} onChange={(e) => setEditingPatient({...editingPatient, gender: e.target.value as any})}><option>Male</option><option>Female</option><option>Other</option></select></div>
                         </div>
                         <Input label="Phone" value={editingPatient.phone} onChange={(e) => setEditingPatient({...editingPatient, phone: e.target.value})} required />
+                        
+                        <div className="space-y-3 pt-2 border-t border-slate-100">
+                            <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><MapPin className="h-3 w-3" /> Address</h4>
+                            <Input label="Address" value={editingPatient.address || ''} onChange={(e) => setEditingPatient({...editingPatient, address: e.target.value})} />
+                            <div className="grid grid-cols-2 gap-3">
+                                <Input label="City" value={editingPatient.city || ''} onChange={(e) => setEditingPatient({...editingPatient, city: e.target.value})} />
+                                <Input label="Country" value={editingPatient.country || ''} onChange={(e) => setEditingPatient({...editingPatient, country: e.target.value})} />
+                            </div>
+                        </div>
+
                         <div className="pt-2 flex justify-end gap-3"><Button variant="secondary" type="button" onClick={() => setEditingPatient(null)}>Cancel</Button><Button type="submit">Save</Button></div>
                     </form>
                 )}

@@ -145,6 +145,10 @@ export interface Patient {
       name: string;
       phone: string;
   };
+  address?: string;
+  city?: string;
+  country?: string;
+  location?: { lat: number; lng: number };
 }
 
 export interface Staff {
