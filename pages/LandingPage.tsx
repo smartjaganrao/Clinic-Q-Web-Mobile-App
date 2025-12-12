@@ -7,7 +7,7 @@ import {
   Activity, Monitor, ArrowRight, Bell, Star,
   Users, LayoutGrid,
   AlertTriangle, Zap, Smartphone, CheckCircle2, ShieldCheck,
-  Building2, ChevronDown
+  Building2, ChevronDown, QrCode, Home, Check, CheckSquare
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Logo } from '../components/Logo';
@@ -54,7 +54,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onClin
             </div>
 
             <div className="hidden md:flex items-center gap-6">
-                <button onClick={() => { const el = document.getElementById('features'); el?.scrollIntoView({ behavior: 'smooth' }); }} className="text-sm font-medium text-slate-600 hover:text-teal-600 transition-colors">Features</button>
+                <button onClick={() => { const el = document.getElementById('features'); el?.scrollIntoView({ behavior: 'smooth' }); }} className="text-sm font-medium text-slate-600 hover:text-teal-600 transition-colors">Why Us</button>
                 <button onClick={() => { const el = document.getElementById('how-it-works'); el?.scrollIntoView({ behavior: 'smooth' }); }} className="text-sm font-medium text-slate-600 hover:text-teal-600 transition-colors">How it Works</button>
             </div>
 
@@ -83,15 +83,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onClin
                       </div>
                       
                       <h1 className="text-5xl lg:text-7xl font-black text-slate-900 tracking-tight mb-6 leading-[1.1]">
-                          Book. Join Queue. <br/>
-                          <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-blue-600">Track Live.</span>
+                          Find Clinics. <br/>
+                          Skip Waiting Rooms. <br/>
+                          <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-blue-600">Feel in Control.</span>
                       </h1>
                       
                       <p className="text-xl text-slate-600 mb-10 leading-relaxed max-w-lg mx-auto lg:mx-0">
-                          Your clinic visit just became smarter. Real-time queue tracking, hybrid appointments, and instant walk-ins — all in one place.
+                          SmartQFlow helps you book appointments or join the live queue at your nearby clinic — so you wait at home, not in a crowded waiting hall.
                       </p>
 
-                      {/* --- SEARCH WIDGET (REPLACED BUTTONS) --- */}
+                      {/* --- SEARCH WIDGET --- */}
                       <div className="bg-white p-2 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200 max-w-lg mx-auto lg:mx-0 transform transition-all hover:scale-[1.01]">
                           {/* Tabs */}
                           <div className="flex p-1 bg-slate-100 rounded-2xl mb-2">
@@ -127,20 +128,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onClin
                               >
                                   <Search className="h-5 w-5" /> Search
                               </Button>
-                          </div>
-                          
-                          {/* Quick Tags */}
-                          <div className="mt-3 px-2 flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider self-center mr-1">Popular:</span>
-                              {['General', 'Dentist', 'Pediatric', 'Skin'].map(tag => (
-                                  <button 
-                                      key={tag}
-                                      onClick={() => onPatientEnter(searchMode)}
-                                      className="px-3 py-1 bg-slate-50 border border-slate-100 rounded-lg text-xs font-medium text-slate-600 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-100 transition-colors whitespace-nowrap"
-                                  >
-                                      {tag}
-                                  </button>
-                              ))}
                           </div>
                       </div>
 
@@ -207,20 +194,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onClin
           </div>
       </section>
 
-      {/* --- WHY SMARTQFLOW (USP) --- */}
+      {/* --- WHY PATIENTS LOVE US (7 Points) --- */}
       <section id="features" className="py-24 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="text-center mb-16">
-                  <h2 className="text-3xl font-bold text-slate-900">Why Patients Love Us</h2>
-                  <p className="text-slate-500 mt-4 max-w-2xl mx-auto">Stop wasting life in waiting rooms. We manage the entire flow of the clinic in real-time.</p>
+                  <h2 className="text-3xl font-bold text-slate-900">Why Patients Love SmartQFlow</h2>
+                  <p className="text-slate-500 mt-4 max-w-2xl mx-auto">We've reimagined the clinic experience to put you back in control of your time.</p>
               </div>
 
-              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {[
-                      { title: "Live Queue Tracking", desc: "See your token number move in real-time. No more guessing.", icon: Activity, color: "text-blue-600", bg: "bg-blue-50" },
-                      { title: "Remote Walk-in", desc: "Join the 'Walk-in' queue from your home. Arrive just in time.", icon: Smartphone, color: "text-purple-600", bg: "bg-purple-50" },
-                      { title: "Delay Auto-Sync", desc: "If the doctor takes a break or is late, your ETA updates instantly.", icon: Clock, color: "text-red-600", bg: "bg-red-50" },
-                      { title: "Family Booking", desc: "Book for yourself, your kids, or parents from one account.", icon: Users, color: "text-indigo-600", bg: "bg-indigo-50" },
+                      { title: "Zero Waiting Room Stress", desc: "Join the queue from home or your office. Arrive only when your turn is near.", icon: Home, color: "text-blue-600", bg: "bg-blue-50" },
+                      { title: "Live Queue Tracking", desc: "See exactly how many patients are ahead of you, your live ETA, and doctor’s status.", icon: Activity, color: "text-emerald-600", bg: "bg-emerald-50" },
+                      { title: "Book Appointments Instantly", desc: "Find clinics nearby, check availability, and book a confirmed time slot in seconds.", icon: Calendar, color: "text-purple-600", bg: "bg-purple-50" },
+                      { title: "Smart Walk-in Tokens", desc: "Doctor available now? Join the walk-in queue instantly without physically standing in line.", icon: Zap, color: "text-amber-600", bg: "bg-amber-50" },
+                      { title: "Family Profiles", desc: "Add kids, parents, or spouse. Book and manage all family health visits under one account.", icon: Users, color: "text-indigo-600", bg: "bg-indigo-50" },
+                      { title: "Alerts & Notifications", desc: "If the queue moves fast or doctor is delayed, you get instant updates.", icon: Bell, color: "text-rose-600", bg: "bg-rose-50" },
+                      { title: "QR Check-in", desc: "Simply scan the clinic QR to mark your arrival — no manual registration.", icon: QrCode, color: "text-slate-600", bg: "bg-slate-100" },
                   ].map((feat, i) => (
                       <div key={i} className="p-6 rounded-2xl border border-slate-100 bg-white hover:shadow-xl hover:border-slate-200 transition-all group">
                           <div className={`w-12 h-12 ${feat.bg} rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
@@ -234,48 +224,89 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onClin
           </div>
       </section>
 
-      {/* --- HOW IT WORKS --- */}
+      {/* --- HOW IT WORKS (4 Steps) --- */}
       <section id="how-it-works" className="py-24 bg-slate-50 border-y border-slate-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-              <h2 className="text-3xl font-bold text-slate-900 mb-16">Smart Healthcare in 3 Steps</h2>
+              <h2 className="text-3xl font-bold text-slate-900 mb-16">How It Works</h2>
               
-              <div className="grid md:grid-cols-3 gap-12 relative">
+              <div className="grid md:grid-cols-4 gap-8 relative">
                   {/* Connector Line (Desktop) */}
-                  <div className="hidden md:block absolute top-12 left-1/6 right-1/6 h-0.5 bg-slate-200 -z-10"></div>
+                  <div className="hidden md:block absolute top-12 left-1/12 right-1/12 h-0.5 bg-slate-200 -z-10"></div>
 
                   {[
-                      { step: "01", title: "Find & Select", desc: "Choose a doctor or clinic based on live wait times.", icon: Search },
-                      { step: "02", title: "Join or Book", desc: "Grab a walk-in token instantly or schedule a slot.", icon: CheckCircle2 },
-                      { step: "03", title: "Track & Arrive", desc: "Watch your queue position move and arrive efficiently.", icon: MapPin },
+                      { step: "01", title: "Search Clinics & Doctors", desc: "Find care by clinic name, doctor name, city, or symptoms.", icon: Search },
+                      { step: "02", title: "Choose Appointment or Walk-in", desc: "Select a time slot OR join the live queue.", icon: CheckCircle2 },
+                      { step: "03", title: "Track Your Turn Live", desc: "See your position, ETA, and doctor status (On Time / Break).", icon: Activity },
+                      { step: "04", title: "Get Called When It's Your Turn", desc: "Arrive exactly on time. No waiting room frustration.", icon: MapPin },
                   ].map((s, i) => (
                       <div key={i} className="flex flex-col items-center relative bg-slate-50 p-4">
-                          <div className="w-24 h-24 bg-white rounded-full shadow-lg border-4 border-slate-100 flex items-center justify-center mb-6 z-10">
-                              <s.icon className="h-10 w-10 text-teal-600" />
+                          <div className="w-24 h-24 bg-white rounded-full shadow-lg border-4 border-slate-100 flex items-center justify-center mb-6 z-10 text-teal-600 font-black text-2xl relative">
+                              <s.icon className="h-10 w-10 z-10" />
+                              <div className="absolute -top-2 -right-2 w-8 h-8 bg-slate-900 text-white rounded-full text-xs flex items-center justify-center border-4 border-slate-50">{s.step}</div>
                           </div>
                           <h3 className="text-xl font-bold text-slate-900 mb-2">{s.title}</h3>
-                          <p className="text-slate-500 max-w-xs mx-auto">{s.desc}</p>
+                          <p className="text-slate-500 text-sm max-w-[200px] mx-auto">{s.desc}</p>
                       </div>
                   ))}
               </div>
           </div>
       </section>
 
-      {/* --- FOR CLINICS TEASER --- */}
-      <section id="for-clinics" className="py-24 bg-slate-900 text-white relative overflow-hidden">
+      {/* --- COMPARISON TABLE --- */}
+      <section className="py-24 bg-white">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="text-center mb-12">
+                  <h2 className="text-3xl font-bold text-slate-900">Why SmartQFlow Is Better</h2>
+                  <p className="text-slate-500 mt-2">Compare the experience.</p>
+              </div>
+
+              <div className="rounded-3xl shadow-xl border border-slate-200 overflow-hidden bg-white">
+                  <div className="grid grid-cols-2 text-center bg-slate-50 border-b border-slate-200">
+                      <div className="py-6 font-bold text-slate-500 text-lg">Traditional Visit</div>
+                      <div className="py-6 font-bold text-teal-700 bg-teal-50/50 text-lg">SmartQFlow Visit</div>
+                  </div>
+                  
+                  {[
+                      ["Sit for 1–3 hours in noisy waiting rooms", "Wait at home comfortably"],
+                      ["No idea how long it will take", "Live ETA & position"],
+                      ["Reception confusion", "Automated queue"],
+                      ["Miss your appointment if late", "Smart late-arrival logic"],
+                      ["No digital history", "Centralized online visit records"],
+                  ].map((row, i) => (
+                      <div key={i} className="grid grid-cols-2 border-b border-slate-100 last:border-none hover:bg-slate-50/50 transition-colors">
+                          <div className="p-6 text-slate-600 flex items-center justify-center text-center border-r border-slate-100">{row[0]}</div>
+                          <div className="p-6 font-bold text-slate-900 bg-teal-50/10 flex items-center justify-center text-center relative overflow-hidden">
+                              <div className="absolute inset-0 bg-teal-50 opacity-0 hover:opacity-100 transition-opacity"></div>
+                              <span className="relative z-10 flex items-center gap-2"><Check className="h-4 w-4 text-teal-600" /> {row[1]}</span>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          </div>
+      </section>
+
+      {/* --- CTA --- */}
+      <section className="py-24 bg-slate-900 text-white relative overflow-hidden">
            <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-teal-500/20 rounded-full blur-3xl pointer-events-none -mt-32 -mr-32"></div>
            <div className="max-w-4xl mx-auto px-4 text-center relative z-10">
-               <span className="text-teal-400 font-bold uppercase tracking-widest text-sm mb-2 block">Are you a Doctor?</span>
-               <h2 className="text-4xl md:text-5xl font-black mb-6 tracking-tight">Transform Your Practice</h2>
+               <h2 className="text-4xl md:text-5xl font-black mb-6 tracking-tight">Ready for stress-free clinic visits?</h2>
                <p className="text-slate-400 text-lg mb-10 leading-relaxed max-w-2xl mx-auto">
-                   Join 500+ forward-thinking clinics using SmartQFlow to reduce waiting times, improve staff efficiency, and deliver a modern patient experience.
+                   Search clinics now and skip waiting rooms forever.
                </p>
                <div className="flex flex-col sm:flex-row justify-center gap-4">
-                   <Button size="lg" className="bg-white hover:bg-slate-100 text-slate-900 h-14 px-10 rounded-full text-lg font-bold shadow-2xl" onClick={onClinicMarketing}>
-                       View Features & Pricing
+                   <Button size="lg" className="bg-white hover:bg-slate-100 text-slate-900 h-14 px-10 rounded-full text-lg font-bold shadow-2xl" onClick={() => onPatientEnter('CLINIC')}>
+                       Find Clinics Near Me
                    </Button>
-                   <Button size="lg" variant="outline" className="border-slate-700 text-white hover:bg-slate-800 h-14 px-10 rounded-full text-lg" onClick={onStaffLogin}>
-                       Partner Login
+                   <Button size="lg" variant="outline" className="border-slate-700 text-white hover:bg-slate-800 h-14 px-10 rounded-full text-lg" onClick={() => onPatientEnter('DOCTOR')}>
+                       Find Doctors
                    </Button>
+               </div>
+               
+               <div className="mt-16 pt-8 border-t border-slate-800/50">
+                   <p className="text-sm text-slate-500 mb-4">Are you a Doctor or Clinic Owner?</p>
+                   <button onClick={onClinicMarketing} className="text-teal-400 hover:text-teal-300 font-bold hover:underline">
+                       See how SmartQFlow can transform your practice &rarr;
+                   </button>
                </div>
            </div>
       </section>

@@ -3,7 +3,7 @@ import React from 'react';
 import { 
   Monitor, Stethoscope, Smartphone, LayoutGrid, Zap, 
   CheckCircle2, ArrowRight, ShieldCheck, TrendingUp, Users,
-  BarChart3, Clock, Lock
+  BarChart3, Clock, Lock, CreditCard, Activity, CalendarDays, Mic, Search, Video, FileText, Pill, AlertTriangle, Building2, UserCheck, Shield, Heart, XCircle, Info, Sparkles, Phone, AlertCircle, Star
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Logo } from '../components/Logo';
@@ -33,6 +33,7 @@ export const ClinicLandingPage: React.FC<ClinicLandingPageProps> = ({ onStartFre
 
             <div className="hidden md:flex items-center gap-8">
                 <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Features</button>
+                <button onClick={() => document.getElementById('comparison')?.scrollIntoView({ behavior: 'smooth' })} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Comparison</button>
                 <button onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Pricing</button>
                 <button onClick={onBackToPatient} className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">For Patients</button>
             </div>
@@ -49,16 +50,16 @@ export const ClinicLandingPage: React.FC<ClinicLandingPageProps> = ({ onStartFre
       <section className="relative pt-20 pb-28 lg:pt-32 lg:pb-40 overflow-hidden bg-slate-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
               <span className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-full px-4 py-1.5 mb-8 shadow-sm">
-                  <span className="text-xs font-bold text-indigo-700 tracking-wide uppercase">New: Kiosk Mode Included</span>
+                  <span className="text-xs font-bold text-indigo-700 tracking-wide uppercase">Your Clinic, Supercharged</span>
               </span>
               
-              <h1 className="text-5xl lg:text-7xl font-black text-slate-900 tracking-tight mb-6 leading-[1.1] max-w-4xl mx-auto">
-                  The Operating System for <br/>
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-indigo-600">Modern Medical Practices.</span>
+              <h1 className="text-5xl lg:text-7xl font-black text-slate-900 tracking-tight mb-6 leading-[1.1] max-w-5xl mx-auto">
+                  Run a Smarter, Faster, <br/>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-indigo-600">Organized Clinic.</span>
               </h1>
               
               <p className="text-xl text-slate-600 mb-10 leading-relaxed max-w-2xl mx-auto">
-                  Streamline your reception, manage hybrid queues, and delight patients with live tracking. All in one simple dashboard.
+                  SmartQFlow is a complete Queue & Clinic Operating System that boosts doctor efficiency, reduces waiting room chaos, and gives patients a modern experience.
               </p>
 
               <div className="flex flex-col sm:flex-row justify-center gap-4">
@@ -74,21 +75,18 @@ export const ClinicLandingPage: React.FC<ClinicLandingPageProps> = ({ onStartFre
               <div className="mt-20 relative mx-auto max-w-5xl">
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-50 via-transparent to-transparent z-10"></div>
                   <div className="rounded-2xl border border-slate-200 shadow-2xl overflow-hidden bg-white">
-                      {/* Abstract representation of the dashboard */}
                       <div className="bg-slate-100 h-8 border-b border-slate-200 flex items-center px-4 gap-2">
                           <div className="w-3 h-3 rounded-full bg-red-400"></div>
                           <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
                           <div className="w-3 h-3 rounded-full bg-green-400"></div>
                       </div>
                       <div className="p-2 grid grid-cols-4 gap-2 bg-slate-50">
-                          {/* Sidebar */}
                           <div className="hidden md:block col-span-1 bg-white h-64 rounded-lg border border-slate-200 p-4 space-y-2">
                               <div className="h-4 w-24 bg-slate-100 rounded mb-4"></div>
                               <div className="h-8 w-full bg-primary-50 rounded"></div>
                               <div className="h-8 w-full bg-white border border-slate-100 rounded"></div>
                               <div className="h-8 w-full bg-white border border-slate-100 rounded"></div>
                           </div>
-                          {/* Main Content */}
                           <div className="col-span-4 md:col-span-3 grid grid-cols-2 gap-4">
                               <div className="col-span-2 flex gap-4">
                                   <div className="flex-1 h-24 bg-white rounded-lg border border-slate-200 p-4">
@@ -120,52 +118,146 @@ export const ClinicLandingPage: React.FC<ClinicLandingPageProps> = ({ onStartFre
           </div>
       </section>
 
-      {/* --- FEATURES GRID --- */}
-      <section id="features" className="py-24 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="text-center mb-16">
-                  <h2 className="text-3xl font-bold text-slate-900">Tools for the Entire Clinic</h2>
-                  <p className="text-slate-500 mt-4 max-w-2xl mx-auto">We connect your reception, doctors, and patients in a seamless loop.</p>
+      {/* --- BENEFITS COMPARISON --- */}
+      <section id="benefits" className="py-24 bg-white">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="text-center mb-12">
+                  <h2 className="text-3xl font-bold text-slate-900">Why Clinics Choose SmartQFlow</h2>
+                  <p className="text-slate-500 mt-2">The difference is clear.</p>
               </div>
 
-              <div className="grid md:grid-cols-3 gap-8">
-                  {/* Reception */}
-                  <div className="p-8 rounded-3xl bg-slate-50 border border-slate-100 hover:shadow-xl transition-all">
-                      <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 mb-6">
-                          <LayoutGrid className="h-8 w-8" />
+              <div className="rounded-3xl shadow-xl border border-slate-200 overflow-hidden bg-white">
+                  <div className="grid grid-cols-2 text-center bg-slate-50 border-b border-slate-200">
+                      <div className="py-6 font-bold text-slate-500 text-lg">Without SmartQFlow</div>
+                      <div className="py-6 font-bold text-primary-700 bg-primary-50/50 text-lg">With SmartQFlow</div>
+                  </div>
+                  
+                  {[
+                      ["Chaotic waiting rooms", "Organized, quiet workflow"],
+                      ["Patients complain about wait time", "Real-time transparency"],
+                      ["Reception overloaded with questions", "Automated display + app"],
+                      ["Manual register/Excel", "Digital queue + appointments"],
+                      ["No-shows & walk-in confusion", "Smart late arrival logic"],
+                      ["Doctor distracted by crowd", "Doctor focuses only on patients"],
+                  ].map((row, i) => (
+                      <div key={i} className="grid grid-cols-2 border-b border-slate-100 last:border-none hover:bg-slate-50/50 transition-colors">
+                          <div className="p-6 text-slate-600 flex items-center justify-center text-center border-r border-slate-100">{row[0]}</div>
+                          <div className="p-6 font-bold text-slate-900 bg-primary-50/10 flex items-center justify-center text-center relative overflow-hidden">
+                              <div className="absolute inset-0 bg-primary-50 opacity-0 hover:opacity-100 transition-opacity"></div>
+                              <span className="relative z-10 flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-primary-600" /> {row[1]}</span>
+                          </div>
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 mb-3">Front Desk Command Center</h3>
-                      <ul className="space-y-3 text-slate-600 text-sm">
-                          <li className="flex gap-2"><CheckCircle2 className="h-5 w-5 text-blue-500" /> Add Walk-in patients in 5 seconds</li>
-                          <li className="flex gap-2"><CheckCircle2 className="h-5 w-5 text-blue-500" /> Manage appointments & emergency cases</li>
-                          <li className="flex gap-2"><CheckCircle2 className="h-5 w-5 text-blue-500" /> Collect payments & print tokens</li>
+                  ))}
+              </div>
+          </div>
+      </section>
+
+      {/* --- COMPETITOR COMPARISON --- */}
+      <section id="comparison" className="py-24 bg-slate-50 border-y border-slate-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="text-center mb-16">
+                  <span className="text-primary-600 font-bold tracking-wider uppercase text-sm">Market Analysis</span>
+                  <h2 className="text-3xl font-bold text-slate-900 mt-2">SmartQFlow vs Competitors</h2>
+                  <p className="text-slate-500 mt-4 max-w-2xl mx-auto">See why we are the top choice for modern OPDs in India.</p>
+              </div>
+
+              <div className="overflow-x-auto pb-6">
+                  <table className="w-full text-sm text-left border-collapse min-w-[1000px]">
+                      <thead>
+                          <tr className="bg-slate-900 text-white">
+                              <th className="p-4 rounded-tl-xl w-1/4">Features</th>
+                              <th className="p-4 bg-primary-600 font-bold text-lg border-b-4 border-primary-800">SmartQFlow</th>
+                              <th className="p-4 text-slate-300">Practo Ray</th>
+                              <th className="p-4 text-slate-300">QueueOne</th>
+                              <th className="p-4 text-slate-300">QDoc</th>
+                              <th className="p-4 text-slate-300 rounded-tr-xl">Basic Token Apps</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 bg-white">
+                          {[
+                              ["Walk-in queue management", true, true, true, true, true],
+                              ["Appointment scheduling", true, true, false, true, false],
+                              ["Hybrid queue (walk-in + appt)", "STAR", false, false, false, false],
+                              ["Live ETA for patients", true, true, true, false, false],
+                              ["Doctor delay/break auto-adjust", true, false, false, false, false],
+                              ["Family booking", true, true, false, false, false],
+                              ["Multi-clinic doctor identity", "STAR", false, false, false, false],
+                              ["Smart late-arrival penalty", "STAR", false, false, false, false],
+                              ["Emergency bump", true, false, false, true, false],
+                              ["Real-time TV display", true, true, false, true, false],
+                              ["Digital notes", true, true, false, true, false],
+                              ["Quick Rx", true, true, false, true, false],
+                              ["AI summary", true, false, false, false, false],
+                              ["Telemedicine", true, true, false, false, false],
+                              ["Patient mobile app with Live Queue", true, true, false, false, false],
+                              ["Price per doctor", "₹1,250", "₹2,200–₹6,000", "₹800–₹1,500", "₹1,500", "₹300–₹800"],
+                              ["Complete queue automation", "STAR", false, false, false, false],
+                          ].map((row, i) => (
+                              <tr key={i} className="hover:bg-slate-50">
+                                  <td className="p-4 font-medium text-slate-900">{row[0]}</td>
+                                  <td className="p-4 bg-primary-50 font-bold text-primary-700 text-center border-x border-primary-100">
+                                      {row[1] === "STAR" ? <span className="flex items-center justify-center gap-1"><Star className="h-4 w-4 fill-current text-yellow-500" /> Yes</span> : row[1] === true ? <CheckCircle2 className="h-5 w-5 text-green-600 mx-auto" /> : row[1]}
+                                  </td>
+                                  <td className="p-4 text-center text-slate-500">{row[2] === true ? <CheckCircle2 className="h-5 w-5 text-slate-400 mx-auto" /> : row[2] === false ? <XCircle className="h-5 w-5 text-slate-300 mx-auto" /> : row[2]}</td>
+                                  <td className="p-4 text-center text-slate-500">{row[3] === true ? <CheckCircle2 className="h-5 w-5 text-slate-400 mx-auto" /> : row[3] === false ? <XCircle className="h-5 w-5 text-slate-300 mx-auto" /> : row[3]}</td>
+                                  <td className="p-4 text-center text-slate-500">{row[4] === true ? <CheckCircle2 className="h-5 w-5 text-slate-400 mx-auto" /> : row[4] === false ? <XCircle className="h-5 w-5 text-slate-300 mx-auto" /> : row[4]}</td>
+                                  <td className="p-4 text-center text-slate-500">{row[5] === true ? <CheckCircle2 className="h-5 w-5 text-slate-400 mx-auto" /> : row[5] === false ? <XCircle className="h-5 w-5 text-slate-300 mx-auto" /> : row[5]}</td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      </section>
+
+      {/* --- WHY SMARTQFLOW WINS --- */}
+      <section className="py-24 bg-white">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="grid md:grid-cols-2 gap-16 items-center">
+                  <div>
+                      <div className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-full px-4 py-1.5 mb-6">
+                          <Sparkles className="h-4 w-4 text-indigo-600" />
+                          <span className="text-xs font-bold text-indigo-700 uppercase tracking-wide">Competitive Advantage</span>
+                      </div>
+                      <h2 className="text-4xl font-bold text-slate-900 mb-6">Why SmartQFlow Wins</h2>
+                      <p className="text-lg text-slate-600 mb-8 leading-relaxed">
+                          SmartQFlow is the <strong className="text-slate-900">ONLY</strong> app that provides Uber-like transparency to patients while handling complex medical workflows.
+                      </p>
+                      <ul className="space-y-4">
+                          {[
+                              "Shows true live ETA & position",
+                              "Merges walk-ins + appointments intelligently",
+                              "Handles doctor delays automatically",
+                              "Supports late-arrival rules & penalties",
+                              "Avoids duplicate doctor profiles across clinics",
+                              "Lets doctors work across multiple clinics cleanly"
+                          ].map((item, i) => (
+                              <li key={i} className="flex items-start gap-3">
+                                  <div className="mt-1 bg-green-100 p-1 rounded-full">
+                                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                  </div>
+                                  <span className="text-slate-700 font-medium">{item}</span>
+                              </li>
+                          ))}
                       </ul>
                   </div>
-
-                  {/* Doctor */}
-                  <div className="p-8 rounded-3xl bg-slate-50 border border-slate-100 hover:shadow-xl transition-all">
-                      <div className="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center text-green-600 mb-6">
-                          <Stethoscope className="h-8 w-8" />
+                  <div className="bg-slate-50 p-8 rounded-3xl border border-slate-200">
+                      <h3 className="font-bold text-xl text-slate-900 mb-6">Pricing Differentiation</h3>
+                      <div className="space-y-4">
+                          {[
+                              { label: "Low Cost", desc: "40–60% cheaper than Practo" },
+                              { label: "Hybrid Queue", desc: "Unique feature; no competitor has this" },
+                              { label: "Multi-Clinic Identity", desc: "Unique support for visiting consultants" },
+                              { label: "True Live ETA", desc: "Better accuracy than token apps" },
+                              { label: "Telemedicine", desc: "Included in standard plans" },
+                              { label: "AI Tools", desc: "No competitor offers AI summaries" }
+                          ].map((item, i) => (
+                              <div key={i} className="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
+                                  <span className="font-bold text-slate-700">{item.label}</span>
+                                  <span className="text-sm text-slate-500">{item.desc}</span>
+                              </div>
+                          ))}
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 mb-3">Smart Doctor Console</h3>
-                      <ul className="space-y-3 text-slate-600 text-sm">
-                          <li className="flex gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> Call next patient with one click</li>
-                          <li className="flex gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> AI-assisted clinical notes summaries</li>
-                          <li className="flex gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> Digital prescriptions & history</li>
-                      </ul>
-                  </div>
-
-                  {/* Patient Experience */}
-                  <div className="p-8 rounded-3xl bg-slate-50 border border-slate-100 hover:shadow-xl transition-all">
-                      <div className="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center text-purple-600 mb-6">
-                          <Smartphone className="h-8 w-8" />
-                      </div>
-                      <h3 className="text-xl font-bold text-slate-900 mb-3">Premium Patient Experience</h3>
-                      <ul className="space-y-3 text-slate-600 text-sm">
-                          <li className="flex gap-2"><CheckCircle2 className="h-5 w-5 text-purple-500" /> Live queue tracking from home</li>
-                          <li className="flex gap-2"><CheckCircle2 className="h-5 w-5 text-purple-500" /> TV Kiosk Mode for waiting room</li>
-                          <li className="flex gap-2"><CheckCircle2 className="h-5 w-5 text-purple-500" /> Automatic delay notifications</li>
-                      </ul>
                   </div>
               </div>
           </div>
@@ -179,59 +271,121 @@ export const ClinicLandingPage: React.FC<ClinicLandingPageProps> = ({ onStartFre
                   <p className="text-slate-400">Start with a 14-day free trial. No hidden fees.</p>
               </div>
 
-              <div className="grid md:grid-cols-3 gap-8">
+              <div className="grid md:grid-cols-4 gap-6">
                   {PRICING_PLANS.map((plan, idx) => (
-                      <div key={plan.name} className={`relative p-8 rounded-3xl border flex flex-col ${plan.recommended ? 'bg-indigo-600 border-indigo-500 shadow-2xl scale-105 z-10' : 'bg-slate-800 border-slate-700'}`}>
+                      <div key={plan.name} className={`relative p-6 rounded-2xl border flex flex-col ${plan.recommended ? 'bg-indigo-600 border-indigo-500 shadow-2xl scale-105 z-10' : 'bg-slate-800 border-slate-700'}`}>
                           {plan.recommended && (
-                              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white text-indigo-600 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                                  Most Popular
+                              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white text-indigo-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                                  Best Value
                               </div>
                           )}
-                          <h3 className="text-xl font-bold mb-2">{plan.name}</h3>
+                          <h3 className="text-lg font-bold mb-2">{plan.name}</h3>
                           <div className="flex items-baseline gap-1 mb-6">
-                              <span className="text-4xl font-black">{plan.price}</span>
-                              <span className="text-sm opacity-60">/month</span>
+                              <span className="text-3xl font-black">{plan.price}</span>
+                              <span className="text-xs opacity-60">{plan.name === 'Pay-Per-Booking' ? '/booking' : '/month'}</span>
                           </div>
-                          <ul className="space-y-4 mb-8 flex-1">
+                          <ul className="space-y-3 mb-8 flex-1">
                               {plan.features.map(f => (
-                                  <li key={f} className="flex items-start gap-3 text-sm">
-                                      <CheckCircle2 className="h-5 w-5 shrink-0 opacity-80" />
+                                  <li key={f} className="flex items-start gap-2 text-xs">
+                                      <CheckCircle2 className="h-4 w-4 shrink-0 opacity-80" />
                                       <span className="opacity-90">{f}</span>
                                   </li>
                               ))}
                           </ul>
-                          <Button onClick={onStartFreeTrial} className={`w-full ${plan.recommended ? 'bg-white text-indigo-600 hover:bg-indigo-50' : 'bg-primary-600 text-white hover:bg-primary-500'}`}>
+                          <Button onClick={onStartFreeTrial} className={`w-full text-sm h-10 ${plan.recommended ? 'bg-white text-indigo-600 hover:bg-indigo-50' : 'bg-primary-600 text-white hover:bg-primary-500'}`}>
                               Choose {plan.name}
                           </Button>
                       </div>
                   ))}
               </div>
+
+              {/* Patient Pricing Note */}
+              <div className="mt-16 max-w-3xl mx-auto bg-slate-800/50 p-8 rounded-2xl border border-slate-700">
+                  <h3 className="font-bold text-xl mb-4 flex items-center gap-2"><Users className="h-5 w-5 text-primary-400" /> Patient Pricing</h3>
+                  <div className="grid md:grid-cols-2 gap-8">
+                      <div>
+                          <p className="text-lg font-bold text-white mb-2">Free for Patients</p>
+                          <p className="text-sm text-slate-400">Patients can search, book, and track queues for free. No subscription required.</p>
+                      </div>
+                      <div className="text-sm text-slate-400">
+                          <p className="font-bold text-white mb-2">Optional Charges:</p>
+                          <ul className="space-y-1">
+                              <li className="flex justify-between"><span>Teleconsultation fee</span> <span className="text-white">Clinic decides</span></li>
+                              <li className="flex justify-between"><span>Appt convenience fee</span> <span className="text-white">₹5–₹10</span></li>
+                              <li className="flex justify-between"><span>Priority visit (optional)</span> <span className="text-white">₹10–₹20</span></li>
+                          </ul>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </section>
+
+      {/* --- SEGMENTS (For Clinics of All Sizes) --- */}
+      <section id="segments" className="py-24 bg-slate-50 border-y border-slate-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="text-center mb-16">
+                  <h2 className="text-3xl font-bold text-slate-900">For Clinics of All Sizes</h2>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-8">
+                  <div className="bg-white p-8 rounded-2xl shadow-sm border border-blue-100">
+                      <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 mb-6">
+                          <UserCheck className="h-6 w-6" />
+                      </div>
+                      <h3 className="text-xl font-bold text-slate-900 mb-2">Solo Clinics</h3>
+                      <p className="text-slate-600 text-sm">Clean queue system, professional patient experience.</p>
+                  </div>
+                  <div className="bg-white p-8 rounded-2xl shadow-sm border border-green-100">
+                      <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-green-600 mb-6">
+                          <Building2 className="h-6 w-6" />
+                      </div>
+                      <h3 className="text-xl font-bold text-slate-900 mb-2">Multi-Specialty Hospitals</h3>
+                      <p className="text-slate-600 text-sm">Multiple doctors, multiple counters, unified management.</p>
+                  </div>
+                  <div className="bg-white p-8 rounded-2xl shadow-sm border border-purple-100">
+                      <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 mb-6">
+                          <LayoutGrid className="h-6 w-6" />
+                      </div>
+                      <h3 className="text-xl font-bold text-slate-900 mb-2">Chains & Corporate</h3>
+                      <p className="text-slate-600 text-sm">Central dashboard, analytics, subscription & usage tracking.</p>
+                  </div>
+              </div>
+          </div>
+      </section>
+
+      {/* --- SECURITY --- */}
+      <section className="py-24 bg-white">
+          <div className="max-w-4xl mx-auto px-4 text-center">
+              <div className="inline-flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-full mb-8">
+                  <ShieldCheck className="h-5 w-5 text-slate-600" />
+                  <span className="font-bold text-slate-700 text-sm uppercase tracking-wide">Reliability & Security</span>
+              </div>
+              <div className="flex flex-wrap justify-center gap-x-8 gap-y-4 text-slate-600 font-medium">
+                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> HIPAA-inspired data handling</span>
+                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> Secure OTP login</span>
+                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> Role-based access</span>
+                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> Encrypted patient records</span>
+                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> Hosted on cloud infrastructure</span>
+              </div>
           </div>
       </section>
 
       {/* --- TRUST / CTA --- */}
-      <section className="py-24 bg-white border-t border-slate-100">
-          <div className="max-w-4xl mx-auto px-4 text-center">
-              <div className="flex justify-center items-center gap-8 mb-12 opacity-50 grayscale">
-                  {/* Mock Logos */}
-                  <div className="font-black text-2xl text-slate-400">APOLLO</div>
-                  <div className="font-black text-2xl text-slate-400">FORTIS</div>
-                  <div className="font-black text-2xl text-slate-400">MANIPAL</div>
-              </div>
+      <section className="py-24 bg-slate-900 text-white border-t border-slate-800 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-slate-950 opacity-50"></div>
+          <div className="max-w-4xl mx-auto px-4 text-center relative z-10">
+              <h2 className="text-4xl md:text-5xl font-black mb-6 tracking-tight">Modernize your clinic today.</h2>
+              <p className="text-slate-400 text-lg mb-10 leading-relaxed">Without expensive software.</p>
               
-              <h2 className="text-4xl font-bold text-slate-900 mb-6">Ready to upgrade your clinic?</h2>
-              <p className="text-lg text-slate-500 mb-8">Join thousands of doctors who have reclaimed their time.</p>
-              
-              <div className="flex flex-col sm:flex-row justify-center gap-4">
+              <div className="flex flex-col sm:flex-row justify-center gap-4 mt-8">
                    <Button size="lg" className="bg-primary-600 hover:bg-primary-700 text-white h-14 px-10 rounded-full text-lg font-bold shadow-xl" onClick={onStartFreeTrial}>
-                       Get Started Now
+                       Start Free Trial
+                   </Button>
+                   <Button size="lg" variant="outline" className="border-slate-600 text-white hover:bg-slate-800 h-14 px-10 rounded-full text-lg" onClick={onLogin}>
+                       Request a Demo
                    </Button>
               </div>
-              
-              <div className="mt-8 flex justify-center gap-6 text-sm text-slate-400">
-                  <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> HIPAA Compliant</span>
-                  <span className="flex items-center gap-2"><Lock className="h-4 w-4" /> 256-bit Encryption</span>
-              </div>
+              <p className="mt-6 text-slate-400 text-sm">Or talk to sales: <span className="text-white font-bold hover:underline cursor-pointer">+91 98765 43210</span></p>
           </div>
       </section>
 

@@ -507,35 +507,50 @@ export const INITIAL_DOCTORS: Doctor[] = INITIAL_CLINICS[0].doctors;
 export const PRICING_PLANS: PricingPlan[] = [
   {
     name: 'Solo Clinic',
-    price: '₹999',
+    price: '₹1,250',
     features: [
-      '1 Doctor',
-      'Unlimited Patients',
-      'Basic Dashboard',
-      'WhatsApp Alerts'
+      'Smart hybrid queue',
+      'Live waiting time',
+      'Reception dashboard',
+      'Doctor dashboard',
+      'TV display',
+      'Unlimited patients'
     ]
   },
   {
-    name: 'Small Hospital',
-    price: '₹2,499',
+    name: 'Standard',
+    price: '₹3,000',
     features: [
-      'Up to 5 Doctors',
-      'Multi-queue Management',
-      'Patient History',
-      'Auto Reminders'
+      'Everything in Solo',
+      'Multi-doctor management',
+      'Multi-counter reception',
+      'Digital vitals',
+      'Quick prescriptions',
+      'AI summaries'
     ],
     recommended: true
   },
   {
     name: 'Premium',
-    price: '₹4,499',
+    price: '₹6,000',
     features: [
-      '10+ Doctors',
-      'Advanced Analytics',
-      'No-show Prediction',
-      'Custom Branding',
-      'Kiosk Support'
+      'Everything in Standard',
+      'Chain management',
+      'Telemedicine module',
+      'API access',
+      'Priority support',
+      'Advanced analytics'
     ]
+  },
+  {
+      name: 'Pay-Per-Booking',
+      price: '₹5',
+      features: [
+          'Zero monthly fees',
+          'Walk-ins + appointments',
+          'Pay only when you earn',
+          'Best for variable volume'
+      ]
   }
 ];
 
