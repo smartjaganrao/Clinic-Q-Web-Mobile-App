@@ -123,6 +123,7 @@ export interface Patient {
   status: PatientStatus;
   doctorId: string; // Assigned doctor
   timeAdded: number; // Timestamp
+  timeStarted?: number; // NEW: Consultation Start Time
   timeCompleted?: number;
   notes?: string;
   diagnosis?: string; // New: Short diagnosis
@@ -146,6 +147,15 @@ export interface Patient {
   };
 }
 
+export interface Staff {
+  id: string;
+  name: string;
+  role: 'RECEPTIONIST' | 'NURSE' | 'MANAGER';
+  phone: string;
+  isActive: boolean;
+  joinedDate: number;
+}
+
 export interface ClinicStats {
   totalPatients: number;
   avgWaitTime: number; // in minutes
@@ -167,6 +177,7 @@ export interface Clinic {
   type?: ClinicType; 
   doctors: Doctor[];
   patients: Patient[];
+  staff: Staff[]; // New: Staff list
   // Location Data
   city: string; // New: City for filtering
   address: string;
@@ -189,4 +200,13 @@ export interface PricingPlan {
   price: string;
   features: string[];
   recommended?: boolean;
+}
+
+// Super Admin Profile
+export interface AdminProfile {
+  name: string;
+  email: string;
+  role: 'SUPER_ADMIN';
+  avatarUrl: string;
+  lastLogin: string;
 }

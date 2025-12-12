@@ -1,5 +1,5 @@
 
-import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient, TimeSlot, Review } from './types';
+import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient, TimeSlot, Review, AdminProfile, Staff } from './types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const genId = () => Math.random().toString(36).substr(2, 5);
@@ -173,6 +173,17 @@ const createRealisticPatients = (doctors: Doctor[], clinicType: ClinicType | str
           appointmentTime = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}`;
       }
 
+      // Generate realistic start/end times for stats
+      const timeAdded = now - timeOffset;
+      // Start time: if active or completed, assume it started some time after added
+      // For random data: started 5-30 mins after addition
+      const startDelay = 5 * 60 * 1000 + Math.random() * 25 * 60 * 1000;
+      const timeStarted = (isWithDoctor || isCompleted) ? timeAdded + startDelay : undefined;
+      
+      // Completed time: started + 10-20 mins
+      const duration = 10 * 60 * 1000 + Math.random() * 10 * 60 * 1000;
+      const timeCompleted = isCompleted ? (timeStarted || 0) + duration : undefined;
+
       patients.push({
         id: `pat_${doc.id}_${i}`,
         tokenNumber: (docIdx + 1) * 100 + (i + 1),
@@ -180,8 +191,9 @@ const createRealisticPatients = (doctors: Doctor[], clinicType: ClinicType | str
         phone: `9${Math.floor(Math.random()*900000000 + 100000000)}`,
         status,
         doctorId: doc.id,
-        timeAdded: now - timeOffset,
-        timeCompleted: isCompleted ? now - timeOffset + (15 * 60 * 1000) : undefined,
+        timeAdded,
+        timeStarted,
+        timeCompleted,
         visitType,
         appointmentDate,
         appointmentTime,
@@ -202,6 +214,13 @@ const createRealisticPatients = (doctors: Doctor[], clinicType: ClinicType | str
   });
 
   return patients;
+};
+
+const createMockStaff = (): Staff[] => {
+    return [
+        { id: genId(), name: "Priya Sharma", role: 'RECEPTIONIST', phone: '9876543210', isActive: true, joinedDate: Date.now() - 10000000 },
+        { id: genId(), name: "Anjali Verma", role: 'NURSE', phone: '9876543211', isActive: true, joinedDate: Date.now() - 5000000 }
+    ];
 };
 
 const chennaiDocs1 = [...createRealDoctors(100, 2, 'General Physician', [500, 700]), ...createRealDoctors(102, 1, 'Diabetologist', [700, 900])];
@@ -260,7 +279,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     about: 'A multi-specialty clinic providing comprehensive healthcare services with state-of-the-art diagnostic facilities and expert doctors.',
     amenities: ['Pharmacy', 'Pathology Lab', 'X-Ray', 'Parking', 'Wheelchair Access'],
     doctors: chennaiDocs1,
-    patients: createRealisticPatients(chennaiDocs1, ClinicType.GENERAL, 'Chennai')
+    patients: createRealisticPatients(chennaiDocs1, ClinicType.GENERAL, 'Chennai'),
+    staff: createMockStaff()
   },
   {
     id: 'clinic_chn_2',
@@ -277,7 +297,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     about: 'World-class eye care hospital dedicated to providing equitable and efficient eye care to all sections of society.',
     amenities: ['Optical Shop', 'Cafeteria', 'Emergency Eye Care', 'Pharmacy', 'Prayer Room'],
     doctors: chennaiDocs2,
-    patients: createRealisticPatients(chennaiDocs2, 'OPHTHALMOLOGY', 'Chennai')
+    patients: createRealisticPatients(chennaiDocs2, 'OPHTHALMOLOGY', 'Chennai'),
+    staff: []
   },
   {
     id: 'clinic_chn_3',
@@ -294,7 +315,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     about: 'India’s premier birthing, woman, and child care hospital celebrating the journey of maternity and beyond.',
     amenities: ['NICU', 'Labor Suites', 'Valet Parking', 'Baby Shop', '24x7 Pharmacy'],
     doctors: chennaiDocs3,
-    patients: createRealisticPatients(chennaiDocs3, ClinicType.GYNECOLOGY, 'Chennai')
+    patients: createRealisticPatients(chennaiDocs3, ClinicType.GYNECOLOGY, 'Chennai'),
+    staff: []
   },
   {
     id: 'clinic_chn_4',
@@ -311,7 +333,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     about: 'A 1000-bed quaternary care hospital offering best-in-class treatment for Orthopedics, Trauma, and Joint Replacement.',
     amenities: ['Ambulance', 'Blood Bank', 'Cafeteria', 'Rehab Center', 'International Patient Care'],
     doctors: chennaiDocs4,
-    patients: createRealisticPatients(chennaiDocs4, ClinicType.ORTHOPEDIC, 'Chennai')
+    patients: createRealisticPatients(chennaiDocs4, ClinicType.ORTHOPEDIC, 'Chennai'),
+    staff: []
   },
   {
     id: 'clinic_chn_5',
@@ -328,7 +351,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     about: 'Advanced dental care center specializing in implants, root canals, and cosmetic dentistry with modern equipment.',
     amenities: ['Digital X-Ray', 'Waiting Lounge', 'Parking', 'Card Payment'],
     doctors: chennaiDocs5,
-    patients: createRealisticPatients(chennaiDocs5, ClinicType.DENTAL, 'Chennai')
+    patients: createRealisticPatients(chennaiDocs5, ClinicType.DENTAL, 'Chennai'),
+    staff: []
   },
   {
     id: 'clinic_chn_6',
@@ -345,7 +369,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     about: 'Leading multi-specialty hospital known for its excellence in Cardiology, Cardiac Surgery, and Neurology.',
     amenities: ['ICU/CCU', 'Emergency', 'Diagnostics', 'Pharmacy', 'Wifi'],
     doctors: chennaiDocs6,
-    patients: createRealisticPatients(chennaiDocs6, ClinicType.CARDIOLOGY, 'Chennai')
+    patients: createRealisticPatients(chennaiDocs6, ClinicType.CARDIOLOGY, 'Chennai'),
+    staff: []
   },
   {
     id: 'clinic_chn_7',
@@ -362,7 +387,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     about: 'Expert dermatologists providing advanced skin and hair treatments including laser hair removal and acne treatment.',
     amenities: ['Laser Suite', 'Private Consultation', 'Valet Parking', 'Wifi'],
     doctors: chennaiDocs7,
-    patients: createRealisticPatients(chennaiDocs7, ClinicType.DERMATOLOGY, 'Chennai')
+    patients: createRealisticPatients(chennaiDocs7, ClinicType.DERMATOLOGY, 'Chennai'),
+    staff: []
   },
   {
     id: 'clinic_chn_8',
@@ -379,7 +405,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     about: 'Specialized ENT care hospital known for Micro Ear Surgery, Endoscopic Sinus Surgery, and Cochlear Implants.',
     amenities: ['Audiology Lab', 'Speech Therapy', 'Pharmacy', 'In-patient Rooms'],
     doctors: chennaiDocs8,
-    patients: createRealisticPatients(chennaiDocs8, 'ENT', 'Chennai')
+    patients: createRealisticPatients(chennaiDocs8, 'ENT', 'Chennai'),
+    staff: []
   },
   {
     id: 'clinic_chn_9',
@@ -396,7 +423,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     about: 'A heritage hospital with a strong focus on Pediatric care, General Medicine, and Surgery since 1933.',
     amenities: ['Pediatric ICU', 'Play Area', 'Vaccination Center', 'Emergency', 'Lab'],
     doctors: chennaiDocs9,
-    patients: createRealisticPatients(chennaiDocs9, ClinicType.PEDIATRIC, 'Chennai')
+    patients: createRealisticPatients(chennaiDocs9, ClinicType.PEDIATRIC, 'Chennai'),
+    staff: []
   },
   {
     id: 'clinic_chn_10',
@@ -413,7 +441,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     about: 'Affordable and accessible general healthcare services for the community with round-the-clock emergency support.',
     amenities: ['Emergency', 'Pharmacy', 'General Ward', 'Basic Lab'],
     doctors: chennaiDocs10,
-    patients: createRealisticPatients(chennaiDocs10, ClinicType.GENERAL, 'Chennai')
+    patients: createRealisticPatients(chennaiDocs10, ClinicType.GENERAL, 'Chennai'),
+    staff: []
   },
 
   // --- BANGALORE CLINICS (Legacy + Enhanced) ---
@@ -432,7 +461,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     about: 'One of India’s foremost multi-specialty healthcare providers offering comprehensive care.',
     amenities: ['Advanced ICU', 'Robotic Surgery', 'Cafeteria', 'Valet Parking', 'Pharmacy'],
     doctors: blrDocs1,
-    patients: createRealisticPatients(blrDocs1, ClinicType.GENERAL, 'Bangalore')
+    patients: createRealisticPatients(blrDocs1, ClinicType.GENERAL, 'Bangalore'),
+    staff: []
   },
   {
     id: 'clinic_blr_2',
@@ -449,7 +479,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     about: 'Specialized hospital for women and children, providing maternity, gynecology, and pediatric services.',
     amenities: ['NICU', 'Labor Rooms', 'Lactation Consulting', 'Ultrasound'],
     doctors: blrDocs2,
-    patients: createRealisticPatients(blrDocs2, ClinicType.PEDIATRIC, 'Bangalore')
+    patients: createRealisticPatients(blrDocs2, ClinicType.PEDIATRIC, 'Bangalore'),
+    staff: []
   },
   {
     id: 'clinic_blr_3',
@@ -466,7 +497,8 @@ export const INITIAL_CLINICS: Clinic[] = [
     about: 'India’s largest dental chain offering quality dental care with modern technology and hygiene standards.',
     amenities: ['X-Ray', 'Sterilization Zone', 'Wifi', 'Card Payment'],
     doctors: blrDocs3,
-    patients: createRealisticPatients(blrDocs3, ClinicType.DENTAL, 'Bangalore')
+    patients: createRealisticPatients(blrDocs3, ClinicType.DENTAL, 'Bangalore'),
+    staff: []
   }
 ];
 
@@ -508,3 +540,12 @@ export const PRICING_PLANS: PricingPlan[] = [
 ];
 
 export const APP_NAME = "SmartQFlow";
+
+// Super Admin Profile Data
+export const SUPER_ADMIN_PROFILE: AdminProfile = {
+  name: "Arjun Venkat",
+  email: "arjun@smartqflow.com",
+  role: "SUPER_ADMIN",
+  avatarUrl: "https://i.pravatar.cc/150?u=super_admin_arjun",
+  lastLogin: new Date().toLocaleString()
+};

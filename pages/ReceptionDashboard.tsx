@@ -1,15 +1,16 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals } from '../types';
+import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
 import { 
-    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp
+    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users
 } from 'lucide-react';
 import { QueueTable } from '../features/reception/components/QueueTable';
 import { PatientDatabaseTable } from '../features/reception/components/PatientDatabaseTable';
 import { DoctorManager } from '../features/reception/components/DoctorManager';
+import { StaffManager } from '../features/reception/components/StaffManager';
 import { ReceptionStats } from '../features/reception/components/ReceptionStats';
 import { AddPatientModal } from '../features/reception/components/AddPatientModal';
 import { DoctorFormModal } from '../features/reception/components/DoctorFormModal';
@@ -17,6 +18,7 @@ import { DoctorFormModal } from '../features/reception/components/DoctorFormModa
 interface ReceptionDashboardProps {
     doctors: Doctor[];
     patients: Patient[];
+    staff?: Staff[];
     clinicName: string;
     clinicType?: ClinicType;
     onAddPatient: (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string, nextOfKin?: {name: string, phone: string}) => void;
@@ -35,15 +37,20 @@ interface ReceptionDashboardProps {
     onDragDrop: (draggedId: string, targetId: string) => void;
     onManualCheckIn: (id: string) => void;
     onBulkUpdateStatus?: (ids: string[], status: PatientStatus) => void;
+    // Staff Props
+    onAddStaff?: (staff: Staff) => void;
+    onUpdateStaff?: (id: string, updates: Partial<Staff>) => void;
+    onDeleteStaff?: (id: string) => void;
     addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
 export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
-    doctors, patients, clinicName, onAddPatient, onEditPatient, onDeletePatient, onDeleteMultiplePatients, 
+    doctors, patients, staff = [], clinicName, onAddPatient, onEditPatient, onDeletePatient, onDeleteMultiplePatients, 
     onAddDoctor, onCheckMasterDoctor, onEditDoctor, onDeleteDoctor, onUpdateStatus, onCancelPatient, onUpdateClinicName, 
-    onToggleEmergency, onManualReorder, onDragDrop, onManualCheckIn, onBulkUpdateStatus, addToast
+    onToggleEmergency, onManualReorder, onDragDrop, onManualCheckIn, onBulkUpdateStatus, 
+    onAddStaff, onUpdateStaff, onDeleteStaff, addToast
 }) => {
-    const [activeTab, setActiveTab] = useState<'QUEUE' | 'DATABASE' | 'DOCTORS' | 'REPORTS'>('QUEUE');
+    const [activeTab, setActiveTab] = useState<'QUEUE' | 'DATABASE' | 'DOCTORS' | 'STAFF' | 'REPORTS'>('QUEUE');
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDoctorId, setFilterDoctorId] = useState<string>('ALL');
     const [filterStatus, setFilterStatus] = useState<string>('ACTIVE'); // 'ACTIVE', 'ALL', 'WAITING', 'WITH_DOCTOR'
@@ -336,12 +343,13 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     <div className="hidden sm:flex gap-1 bg-slate-100 p-1 rounded-lg flex-shrink-0">
                         <button onClick={() => setActiveTab('QUEUE')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'QUEUE' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><List className="h-3 w-3" /> Queue</button>
                         <button onClick={() => setActiveTab('DATABASE')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'DATABASE' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Database className="h-3 w-3" /> Patients</button>
-                        <button onClick={() => setActiveTab('DOCTORS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'DOCTORS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Stethoscope className="h-3 w-3" /> Staff</button>
+                        <button onClick={() => setActiveTab('DOCTORS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'DOCTORS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Stethoscope className="h-3 w-3" /> Doctors</button>
+                        <button onClick={() => setActiveTab('STAFF')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'STAFF' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Users className="h-3 w-3" /> Staff</button>
                         <button onClick={() => setActiveTab('REPORTS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'REPORTS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><BarChart3 className="h-3 w-3" /> Reports</button>
                     </div>
                 </div>
 
-                {/* DOCTOR STATUS DECK */}
+                {/* DOCTOR STATUS DECK - Only visible in Queue Tab */}
                 {activeTab === 'QUEUE' && (
                     <div className="bg-white border-b border-slate-200 w-full overflow-hidden transition-all duration-300">
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 gap-2 p-2 max-w-[1920px] mx-auto">
@@ -522,6 +530,15 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     />
                 )}
 
+                {activeTab === 'STAFF' && onAddStaff && onUpdateStaff && onDeleteStaff && (
+                    <StaffManager 
+                        staff={staff}
+                        onAddStaff={onAddStaff}
+                        onUpdateStaff={onUpdateStaff}
+                        onDeleteStaff={onDeleteStaff}
+                    />
+                )}
+
                 {activeTab === 'REPORTS' && (
                     <ReceptionStats patients={patients} doctors={doctors} />
                 )}
@@ -545,13 +562,13 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     <div className={`p-1 rounded-full ${activeTab === 'DOCTORS' ? 'bg-primary-50' : ''}`}>
                         <Stethoscope className={`h-5 w-5 ${activeTab === 'DOCTORS' ? 'stroke-primary-600' : ''}`} />
                     </div>
-                    <span className="text-[10px] font-bold">Staff</span>
+                    <span className="text-[10px] font-bold">Doctors</span>
                 </button>
-                <button onClick={() => setActiveTab('REPORTS')} className={`flex flex-col items-center gap-1 p-2 rounded-xl w-full transition-all ${activeTab === 'REPORTS' ? 'text-primary-700' : 'text-slate-400'}`}>
-                    <div className={`p-1 rounded-full ${activeTab === 'REPORTS' ? 'bg-primary-50' : ''}`}>
-                        <BarChart3 className={`h-5 w-5 ${activeTab === 'REPORTS' ? 'stroke-primary-600' : ''}`} />
+                <button onClick={() => setActiveTab('STAFF')} className={`flex flex-col items-center gap-1 p-2 rounded-xl w-full transition-all ${activeTab === 'STAFF' ? 'text-primary-700' : 'text-slate-400'}`}>
+                    <div className={`p-1 rounded-full ${activeTab === 'STAFF' ? 'bg-primary-50' : ''}`}>
+                        <Users className={`h-5 w-5 ${activeTab === 'STAFF' ? 'stroke-primary-600' : ''}`} />
                     </div>
-                    <span className="text-[10px] font-bold">Reports</span>
+                    <span className="text-[10px] font-bold">Staff</span>
                 </button>
             </nav>
 

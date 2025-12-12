@@ -1,5 +1,5 @@
 
-import { Clinic, Patient, Doctor, PatientStatus, DoctorStatus, PlanType, DaySchedule, ClinicType } from '../types';
+import { Clinic, Patient, Doctor, Staff, PatientStatus, DoctorStatus, PlanType, DaySchedule, ClinicType } from '../types';
 import { INITIAL_CLINICS } from '../constants';
 
 const STORAGE_KEY = 'clinicq_db_v2';
@@ -86,7 +86,13 @@ class StorageService {
     await delay(50);
     this.clinics = this.clinics.map(c => 
         c.id === clinicId 
-        ? { ...c, patients: c.patients.map(p => p.id === patientId ? { ...p, status, timeCompleted: status === PatientStatus.COMPLETED ? Date.now() : p.timeCompleted } : p) }
+        ? { ...c, patients: c.patients.map(p => {
+            if (p.id !== patientId) return p;
+            const updates: Partial<Patient> = { status };
+            if (status === PatientStatus.COMPLETED) updates.timeCompleted = Date.now();
+            if (status === PatientStatus.WITH_DOCTOR && !p.timeStarted) updates.timeStarted = Date.now();
+            return { ...p, ...updates };
+        }) }
         : c
     );
     this.save();
@@ -149,11 +155,37 @@ class StorageService {
       this.save();
   }
 
+  // --- STAFF OPERATIONS (NEW) ---
+
+  async addClinicStaff(clinicId: string, staff: Staff) {
+      await delay(100);
+      this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, staff: [...(c.staff || []), staff] } : c);
+      this.save();
+  }
+
+  async updateClinicStaff(clinicId: string, staffId: string, updates: Partial<Staff>) {
+      await delay(50);
+      this.clinics = this.clinics.map(c => c.id === clinicId ? { 
+          ...c, 
+          staff: (c.staff || []).map(s => s.id === staffId ? { ...s, ...updates } : s) 
+      } : c);
+      this.save();
+  }
+
+  async deleteClinicStaff(clinicId: string, staffId: string) {
+      await delay(50);
+      this.clinics = this.clinics.map(c => c.id === clinicId ? { 
+          ...c, 
+          staff: (c.staff || []).filter(s => s.id !== staffId) 
+      } : c);
+      this.save();
+  }
+
   // --- CLINIC OPERATIONS ---
 
   async createClinic(clinic: Clinic) {
       await delay(200);
-      this.clinics = [...this.clinics, clinic];
+      this.clinics = [...this.clinics, { ...clinic, staff: [] }];
       this.save();
   }
 

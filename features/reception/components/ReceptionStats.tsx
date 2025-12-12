@@ -87,26 +87,40 @@ export const ReceptionStats: React.FC<ReceptionStatsProps> = ({ patients, doctor
     
     const avgWaitMinutes = waitTimeCount > 0 ? Math.round((totalWaitTime / waitTimeCount) / 60000) : 0;
 
-    // Doctor Performance
+    // Doctor Performance (Enhanced with Actual Consult Time)
     const doctorStats = doctors.map(doc => {
         const docPatients = filteredPatients.filter(p => p.doctorId === doc.id);
-        const completedCount = docPatients.filter(p => p.status === PatientStatus.COMPLETED).length;
+        const completedPatients = docPatients.filter(p => p.status === PatientStatus.COMPLETED);
         const waitingCount = docPatients.filter(p => p.status === PatientStatus.WAITING).length;
+        
+        // Calculate Actual Avg Consult Time
+        let totalConsultTime = 0;
+        let consultCount = 0;
+        completedPatients.forEach(p => {
+            if (p.timeStarted && p.timeCompleted) {
+                totalConsultTime += (p.timeCompleted - p.timeStarted);
+                consultCount++;
+            }
+        });
+        const actualAvgTime = consultCount > 0 ? Math.round((totalConsultTime / consultCount) / 60000) : 0;
+
         return {
             id: doc.id,
             name: doc.name,
             specialty: doc.specialty,
             avatar: doc.avatarUrl,
             total: docPatients.length,
-            completed: completedCount,
+            completed: completedPatients.length,
             waiting: waitingCount,
-            utilization: docPatients.length > 0 ? Math.round((completedCount / docPatients.length) * 100) : 0
+            utilization: docPatients.length > 0 ? Math.round((completedPatients.length / docPatients.length) * 100) : 0,
+            actualAvgTime,
+            targetTime: doc.consultationTime || 15
         };
     }).sort((a, b) => b.total - a.total);
 
-    // Hourly Distribution (Aggregated across the selected range)
-    // Useful to see "Busy hours of the day" regardless of date range
-    const hourlyData = new Array(13).fill(0); // 08:00 to 20:00
+    // Heatmap Data (Day x Hour)
+    // 7 Days x 13 Hours (8 AM - 8 PM)
+    const heatmapGrid = Array(7).fill(0).map(() => Array(13).fill(0));
     filteredPatients.forEach(p => {
         let time = p.timeAdded;
         if (p.visitType === 'APPOINTMENT' && p.appointmentDate && p.appointmentTime) {
@@ -115,13 +129,14 @@ export const ReceptionStats: React.FC<ReceptionStatsProps> = ({ patients, doctor
              d.setHours(h, m);
              time = d.getTime();
         }
+        const dateObj = new Date(time);
+        const day = dateObj.getDay(); // 0 = Sun
+        const hour = dateObj.getHours();
         
-        const hour = new Date(time).getHours();
         if (hour >= 8 && hour <= 20) {
-            hourlyData[hour - 8]++;
+            heatmapGrid[day][hour - 8]++;
         }
     });
-    const maxHourly = Math.max(...hourlyData, 1);
 
     const formatRange = () => {
         if (filterType === 'TODAY') return 'Today';
@@ -141,11 +156,22 @@ export const ReceptionStats: React.FC<ReceptionStatsProps> = ({ patients, doctor
         cancelled: cancelled.length,
         avgWaitMinutes,
         doctorStats,
-        hourlyData,
-        maxHourly,
+        heatmapGrid,
         dateRangeLabel: formatRange()
     };
   }, [patients, doctors, filterType, customStart, customEnd]);
+
+  // Helper for Heatmap Color
+  const getHeatmapColor = (count: number) => {
+      if (count === 0) return 'bg-slate-50';
+      if (count < 3) return 'bg-green-100';
+      if (count < 6) return 'bg-yellow-200';
+      if (count < 10) return 'bg-orange-300';
+      return 'bg-red-400';
+  };
+
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const HOURS = ['8am', '9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm', '6pm', '7pm', '8pm'];
 
   return (
     <div className="p-4 sm:p-6 h-full overflow-y-auto bg-slate-50/50 custom-scrollbar">
@@ -241,86 +267,98 @@ export const ReceptionStats: React.FC<ReceptionStatsProps> = ({ patients, doctor
             </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Doctor Workload Table */}
-            <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Doctor Efficiency Table */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[400px]">
                 <div className="p-5 border-b border-slate-100 flex justify-between items-center">
-                    <h4 className="font-bold text-slate-800">Doctor Performance</h4>
-                    <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">{stats.dateRangeLabel}</span>
+                    <h4 className="font-bold text-slate-800">Doctor Efficiency</h4>
+                    <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">Performance</span>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="overflow-auto flex-1 custom-scrollbar">
                     <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-50 text-slate-500 font-bold text-xs uppercase">
+                        <thead className="bg-slate-50 text-slate-500 font-bold text-xs uppercase sticky top-0 z-10">
                             <tr>
                                 <th className="px-5 py-3">Doctor</th>
-                                <th className="px-5 py-3 text-center">Total</th>
-                                <th className="px-5 py-3 text-center">Done</th>
-                                <th className="px-5 py-3 text-center">Waiting</th>
-                                <th className="px-5 py-3 w-32">Utilization</th>
+                                <th className="px-5 py-3 text-center">Visits</th>
+                                <th className="px-5 py-3 text-center">Avg Time</th>
+                                <th className="px-5 py-3 w-32">Efficiency</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {stats.doctorStats.map(doc => (
+                            {stats.doctorStats.map(doc => {
+                                const diff = doc.actualAvgTime - doc.targetTime;
+                                const isEfficient = diff <= 2; // Allow 2 min buffer
+                                return (
                                 <tr key={doc.id} className="hover:bg-slate-50">
                                     <td className="px-5 py-3">
                                         <div className="flex items-center gap-3">
                                             <img src={doc.avatar} className="w-8 h-8 rounded-full bg-slate-200" />
                                             <div>
                                                 <div className="font-bold text-slate-900">{doc.name}</div>
-                                                <div className="text-[10px] text-slate-500">{doc.specialty}</div>
+                                                <div className="text-[10px] text-slate-500">Target: {doc.targetTime}m</div>
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-5 py-3 text-center font-medium">{doc.total}</td>
-                                    <td className="px-5 py-3 text-center font-bold text-green-600">{doc.completed}</td>
-                                    <td className="px-5 py-3 text-center font-bold text-orange-600">{doc.waiting}</td>
-                                    <td className="px-5 py-3">
-                                        <div className="w-full bg-slate-100 rounded-full h-2">
-                                            <div className="bg-primary-500 h-2 rounded-full transition-all duration-500" style={{ width: `${doc.utilization}%` }}></div>
+                                    <td className="px-5 py-3 text-center font-bold">{doc.completed}</td>
+                                    <td className="px-5 py-3 text-center">
+                                        <div className="font-bold text-slate-800">{doc.actualAvgTime}m</div>
+                                        <div className={`text-[10px] font-bold ${diff > 5 ? 'text-red-500' : 'text-green-500'}`}>
+                                            {diff > 0 ? `+${diff}` : diff}m
                                         </div>
-                                        <div className="text-[10px] text-right text-slate-400 mt-1">{doc.utilization}%</div>
+                                    </td>
+                                    <td className="px-5 py-3">
+                                        <span className={`px-2 py-1 rounded text-xs font-bold ${isEfficient ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                            {isEfficient ? 'Optimal' : 'Slow'}
+                                        </span>
                                     </td>
                                 </tr>
-                            ))}
+                            )})}
                             {stats.doctorStats.length === 0 && (
-                                <tr><td colSpan={5} className="text-center py-8 text-slate-400">No data available for this period</td></tr>
+                                <tr><td colSpan={4} className="text-center py-8 text-slate-400">No data available</td></tr>
                             )}
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            {/* Peak Hours Chart (Simple CSS Bar Chart) */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col">
-                <div className="mb-6">
-                    <h4 className="font-bold text-slate-800">Peak Hours</h4>
-                    <p className="text-xs text-slate-500">Busiest times of day ({stats.dateRangeLabel})</p>
+            {/* Peak Hours Heatmap */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col h-[400px]">
+                <div className="mb-4 flex justify-between items-center">
+                    <div>
+                        <h4 className="font-bold text-slate-800">Peak Hours Heatmap</h4>
+                        <p className="text-xs text-slate-500">Patient Footfall Density ({stats.dateRangeLabel})</p>
+                    </div>
+                    <div className="flex gap-2 text-[10px] font-bold text-slate-500">
+                        <div className="flex items-center gap-1"><span className="w-2 h-2 bg-green-100 rounded"></span> Low</div>
+                        <div className="flex items-center gap-1"><span className="w-2 h-2 bg-orange-300 rounded"></span> Med</div>
+                        <div className="flex items-center gap-1"><span className="w-2 h-2 bg-red-400 rounded"></span> High</div>
+                    </div>
                 </div>
                 
-                <div className="flex-1 flex items-end justify-between gap-1 min-h-[200px] border-b border-slate-200 pb-2">
-                    {stats.hourlyData.map((count, index) => {
-                        const height = stats.maxHourly > 0 ? (count / stats.maxHourly) * 100 : 0;
-                        const hourLabel = (index + 8).toString().padStart(2, '0');
-                        return (
-                            <div key={index} className="flex-1 flex flex-col justify-end group relative" title={`${hourLabel}:00 - ${count} patients`}>
-                                <div 
-                                    className="w-full bg-primary-100 hover:bg-primary-500 rounded-t-sm transition-all duration-300 relative group-hover:shadow-lg"
-                                    style={{ height: `${Math.max(height, 5)}%` }}
-                                >
-                                    {count > 0 && (
-                                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] font-bold px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
-                                            {count}
+                <div className="flex-1 overflow-auto custom-scrollbar">
+                    <div className="min-w-[500px]">
+                        <div className="flex">
+                            <div className="w-12 flex-shrink-0"></div>
+                            {HOURS.map((h, i) => (
+                                <div key={i} className="flex-1 text-[10px] text-center text-slate-400 font-bold uppercase pb-2">{h}</div>
+                            ))}
+                        </div>
+                        {DAYS.map((day, dIdx) => (
+                            <div key={dIdx} className="flex items-center mb-1">
+                                <div className="w-12 text-[10px] font-bold text-slate-500 uppercase">{day}</div>
+                                {stats.heatmapGrid[dIdx].map((count, hIdx) => (
+                                    <div key={hIdx} className="flex-1 px-0.5 h-8">
+                                        <div 
+                                            className={`w-full h-full rounded-md ${getHeatmapColor(count)} flex items-center justify-center text-[10px] font-bold text-slate-700 transition-all hover:scale-110 cursor-default`}
+                                            title={`${DAYS[dIdx]} ${HOURS[hIdx]}: ${count} patients`}
+                                        >
+                                            {count > 0 ? count : ''}
                                         </div>
-                                    )}
-                                </div>
+                                    </div>
+                                ))}
                             </div>
-                        );
-                    })}
-                </div>
-                <div className="flex justify-between mt-2 text-[10px] text-slate-400 font-medium">
-                    <span>08:00</span>
-                    <span>14:00</span>
-                    <span>20:00</span>
+                        ))}
+                    </div>
                 </div>
             </div>
         </div>

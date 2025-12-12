@@ -1,10 +1,12 @@
 
 import React, { useState } from 'react';
-import { Clinic, PlanType } from '../../../types';
-import { Search, Edit2, Trash2, Power, AlertCircle, CheckCircle, CreditCard, X } from 'lucide-react';
+import { Clinic, Doctor, PlanType, Staff } from '../../../types';
+import { Search, Edit2, Trash2, Power, AlertCircle, CheckCircle, CreditCard, Users, Stethoscope } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { Modal } from '../../../components/Modal';
+import { StaffManagementModal } from './StaffManagementModal';
+import { AdminDoctorsModal } from './AdminDoctorsModal';
 
 interface ClinicsTableProps {
   clinics: Clinic[];
@@ -12,14 +14,28 @@ interface ClinicsTableProps {
   onToggleStatus: (clinicId: string) => void;
   onDeleteClinic: (clinicId: string) => void;
   onEditClinic: (clinicId: string, updates: Partial<Clinic>) => void;
+  // Staff Handlers
+  onAddStaff?: (clinicId: string, staff: Staff) => void;
+  onUpdateStaff?: (clinicId: string, staffId: string, updates: Partial<Staff>) => void;
+  onDeleteStaff?: (clinicId: string, staffId: string) => void;
+  // Doctor Handlers
+  onAddDoctor?: (clinicId: string, doctor: Doctor) => void;
+  onEditDoctor?: (clinicId: string, doctorId: string, updates: Partial<Doctor>) => void;
+  onDeleteDoctor?: (clinicId: string, doctorId: string) => void;
+  onCheckMasterDoctor?: (mobile: string) => Doctor | null;
+  addToast?: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
 export const ClinicsTable: React.FC<ClinicsTableProps> = ({
-  clinics, onUpdatePlan, onToggleStatus, onDeleteClinic, onEditClinic
+  clinics, onUpdatePlan, onToggleStatus, onDeleteClinic, onEditClinic,
+  onAddStaff, onUpdateStaff, onDeleteStaff,
+  onAddDoctor, onEditDoctor, onDeleteDoctor, onCheckMasterDoctor, addToast
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [editModal, setEditModal] = useState<{ isOpen: boolean; clinic: Clinic | null }>({ isOpen: false, clinic: null });
     const [planModal, setPlanModal] = useState<{ isOpen: boolean; clinic: Clinic | null }>({ isOpen: false, clinic: null });
+    const [staffModal, setStaffModal] = useState<{ isOpen: boolean; clinic: Clinic | null }>({ isOpen: false, clinic: null });
+    const [doctorModal, setDoctorModal] = useState<{ isOpen: boolean; clinic: Clinic | null }>({ isOpen: false, clinic: null });
 
     const filteredClinics = clinics.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.city.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -39,17 +55,25 @@ export const ClinicsTable: React.FC<ClinicsTableProps> = ({
                 <div className="relative w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" /><input type="text" placeholder="Search clinics..." className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div>
             </div>
             <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500"><tr><th className="px-6 py-3 font-semibold">Clinic Name</th><th className="px-6 py-3 font-semibold">Plan</th><th className="px-6 py-3 font-semibold">Status</th><th className="px-6 py-3 font-semibold">Doctors / Patients</th><th className="px-6 py-3 font-semibold">Location</th><th className="px-6 py-3 font-semibold text-right">Actions</th></tr></thead>
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500"><tr><th className="px-6 py-3 font-semibold">Clinic Name</th><th className="px-6 py-3 font-semibold">Plan</th><th className="px-6 py-3 font-semibold">Status</th><th className="px-6 py-3 font-semibold">Stats</th><th className="px-6 py-3 font-semibold">Location</th><th className="px-6 py-3 font-semibold text-right">Actions</th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
                     {filteredClinics.map(clinic => (
                         <tr key={clinic.id} className="hover:bg-slate-50 group">
                             <td className="px-6 py-4"><div className="font-bold text-slate-900">{clinic.name}</div><div className="text-xs text-slate-500">ID: {clinic.id}</div></td>
                             <td className="px-6 py-4"><span className={`px-2 py-1 rounded-md text-xs font-bold border ${clinic.plan === PlanType.PREMIUM ? 'bg-purple-50 text-purple-700 border-purple-200' : clinic.plan === PlanType.SMALL ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>{clinic.plan}</span></td>
                             <td className="px-6 py-4"><span className={`flex items-center gap-1 text-xs font-bold ${clinic.subscriptionStatus === 'SUSPENDED' ? 'text-red-600' : 'text-green-600'}`}>{clinic.subscriptionStatus === 'SUSPENDED' ? <AlertCircle className="h-3 w-3" /> : <CheckCircle className="h-3 w-3" />}{clinic.subscriptionStatus || 'ACTIVE'}</span></td>
-                            <td className="px-6 py-4 text-slate-600">{clinic.doctors.length} Docs • {clinic.patients.length} Pts</td>
+                            <td className="px-6 py-4 text-slate-600">
+                                <div className="flex gap-2 text-xs">
+                                    <span title="Doctors">🩺 {clinic.doctors.length}</span>
+                                    <span title="Staff">👥 {clinic.staff?.length || 0}</span>
+                                    <span title="Patients">🏥 {clinic.patients.length}</span>
+                                </div>
+                            </td>
                             <td className="px-6 py-4 text-slate-600">{clinic.city}</td>
                             <td className="px-6 py-4 text-right">
                                 <div className="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => setStaffModal({isOpen: true, clinic})} className="p-2 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-800" title="Manage Staff"><Users className="h-4 w-4" /></button>
+                                    <button onClick={() => setDoctorModal({isOpen: true, clinic})} className="p-2 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-800" title="Manage Doctors"><Stethoscope className="h-4 w-4" /></button>
                                     <button onClick={() => setEditModal({isOpen: true, clinic})} className="p-2 hover:bg-slate-100 rounded text-slate-500" title="Edit Details"><Edit2 className="h-4 w-4" /></button>
                                     <button onClick={() => setPlanModal({isOpen: true, clinic})} className="p-2 hover:bg-blue-50 rounded text-blue-600" title="Manage Plan"><CreditCard className="h-4 w-4" /></button>
                                     <button onClick={() => onToggleStatus(clinic.id)} className={`p-2 hover:bg-slate-100 rounded ${clinic.subscriptionStatus === 'SUSPENDED' ? 'text-green-600' : 'text-orange-600'}`} title={clinic.subscriptionStatus === 'SUSPENDED' ? 'Activate' : 'Suspend'}><Power className="h-4 w-4" /></button>
@@ -80,6 +104,33 @@ export const ClinicsTable: React.FC<ClinicsTableProps> = ({
                     </div>
                 )}
             </Modal>
+            
+            {/* Staff Management Modal Integration */}
+            {staffModal.clinic && (
+                <StaffManagementModal
+                    isOpen={staffModal.isOpen}
+                    onClose={() => setStaffModal({ isOpen: false, clinic: null })}
+                    clinicName={staffModal.clinic.name}
+                    staff={staffModal.clinic.staff || []}
+                    onAddStaff={(staff) => onAddStaff && onAddStaff(staffModal.clinic!.id, staff)}
+                    onUpdateStaff={(staffId, updates) => onUpdateStaff && onUpdateStaff(staffModal.clinic!.id, staffId, updates)}
+                    onDeleteStaff={(staffId) => onDeleteStaff && onDeleteStaff(staffModal.clinic!.id, staffId)}
+                />
+            )}
+
+            {/* Doctor Management Modal Integration */}
+            {doctorModal.clinic && onAddDoctor && onEditDoctor && onDeleteDoctor && onCheckMasterDoctor && addToast && (
+                <AdminDoctorsModal 
+                    isOpen={doctorModal.isOpen}
+                    onClose={() => setDoctorModal({ isOpen: false, clinic: null })}
+                    clinic={doctorModal.clinic}
+                    onAddDoctor={onAddDoctor}
+                    onEditDoctor={onEditDoctor}
+                    onDeleteDoctor={onDeleteDoctor}
+                    onCheckMasterDoctor={onCheckMasterDoctor}
+                    addToast={addToast}
+                />
+            )}
         </div>
     );
 };

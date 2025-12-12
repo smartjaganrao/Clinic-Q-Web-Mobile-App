@@ -51,25 +51,26 @@ export const QueueTable: React.FC<QueueTableProps> = ({
               const isNextUp = nextUpPatientIds ? nextUpPatientIds.has(patient.id) : false;
               
               let cardClass = "bg-white border-slate-200";
-              if (isServing) cardClass = "border-blue-500 shadow-blue-100 ring-1 ring-blue-500";
+              if (isServing) cardClass = "bg-blue-50/30 border-blue-500 shadow-md shadow-blue-100 ring-1 ring-blue-500 z-10";
               else if (isNextUp) cardClass = "border-indigo-500 shadow-indigo-50 ring-1 ring-indigo-500 relative";
               else if (patient.isEmergency) cardClass = "border-red-200 bg-red-50/30";
               else if (isOnHold) cardClass = "border-orange-200 bg-orange-50/30 opacity-90";
 
               return (
-                  <div key={patient.id} className={`rounded-xl p-4 shadow-sm border relative overflow-hidden ${cardClass}`}>
-                      {isServing && <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>}
+                  <div key={patient.id} className={`rounded-xl p-4 shadow-sm border relative overflow-hidden transition-all ${cardClass}`}>
+                      {isServing && <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-600"></div>}
                       {isOnHold && <div className="absolute top-0 left-0 w-1 h-full bg-orange-400"></div>}
                       
                       {/* Top Right Badges */}
                       <div className="absolute top-0 right-0 flex items-start">
-                          {isNextUp && <div className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg flex items-center gap-1 shadow-sm z-10">NEXT</div>}
-                          {patient.isEmergency && !isNextUp && <div className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-1 rounded-bl-lg flex items-center gap-1"><Zap className="h-3 w-3 fill-current" /> URGENT</div>}
+                          {isServing && <div className="bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl flex items-center gap-1 shadow-sm z-10 animate-in fade-in"><Activity className="h-3 w-3 animate-pulse" /> SERVING</div>}
+                          {isNextUp && !isServing && <div className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg flex items-center gap-1 shadow-sm z-10">NEXT</div>}
+                          {patient.isEmergency && !isNextUp && !isServing && <div className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-1 rounded-bl-lg flex items-center gap-1"><Zap className="h-3 w-3 fill-current" /> URGENT</div>}
                           {isOnHold && !patient.isEmergency && !isNextUp && <div className="bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-1 rounded-bl-lg flex items-center gap-1"><PauseCircle className="h-3 w-3" /> ON HOLD</div>}
                       </div>
                       
                       <div className="flex items-start gap-4">
-                          <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 flex-shrink-0 ${isServing ? 'bg-blue-600 text-white border-blue-600' : isNextUp ? 'bg-indigo-600 text-white border-indigo-600' : ''}`}>
+                          <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 flex-shrink-0 ${isServing ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white border-blue-600 shadow-inner' : isNextUp ? 'bg-indigo-600 text-white border-indigo-600' : ''}`}>
                               <span className="text-xl font-black">{patient.tokenNumber}</span>
                           </div>
                           
@@ -79,8 +80,8 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                               </div>
                               <div className="text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-1">
                                   <span>{doc?.name}</span>
-                                  <span>•</span>
-                                  <span className={waitMins > 30 ? 'text-red-500 font-bold' : ''}>~{waitMins}m Wait</span>
+                                  {!isServing && <span>•</span>}
+                                  {!isServing && <span className={waitMins > 30 ? 'text-red-500 font-bold' : ''}>~{waitMins}m Wait</span>}
                               </div>
                               
                               {/* Next of Kin Display (Mobile) */}
@@ -194,7 +195,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
               const waitMins = estTimeMs ? Math.max(0, Math.ceil((estTimeMs - Date.now()) / 60000)) : 0;
               
               let rowStateClass = "bg-white border-slate-200 hover:border-primary-300 hover:shadow-sm";
-              if (isServing) rowStateClass = "bg-white border-l-4 border-l-blue-500 border-y-blue-100 border-r-blue-100 shadow-md scale-[1.01] z-10 relative";
+              if (isServing) rowStateClass = "bg-blue-50/20 border-l-4 border-l-blue-600 border-y border-y-blue-200 border-r border-r-blue-200 shadow-lg scale-[1.01] z-10 relative transition-transform";
               else if (isNextUp) rowStateClass = "bg-white border-l-4 border-l-indigo-500 border-y-indigo-50 border-r-indigo-50 shadow-sm";
               else if (patient.isEmergency) rowStateClass = "bg-red-50/30 border-l-4 border-l-red-500 border-red-100";
               else if (isOnHold) rowStateClass = "bg-orange-50/30 border-l-4 border-l-orange-400 border-orange-100 opacity-80";
@@ -255,7 +256,10 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                   
                   <td className="px-3 py-1.5">
                       {isServing ? (
-                          <div className="flex items-center gap-1.5 text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-100 w-fit"><Activity className="h-3 w-3 animate-pulse" /><span className="text-[10px] font-bold">In Consult</span></div>
+                          <div className="flex items-center gap-1.5 text-white bg-blue-600 px-2.5 py-1 rounded-full shadow-sm w-fit">
+                              <Activity className="h-3 w-3 animate-pulse" />
+                              <span className="text-[10px] font-bold uppercase tracking-wide">Serving</span>
+                          </div>
                       ) : (isWaiting || isOnHold) ? (
                           <div className="flex flex-col gap-0.5">
                               {isOnHold ? (

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, AppNotification, ClinicStats, TimeSlot, ClinicType, Vitals, PainPoint } from './types';
+import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, AppNotification, ClinicStats, TimeSlot, ClinicType, Vitals, PainPoint, Staff } from './types';
 // Removed INITIAL_CLINICS import as it's now handled in storage.ts
 import { LandingPage } from './pages/LandingPage';
 import { StaffLogin } from './pages/StaffLogin';
@@ -306,7 +306,7 @@ export default function App() {
       addToast(`${ids.length} records deleted`, 'info');
   };
 
-  // DOCTOR MANAGEMENT
+  // DOCTOR MANAGEMENT (Reception Context)
   const handleAddDoctor = async (name: string, specialty: string, room: string, schedule: DaySchedule[], mobile?: string, regNo?: string, masterId?: string, avatarUrl?: string, fee?: number, time?: number) => {
       if (!currentClinicId) return;
       const newMasterId = masterId || `master_${Date.now()}`;
@@ -334,6 +334,25 @@ export default function App() {
       if (!currentClinicId) return;
       await storage.deleteDoctor(currentClinicId, id);
       addToast('Doctor removed', 'info');
+  };
+
+  // STAFF MANAGEMENT (Reception Context)
+  const handleLocalAddStaff = async (staff: Staff) => {
+      if (!currentClinicId) return;
+      await storage.addClinicStaff(currentClinicId, staff);
+      addToast('Staff member added', 'success');
+  };
+
+  const handleLocalUpdateStaff = async (id: string, updates: Partial<Staff>) => {
+      if (!currentClinicId) return;
+      await storage.updateClinicStaff(currentClinicId, id, updates);
+      addToast('Staff updated', 'success');
+  };
+
+  const handleLocalDeleteStaff = async (id: string) => {
+      if (!currentClinicId) return;
+      await storage.deleteClinicStaff(currentClinicId, id);
+      addToast('Staff removed', 'info');
   };
 
   const checkMasterDoctor = (mobile: string): Doctor | null => {
@@ -501,6 +520,20 @@ export default function App() {
       addToast("System reset complete", "warning");
   };
 
+  // ADMIN STAFF HANDLERS (SUPER ADMIN)
+  const handleAddStaff = async (clinicId: string, staff: Staff) => {
+      await storage.addClinicStaff(clinicId, staff);
+      addToast("Staff member added", "success");
+  };
+  const handleUpdateStaff = async (clinicId: string, staffId: string, updates: Partial<Staff>) => {
+      await storage.updateClinicStaff(clinicId, staffId, updates);
+      addToast("Staff updated", "success");
+  };
+  const handleDeleteStaff = async (clinicId: string, staffId: string) => {
+      await storage.deleteClinicStaff(clinicId, staffId);
+      addToast("Staff removed", "info");
+  };
+
   return (
     <>
       <ToastContainer notifications={notifications} remove={removeToast} />
@@ -529,6 +562,7 @@ export default function App() {
               type: ClinicType.GENERAL,
               doctors: [],
               patients: [],
+              staff: [],
               city: city, 
               address: address, 
               pincode: pincode,
@@ -577,6 +611,7 @@ export default function App() {
             <ReceptionDashboard 
               doctors={currentClinic.doctors}
               patients={currentClinic.patients}
+              staff={currentClinic.staff}
               clinicName={currentClinic.name}
               clinicType={currentClinic.type}
               onAddPatient={handleAddPatient}
@@ -602,6 +637,9 @@ export default function App() {
               }}
               onManualCheckIn={(id) => handlePatientCheckIn(currentClinic.id, id)}
               onBulkUpdateStatus={handleBulkUpdateStatus}
+              onAddStaff={handleLocalAddStaff}
+              onUpdateStaff={handleLocalUpdateStaff}
+              onDeleteStaff={handleLocalDeleteStaff}
               addToast={addToast}
             />
           </div>
@@ -681,6 +719,14 @@ export default function App() {
                        onDeleteClinic={handleDeleteClinic}
                        onEditClinic={handleEditClinic}
                        onResetSystem={handleResetSystem}
+                       onAddStaff={handleAddStaff}
+                       onUpdateStaff={handleUpdateStaff}
+                       onDeleteStaff={handleDeleteStaff}
+                       onAddDoctor={(clinicId, doc) => storage.addDoctor(clinicId, doc)}
+                       onEditDoctor={(clinicId, docId, updates) => storage.updateDoctor(clinicId, docId, updates)}
+                       onDeleteDoctor={(clinicId, docId) => storage.deleteDoctor(clinicId, docId)}
+                       onCheckMasterDoctor={checkMasterDoctor}
+                       addToast={addToast}
                    />
                </div>
           </div>
