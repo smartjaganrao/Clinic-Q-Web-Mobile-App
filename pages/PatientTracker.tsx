@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode } from '../types';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -191,6 +192,7 @@ interface GroupedSlots {
 export const PatientTracker: React.FC<PatientTrackerProps> = ({
   clinics, userPhone, userName, isGuest, onLoginClick, onBack, onGetToken, addToast, onUpdateDetails, onCancelVisit, onCheckIn, preSelectedClinicId, onClearPendingAction, initialSearchMode
 }) => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'BOOK' | 'HISTORY' | 'PROFILE'>('BOOK');
   const [selectedClinicId, setSelectedClinicId] = useState<string | null>(preSelectedClinicId || null);
   const [bookingView, setBookingView] = useState<'LIST' | 'CLINIC_DETAILS' | 'FORM'>('LIST');
@@ -279,50 +281,11 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   }, [travelEstimate]);
 
   // --- HISTORY MANAGEMENT ---
-  useEffect(() => {
-    // Ensure initial state is set correctly
-    if (!window.history.state || window.history.state.appView !== 'PATIENT_TRACKER') {
-        window.history.replaceState({ 
-            appView: 'PATIENT_TRACKER', 
-            view: bookingView, 
-            clinicId: selectedClinicId, 
-            tab: activeTab,
-            pushed: false
-        }, '');
-    }
-
-    const handlePopState = (event: PopStateEvent) => {
-        const state = event.state;
-        if (state && state.appView === 'PATIENT_TRACKER') {
-             // Restore view state
-             if (state.tab) setActiveTab(state.tab);
-             
-             // Prioritize view restoration
-             if (state.view) setBookingView(state.view);
-             if (state.clinicId !== undefined) setSelectedClinicId(state.clinicId);
-             else setSelectedClinicId(null);
-        } else {
-             // Fallback if history state is lost or external
-             // We default to LIST view in BOOK tab
-             setBookingView('LIST');
-             setSelectedClinicId(null);
-             setActiveTab('BOOK');
-        }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  // Using simple internal state management instead of window.history for React Router compatibility
+  // The 'back' button on top of the UI handles moving up the stack.
+  // The browser back button is handled by React Router in App.tsx (which exits the patient view)
 
   const navigateToView = (view: 'LIST' | 'CLINIC_DETAILS' | 'FORM', clinicId: string | null) => {
-      const newState = {
-          appView: 'PATIENT_TRACKER',
-          view,
-          clinicId,
-          tab: activeTab,
-          pushed: true
-      };
-      window.history.pushState(newState, '');
       setBookingView(view);
       setSelectedClinicId(clinicId);
   };
@@ -332,33 +295,19 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       // When switching tabs, we generally reset the drill-down view to LIST
       setBookingView('LIST');
       setSelectedClinicId(null);
-      
-      // We replace state so that back button doesn't cycle through tabs like pages, 
-      // but treats the tab switch as a top-level context change.
-      window.history.replaceState({
-          appView: 'PATIENT_TRACKER',
-          view: 'LIST',
-          clinicId: null,
-          tab: newTab,
-          pushed: false
-      }, '');
   };
 
   const handleUIBack = () => {
-      if (window.history.state?.pushed) {
-          window.history.back();
+      if (bookingView === 'FORM') {
+           // Fallback to details
+           setBookingView('CLINIC_DETAILS');
+      } else if (bookingView === 'CLINIC_DETAILS') {
+           // Fallback to List
+           setBookingView('LIST');
+           setSelectedClinicId(null);
       } else {
-          // If we are at root of a pushed stack or deep-linked
-          if (bookingView === 'FORM') {
-               // Fallback to details
-               setBookingView('CLINIC_DETAILS');
-               window.history.replaceState({ ...window.history.state, view: 'CLINIC_DETAILS' }, '');
-          } else {
-               // Fallback to List
-               setBookingView('LIST');
-               setSelectedClinicId(null);
-               window.history.replaceState({ ...window.history.state, view: 'LIST', clinicId: null }, '');
-          }
+          // At root of tab, go to home or call parent back
+          onBack();
       }
   };
 
@@ -406,15 +355,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           onClearPendingAction(); 
           const clinic = clinics.find(c => c.id === preSelectedClinicId); 
           if (clinic) { setSelectedCity(clinic.city); } 
-
-          // History update for deep link: Replace state rather than push to avoid double back
-          window.history.replaceState({ 
-              appView: 'PATIENT_TRACKER', 
-              view: 'CLINIC_DETAILS', 
-              clinicId: preSelectedClinicId, 
-              tab: 'BOOK',
-              pushed: false // Not pushed by user navigation, so Back might exit app if initial
-          }, '');
       } 
   }, [preSelectedClinicId, clinics, onClearPendingAction]);
 
@@ -686,14 +626,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       setShowLateWarningModal(false); 
       setShowAuthModal(false);
       setViewingDoctor(null); // Close doctor profile if open
-
-      window.history.replaceState({
-          appView: 'PATIENT_TRACKER',
-          view: 'LIST',
-          clinicId: null,
-          tab: 'ACTIVE',
-          pushed: false
-      }, '');
   };
 
   const handleBookToken = (e?: React.MouseEvent) => {

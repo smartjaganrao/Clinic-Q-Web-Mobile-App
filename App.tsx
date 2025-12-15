@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
 import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, AppNotification, ClinicStats, TimeSlot, ClinicType, Vitals, PainPoint, Staff, ClinicOperationMode } from './types';
 import { LandingPage } from './pages/LandingPage';
-import { ClinicLandingPage } from './pages/ClinicLandingPage'; // New Import
+import { ClinicLandingPage } from './pages/ClinicLandingPage';
 import { StaffLogin } from './pages/StaffLogin';
 import { ClinicAuth } from './pages/ClinicAuth';
 import { DoctorLogin } from './pages/DoctorLogin';
@@ -30,20 +31,21 @@ const getLocalToday = () => {
     return `${year}-${month}-${day}`;
 };
 
-type AppView = 
-  | 'LANDING' 
-  | 'CLINIC_LANDING' // New View
-  | 'STAFF_LOGIN'
-  | 'PATIENT_LOGIN'
-  | 'PATIENT_TRACKER' 
-  | 'CLINIC_AUTH' 
-  | 'DOCTOR_LOGIN' 
-  | 'DASHBOARD_RECEPTION' 
-  | 'DASHBOARD_DOCTOR' 
-  | 'ADMIN_DASHBOARD'
-  | 'KIOSK';
+// Helper Component to Sync URL Params with State
+const RouteSyncer = ({ currentClinicId, onSync }: { currentClinicId: string | null, onSync: (id: string) => void }) => {
+    const params = useParams();
+    useEffect(() => {
+        if (params.clinicId && params.clinicId !== currentClinicId) {
+            onSync(params.clinicId);
+        }
+    }, [params.clinicId, currentClinicId, onSync]);
+    return null;
+};
 
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   // ------------------------------------------------------------------
   // SESSION PERSISTENCE
   // ------------------------------------------------------------------
@@ -56,32 +58,21 @@ export default function App() {
   
   const session = getSession();
 
-  // State Machine
-  const [currentView, setCurrentView] = useState<AppView>(session?.currentView || 'LANDING');
+  // Global State
   const [userRole, setUserRole] = useState<UserRole | null>(session?.userRole || null);
-  
-  // Data State - Now managed via Storage Subscription
   const [clinics, setClinics] = useState<Clinic[]>([]);
-
   const [currentClinicId, setCurrentClinicId] = useState<string | null>(session?.selectedClinicId || null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(session?.currentUser?.id || null); // Store ID, derive object
+  const [currentUserId, setCurrentUserId] = useState<string | null>(session?.currentUser?.id || null);
   
   // Patient Auth
   const [patientAuth, setPatientAuth] = useState<{name: string, phone: string} | null>(session?.loggedInPatient || null);
   const [initialSearchMode, setInitialSearchMode] = useState<'DOCTOR' | 'CLINIC'>('CLINIC');
   
-  // Pending Action (Only Check-In supported via global redirect now)
+  // Pending Action
   const [pendingAction, setPendingAction] = useState<{ type: 'CHECK_IN', clinicId: string, patientId: string } | null>(null);
 
   // Notifications
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-
-  // Derived State
-  const currentClinic = clinics.find(c => c.id === currentClinicId) || null;
-  // Derive current user (Doctor) from fresh clinics data
-  const currentUser = (userRole === UserRole.DOCTOR && currentClinic && currentUserId) 
-      ? currentClinic.doctors.find(d => d.id === currentUserId) || null 
-      : null;
 
   // ------------------------------------------------------------------
   // SUBSCRIPTION TO DATA LAYER
@@ -94,29 +85,25 @@ export default function App() {
   }, []);
 
   // ------------------------------------------------------------------
-  // SESSION EFFECTS
+  // DERIVED STATE HELPERS
   // ------------------------------------------------------------------
   
-  // Safety Redirect
-  useEffect(() => {
-      const needsClinic = ['DASHBOARD_RECEPTION', 'DASHBOARD_DOCTOR', 'KIOSK', 'DOCTOR_LOGIN'].includes(currentView);
-      // Wait for clinics to load before redirecting
-      if (clinics.length > 0 && needsClinic && !currentClinic) {
-          setCurrentView(userRole ? 'CLINIC_AUTH' : 'LANDING');
-      }
-  }, [currentView, currentClinic, userRole, clinics.length]);
+  const currentClinic = clinics.find(c => c.id === currentClinicId) || null;
+  const currentUser = (userRole === UserRole.DOCTOR && currentClinic && currentUserId) 
+      ? currentClinic.doctors.find(d => d.id === currentUserId) || null 
+      : null;
 
   // Save Session
   useEffect(() => {
     const s = {
-      currentView,
+      // currentView removed, strictly URL based now
       userRole,
       selectedClinicId: currentClinicId,
       currentUser: currentUser ? { id: currentUser.id } : null,
       loggedInPatient: patientAuth
     };
     localStorage.setItem('clinicq_session_v2', JSON.stringify(s));
-  }, [currentView, userRole, currentClinicId, currentUser, patientAuth]);
+  }, [userRole, currentClinicId, currentUser, patientAuth]);
 
   // ------------------------------------------------------------------
   // HELPERS
@@ -132,74 +119,73 @@ export default function App() {
   };
 
   // ------------------------------------------------------------------
-  // HANDLERS (Now delegation to Storage Service)
+  // HANDLERS
   // ------------------------------------------------------------------
 
-  // Navigation
-  const handleStaffLogin = () => setCurrentView('STAFF_LOGIN');
+  const handleStaffLogin = () => navigate('/login/staff');
   
   const handlePatientEnter = (mode?: 'DOCTOR' | 'CLINIC') => {
       setInitialSearchMode(mode || 'CLINIC');
-      setCurrentView('PATIENT_TRACKER');
+      navigate('/patient');
   };
 
   const handleRoleSelect = (role: UserRole) => {
     setUserRole(role);
     if (role === UserRole.ADMIN) {
-        setCurrentView('ADMIN_DASHBOARD');
+        navigate('/admin');
     } else {
-        setCurrentView('CLINIC_AUTH');
+        navigate('/setup'); // Clinic Auth
     }
   };
 
   const handleClinicSelect = (clinicId: string) => {
     setCurrentClinicId(clinicId);
     if (userRole === UserRole.DOCTOR) {
-      setCurrentView('DOCTOR_LOGIN');
+      navigate(`/clinic/${clinicId}/login`);
     } else if (userRole === UserRole.RECEPTIONIST) {
-      setCurrentView('DASHBOARD_RECEPTION');
+      navigate(`/clinic/${clinicId}/reception`);
     } else if (userRole === UserRole.KIOSK) {
-      setCurrentView('KIOSK');
+      navigate(`/clinic/${clinicId}/kiosk`);
     }
   };
 
   const handleDoctorSelect = (doctorId: string) => {
     setCurrentUserId(doctorId);
-    setCurrentView('DASHBOARD_DOCTOR');
+    navigate(`/clinic/${currentClinicId}/doctor`);
   };
 
   // PATIENT LOGIN & AUTO-BOOKING LOGIC
   const handlePatientLogin = (phone: string, name: string) => {
     setPatientAuth({ phone, name });
-    if (currentView !== 'PATIENT_TRACKER') {
-        setCurrentView('PATIENT_TRACKER');
-    }
     
+    // Redirect logic
     if (pendingAction && pendingAction.type === 'CHECK_IN') {
         handlePatientCheckIn(pendingAction.clinicId, pendingAction.patientId);
         addToast("Check-in confirmed!", "success");
         setPendingAction(null);
+        navigate('/patient');
     } else {
         addToast(`Welcome, ${name}`, "success");
+        navigate('/patient');
     }
   };
 
   const handleLogout = () => {
-    setCurrentView('LANDING');
     setUserRole(null);
     setCurrentClinicId(null);
     setCurrentUserId(null);
     setPatientAuth(null);
     setPendingAction(null);
     localStorage.removeItem('clinicq_session_v2');
+    navigate('/');
   };
   
   const handlePatientLoginBack = () => {
       if (pendingAction) {
           setPendingAction(null);
-          setCurrentView('PATIENT_TRACKER');
+          navigate('/patient');
       } else {
-          setCurrentView('LANDING');
+          navigate('/');
       }
   };
 
@@ -418,6 +404,7 @@ export default function App() {
           if (linkedDoc) {
               setCurrentClinicId(targetClinicId);
               setCurrentUserId(linkedDoc.id);
+              navigate(`/clinic/${targetClinicId}/doctor`);
               addToast(`Switched to ${newClinic.name}`, 'success');
           } else {
               addToast("Profile not linked in target clinic", "error");
@@ -457,7 +444,7 @@ export default function App() {
   const handleSimulateQRScan = (clinicId: string) => {
       if (!patientAuth) {
           setPendingAction({ type: 'CHECK_IN', clinicId, patientId: 'current' }); 
-          setCurrentView('PATIENT_LOGIN');
+          navigate('/login/patient');
           addToast("Login to check-in", "info");
       } else {
           const clinic = clinics.find(c => c.id === clinicId);
@@ -466,10 +453,10 @@ export default function App() {
           if (visit) {
               handlePatientCheckIn(clinicId, visit.id);
               addToast("Checked In Successfully!", "success");
-              setCurrentView('PATIENT_TRACKER');
+              navigate('/patient');
           } else {
               setCurrentClinicId(clinicId);
-              setCurrentView('PATIENT_TRACKER');
+              navigate('/patient');
               addToast("No active visit found. Book now.", "info");
           }
       }
@@ -510,252 +497,292 @@ export default function App() {
       addToast("Staff removed", "info");
   };
 
+  // --- COMPONENT RENDER ---
+
+  // Safety loading state if accessing deep link without data loaded yet
+  if (clinics.length === 0 && !location.pathname.includes('/login') && location.pathname !== '/') {
+      return (
+          <div className="flex h-screen items-center justify-center bg-slate-50">
+              <div className="flex flex-col items-center gap-2">
+                  <Logo className="h-10 w-10 animate-bounce" />
+                  <p className="text-slate-500 font-medium">Loading SmartQFlow...</p>
+              </div>
+          </div>
+      );
+  }
+
   return (
     <>
       <ToastContainer notifications={notifications} remove={removeToast} />
       
-      {currentView === 'LANDING' && (
-        <LandingPage 
-          onPatientEnter={handlePatientEnter} 
-          onClinicMarketing={() => setCurrentView('CLINIC_LANDING')} // Nav to separate page
-          onStaffLogin={handleStaffLogin}
-          onSimulateQRScan={handleSimulateQRScan}
-          clinics={clinics}
-        />
-      )}
+      <Routes>
+        {/* PUBLIC ROUTES */}
+        <Route path="/" element={
+            <LandingPage 
+              onPatientEnter={handlePatientEnter} 
+              onClinicMarketing={() => navigate('/for-clinics')}
+              onStaffLogin={handleStaffLogin}
+              onSimulateQRScan={handleSimulateQRScan}
+              clinics={clinics}
+            />
+        } />
+        
+        <Route path="/for-clinics" element={
+            <ClinicLandingPage
+              onStartFreeTrial={() => navigate('/setup')} 
+              onLogin={handleStaffLogin}
+              onBackToPatient={() => navigate('/')}
+            />
+        } />
 
-      {currentView === 'CLINIC_LANDING' && (
-        <ClinicLandingPage
-          onStartFreeTrial={() => setCurrentView('STAFF_LOGIN')} // Or create a generic 'REGISTER' view if desired
-          onLogin={handleStaffLogin}
-          onBackToPatient={() => setCurrentView('LANDING')}
-        />
-      )}
+        <Route path="/login/staff" element={
+            <StaffLogin onSelectRole={handleRoleSelect} onBack={() => navigate('/for-clinics')} />
+        } />
 
-      {currentView === 'STAFF_LOGIN' && <StaffLogin onSelectRole={handleRoleSelect} onBack={() => setCurrentView('CLINIC_LANDING')} />}
-
-      {currentView === 'CLINIC_AUTH' && userRole && (
-        <ClinicAuth 
-          clinics={clinics}
-          onSelectClinic={handleClinicSelect}
-          onCreateClinic={async (name, plan, address, city, pincode, services, mode, type, phone, about) => {
-            const newClinic: Clinic = {
-              id: `clinic_${Date.now()}`,
-              name,
-              slug: name.toLowerCase().replace(/\s+/g, '-'),
-              plan,
-              type: type, // Updated from hardcoded GENERAL
-              operationMode: mode,
-              doctors: [],
-              patients: [],
-              staff: [],
-              city: city, 
-              address: address, 
-              pincode: pincode,
-              contactPhone: phone, // NEW
-              about: about, // NEW
-              amenities: services
-            };
-            await storage.createClinic(newClinic);
-            handleClinicSelect(newClinic.id);
-          }}
-          onBack={() => setCurrentView('STAFF_LOGIN')}
-          role={userRole}
-        />
-      )}
-
-      {currentView === 'DOCTOR_LOGIN' && currentClinic && (
-        <DoctorLogin 
-          clinic={currentClinic}
-          onSelectDoctor={handleDoctorSelect}
-          onBack={() => setCurrentView('CLINIC_AUTH')}
-        />
-      )}
-
-      {/* DASHBOARDS */}
-      
-      {/* RECEPTION */}
-      {currentView === 'DASHBOARD_RECEPTION' && currentClinic && (
-        <div className="flex flex-col h-screen">
-          <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm z-20">
-            <div className="flex items-center gap-3">
-              <Logo className="h-8 w-8" />
-              <div>
-                  <h1 className="text-xl font-bold text-slate-900 leading-none">SmartQFlow</h1>
-                  <span className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">Reception Console</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-               <div className="text-right hidden sm:block">
-                  <p className="text-sm font-bold text-slate-900">{currentClinic.name}</p>
-                  <p className="text-xs text-slate-500">{currentClinic.city}</p>
-               </div>
-               <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-500 hover:bg-red-50">
-                <LogOut className="h-4 w-4 mr-2" /> Logout
-               </Button>
-            </div>
-          </header>
-          <div className="flex-1 overflow-hidden bg-slate-50">
-            <ReceptionDashboard 
-              doctors={currentClinic.doctors}
-              patients={currentClinic.patients}
-              staff={currentClinic.staff}
-              clinicName={currentClinic.name}
-              clinicType={currentClinic.type}
-              operationMode={currentClinic.operationMode}
-              clinicData={currentClinic}
-              onAddPatient={handleAddPatient}
-              onEditPatient={handleEditPatient}
-              onDeletePatient={handleDeletePatient}
-              onDeleteMultiplePatients={handleDeleteMultiplePatients}
-              onAddDoctor={handleAddDoctor}
-              onCheckMasterDoctor={checkMasterDoctor}
-              onEditDoctor={handleEditDoctor}
-              onDeleteDoctor={handleDeleteDoctor}
-              onUpdateStatus={handleUpdateStatus}
-              onCancelPatient={(id) => handleUpdateStatus(id, PatientStatus.CANCELLED)}
-              onUpdateClinicSettings={(updates) => storage.updateClinic(currentClinic.id, updates)}
-              onToggleEmergency={(id) => {
-                  const p = currentClinic.patients.find(pat => pat.id === id);
-                  if (p) handleEditPatient(id, { isEmergency: !p.isEmergency });
-              }}
-              onManualReorder={(id, direction) => {
-                  addToast("Reordering not fully implemented in demo", "info");
-              }}
-              onDragDrop={(draggedId, targetId) => {
-                   addToast("Reordering updated", "success");
-              }}
-              onManualCheckIn={(id) => handlePatientCheckIn(currentClinic.id, id)}
-              onBulkUpdateStatus={handleBulkUpdateStatus}
-              onAddStaff={handleLocalAddStaff}
-              onUpdateStaff={handleLocalUpdateStaff}
-              onDeleteStaff={handleLocalDeleteStaff}
+        <Route path="/login/patient" element={
+            <PatientLogin 
+              onLogin={handlePatientLogin}
+              onBack={handlePatientLoginBack}
               addToast={addToast}
+              pendingActionMessage={pendingAction?.type === 'CHECK_IN' ? 'Login to confirm your arrival' : undefined}
             />
-          </div>
-        </div>
-      )}
+        } />
 
-      {/* DOCTOR */}
-      {currentView === 'DASHBOARD_DOCTOR' && currentClinic && currentUser && (() => {
-        const activeDoctor = currentClinic.doctors.find(d => d.id === currentUser.id) || currentUser;
-        const linkedClinics = activeDoctor.masterId 
-            ? clinics.filter(c => c.doctors.some(d => d.masterId === activeDoctor.masterId))
-            : [];
+        {/* CLINIC SETUP & DOCTOR LOGIN */}
+        <Route path="/setup" element={
+            userRole ? (
+                <ClinicAuth 
+                  clinics={clinics}
+                  onSelectClinic={handleClinicSelect}
+                  onCreateClinic={async (name, plan, address, city, pincode, services, mode, type, phone, about) => {
+                    const newClinic: Clinic = {
+                      id: `clinic_${Date.now()}`,
+                      name,
+                      slug: name.toLowerCase().replace(/\s+/g, '-'),
+                      plan,
+                      type: type,
+                      operationMode: mode,
+                      doctors: [],
+                      patients: [],
+                      staff: [],
+                      city: city, 
+                      address: address, 
+                      pincode: pincode,
+                      contactPhone: phone,
+                      about: about,
+                      amenities: services
+                    };
+                    await storage.createClinic(newClinic);
+                    handleClinicSelect(newClinic.id);
+                  }}
+                  onBack={() => navigate('/login/staff')}
+                  role={userRole}
+                />
+            ) : <Navigate to="/login/staff" />
+        } />
 
-        return (
-        <div className="flex flex-col h-screen">
-          <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm z-20">
-            <div className="flex items-center gap-3">
-              <Logo className="h-8 w-8" />
-              <div>
-                  <h1 className="text-xl font-bold text-slate-900 leading-none">SmartQFlow</h1>
-                  <span className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">Doctor Console</span>
-              </div>
+        <Route path="/clinic/:clinicId/login" element={
+            <>
+                <RouteSyncer currentClinicId={currentClinicId} onSync={setCurrentClinicId} />
+                {currentClinic ? (
+                    <DoctorLogin 
+                        clinic={currentClinic}
+                        onSelectDoctor={handleDoctorSelect}
+                        onBack={() => navigate('/setup')}
+                    />
+                ) : <div className="p-8 text-center">Loading Clinic Data...</div>}
+            </>
+        } />
+
+        {/* DASHBOARDS */}
+        <Route path="/clinic/:clinicId/reception" element={
+            <>
+                <RouteSyncer currentClinicId={currentClinicId} onSync={setCurrentClinicId} />
+                {currentClinic && (
+                    <div className="flex flex-col h-screen">
+                        <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm z-20">
+                            <div className="flex items-center gap-3">
+                                <Logo className="h-8 w-8" />
+                                <div>
+                                    <h1 className="text-xl font-bold text-slate-900 leading-none">SmartQFlow</h1>
+                                    <span className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">Reception Console</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="text-right hidden sm:block">
+                                    <p className="text-sm font-bold text-slate-900">{currentClinic.name}</p>
+                                    <p className="text-xs text-slate-500">{currentClinic.city}</p>
+                                </div>
+                                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-500 hover:bg-red-50">
+                                    <LogOut className="h-4 w-4 mr-2" /> Logout
+                                </Button>
+                            </div>
+                        </header>
+                        <div className="flex-1 overflow-hidden bg-slate-50">
+                            <ReceptionDashboard 
+                                doctors={currentClinic.doctors}
+                                patients={currentClinic.patients}
+                                staff={currentClinic.staff}
+                                clinicName={currentClinic.name}
+                                clinicType={currentClinic.type}
+                                operationMode={currentClinic.operationMode}
+                                clinicData={currentClinic}
+                                onAddPatient={handleAddPatient}
+                                onEditPatient={handleEditPatient}
+                                onDeletePatient={handleDeletePatient}
+                                onDeleteMultiplePatients={handleDeleteMultiplePatients}
+                                onAddDoctor={handleAddDoctor}
+                                onCheckMasterDoctor={checkMasterDoctor}
+                                onEditDoctor={handleEditDoctor}
+                                onDeleteDoctor={handleDeleteDoctor}
+                                onUpdateStatus={handleUpdateStatus}
+                                onCancelPatient={(id) => handleUpdateStatus(id, PatientStatus.CANCELLED)}
+                                onUpdateClinicSettings={(updates) => storage.updateClinic(currentClinic.id, updates)}
+                                onToggleEmergency={(id) => {
+                                    const p = currentClinic.patients.find(pat => pat.id === id);
+                                    if (p) handleEditPatient(id, { isEmergency: !p.isEmergency });
+                                }}
+                                onManualReorder={(id, direction) => {
+                                    addToast("Reordering not fully implemented in demo", "info");
+                                }}
+                                onDragDrop={(draggedId, targetId) => {
+                                    addToast("Reordering updated", "success");
+                                }}
+                                onManualCheckIn={(id) => handlePatientCheckIn(currentClinic.id, id)}
+                                onBulkUpdateStatus={handleBulkUpdateStatus}
+                                onAddStaff={handleLocalAddStaff}
+                                onUpdateStaff={handleLocalUpdateStaff}
+                                onDeleteStaff={handleLocalDeleteStaff}
+                                addToast={addToast}
+                            />
+                        </div>
+                    </div>
+                )}
+            </>
+        } />
+
+        <Route path="/clinic/:clinicId/doctor" element={
+            <>
+                <RouteSyncer currentClinicId={currentClinicId} onSync={setCurrentClinicId} />
+                {currentClinic && currentUser && (() => {
+                    const activeDoctor = currentClinic.doctors.find(d => d.id === currentUser.id) || currentUser;
+                    const linkedClinics = activeDoctor.masterId 
+                        ? clinics.filter(c => c.doctors.some(d => d.masterId === activeDoctor.masterId))
+                        : [];
+
+                    return (
+                        <div className="flex flex-col h-screen">
+                            <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm z-20">
+                                <div className="flex items-center gap-3">
+                                    <Logo className="h-8 w-8" />
+                                    <div>
+                                        <h1 className="text-xl font-bold text-slate-900 leading-none">SmartQFlow</h1>
+                                        <span className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">Doctor Console</span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="text-right hidden sm:block">
+                                        <p className="text-sm font-medium text-slate-900">Dr. {activeDoctor.name}</p>
+                                        <p className="text-xs text-slate-500">{activeDoctor.specialty}</p>
+                                    </div>
+                                    <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-500 hover:bg-red-50">
+                                        <LogOut className="h-4 w-4 mr-2" /> Logout
+                                    </Button>
+                                </div>
+                            </header>
+                            <div className="flex-1 overflow-hidden bg-slate-50">
+                                <DoctorDashboard 
+                                    doctor={activeDoctor}
+                                    queue={currentClinic.patients.filter(p => p.doctorId === activeDoctor.id && p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED)}
+                                    linkedClinics={linkedClinics}
+                                    currentClinicId={currentClinic.id}
+                                    onSwitchClinic={handleSwitchClinic}
+                                    onNextPatient={handleNextPatient}
+                                    onCompletePatient={handleCompletePatient}
+                                    onUpdateStatus={handleUpdateDoctorStatus}
+                                    onUpdatePatientDetails={(id, updates) => storage.updatePatient(currentClinic.id, id, updates)}
+                                    onHoldPatient={handleHoldPatient}
+                                    onResumePatient={handleResumePatient}
+                                />
+                            </div>
+                        </div>
+                    );
+                })()}
+            </>
+        } />
+
+        <Route path="/clinic/:clinicId/kiosk" element={
+            <>
+                <RouteSyncer currentClinicId={currentClinicId} onSync={setCurrentClinicId} />
+                {currentClinic && (
+                    <KioskView 
+                        doctors={currentClinic.doctors}
+                        patients={currentClinic.patients}
+                        clinicName={currentClinic.name}
+                        onExit={handleLogout}
+                    />
+                )}
+            </>
+        } />
+
+        <Route path="/admin" element={
+            <div className="flex flex-col h-screen">
+                <header className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-md z-20">
+                    <div className="flex items-center gap-3"><Logo className="h-8 w-8" /><span className="font-bold text-xl">Super Admin</span></div>
+                    <Button variant="ghost" size="sm" onClick={handleLogout} className="text-white hover:bg-white/10">
+                        <LogOut className="h-4 w-4 mr-2" /> Logout
+                    </Button>
+                </header>
+                <div className="flex-1 overflow-hidden">
+                    <AdminDashboard 
+                        clinics={clinics}
+                        onUpdatePlan={handleUpdateClinicPlan}
+                        onToggleStatus={handleToggleClinicStatus}
+                        onDeleteClinic={handleDeleteClinic}
+                        onEditClinic={handleEditClinic}
+                        onResetSystem={handleResetSystem}
+                        onAddStaff={handleAddStaff}
+                        onUpdateStaff={handleUpdateStaff}
+                        onDeleteStaff={handleDeleteStaff}
+                        onAddDoctor={(clinicId, doc) => storage.addDoctor(clinicId, doc)}
+                        onEditDoctor={(clinicId, docId, updates) => storage.updateDoctor(clinicId, docId, updates)}
+                        onDeleteDoctor={(clinicId, docId) => storage.deleteDoctor(clinicId, docId)}
+                        onCheckMasterDoctor={checkMasterDoctor}
+                        addToast={addToast}
+                    />
+                </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium text-slate-900">Dr. {activeDoctor.name}</p>
-                <p className="text-xs text-slate-500">{activeDoctor.specialty}</p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-500 hover:bg-red-50">
-                <LogOut className="h-4 w-4 mr-2" /> Logout
-              </Button>
-            </div>
-          </header>
-          <div className="flex-1 overflow-hidden bg-slate-50">
-            <DoctorDashboard 
-              doctor={activeDoctor}
-              queue={currentClinic.patients.filter(p => p.doctorId === activeDoctor.id && p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED)}
-              linkedClinics={linkedClinics}
-              currentClinicId={currentClinic.id}
-              onSwitchClinic={handleSwitchClinic}
-              onNextPatient={handleNextPatient}
-              onCompletePatient={handleCompletePatient}
-              onUpdateStatus={handleUpdateDoctorStatus}
-              onUpdatePatientDetails={(id, updates) => storage.updatePatient(currentClinic.id, id, updates)}
-              onHoldPatient={handleHoldPatient}
-              onResumePatient={handleResumePatient}
+        } />
+
+        {/* PATIENT TRACKER */}
+        <Route path="/patient" element={
+            <PatientTracker 
+                clinics={clinics}
+                userPhone={patientAuth?.phone || ''}
+                userName={patientAuth?.name || 'Guest'}
+                isGuest={!patientAuth}
+                onLoginClick={(phone, name) => {
+                    if (phone && name) {
+                        handlePatientLogin(phone, name);
+                    } else {
+                        navigate('/login/patient');
+                    }
+                }}
+                onBack={handleLogout}
+                onGetToken={handleGetToken}
+                addToast={addToast}
+                onUpdateDetails={(id, updates) => { if(currentClinicId) storage.updatePatient(currentClinicId, id, updates) }}
+                onCancelVisit={handleCancelVisit}
+                onCheckIn={handlePatientCheckIn}
+                preSelectedClinicId={currentClinicId || undefined}
+                onClearPendingAction={() => setCurrentClinicId(null)}
+                initialSearchMode={initialSearchMode}
             />
-          </div>
-        </div>
-        );
-      })()}
+        } />
 
-      {/* KIOSK */}
-      {currentView === 'KIOSK' && currentClinic && (
-        <KioskView 
-          doctors={currentClinic.doctors}
-          patients={currentClinic.patients}
-          clinicName={currentClinic.name}
-          onExit={handleLogout}
-        />
-      )}
-
-      {/* ADMIN */}
-      {currentView === 'ADMIN_DASHBOARD' && (
-          <div className="flex flex-col h-screen">
-               <header className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-md z-20">
-                  <div className="flex items-center gap-3"><Logo className="h-8 w-8" /><span className="font-bold text-xl">Super Admin</span></div>
-                  <Button variant="ghost" size="sm" onClick={handleLogout} className="text-white hover:bg-white/10">
-                      <LogOut className="h-4 w-4 mr-2" /> Logout
-                  </Button>
-               </header>
-               <div className="flex-1 overflow-hidden">
-                   <AdminDashboard 
-                       clinics={clinics}
-                       onUpdatePlan={handleUpdateClinicPlan}
-                       onToggleStatus={handleToggleClinicStatus}
-                       onDeleteClinic={handleDeleteClinic}
-                       onEditClinic={handleEditClinic}
-                       onResetSystem={handleResetSystem}
-                       onAddStaff={handleAddStaff}
-                       onUpdateStaff={handleUpdateStaff}
-                       onDeleteStaff={handleDeleteStaff}
-                       onAddDoctor={(clinicId, doc) => storage.addDoctor(clinicId, doc)}
-                       onEditDoctor={(clinicId, docId, updates) => storage.updateDoctor(clinicId, docId, updates)}
-                       onDeleteDoctor={(clinicId, docId) => storage.deleteDoctor(clinicId, docId)}
-                       onCheckMasterDoctor={checkMasterDoctor}
-                       addToast={addToast}
-                   />
-               </div>
-          </div>
-      )}
-
-      {/* PATIENT APP FLOW */}
-      {currentView === 'PATIENT_LOGIN' && (
-        <PatientLogin 
-          onLogin={handlePatientLogin}
-          onBack={handlePatientLoginBack}
-          addToast={addToast}
-          pendingActionMessage={pendingAction?.type === 'CHECK_IN' ? 'Login to confirm your arrival' : undefined}
-        />
-      )}
-
-      {currentView === 'PATIENT_TRACKER' && (
-        <PatientTracker 
-          clinics={clinics}
-          userPhone={patientAuth?.phone || ''}
-          userName={patientAuth?.name || 'Guest'}
-          isGuest={!patientAuth}
-          onLoginClick={(phone, name) => {
-              if (phone && name) {
-                  handlePatientLogin(phone, name);
-              } else {
-                  setCurrentView('PATIENT_LOGIN');
-              }
-          }}
-          onBack={handleLogout}
-          onGetToken={handleGetToken}
-          addToast={addToast}
-          onUpdateDetails={(id, updates) => { if(currentClinicId) storage.updatePatient(currentClinicId, id, updates) }}
-          onCancelVisit={handleCancelVisit}
-          onCheckIn={handlePatientCheckIn}
-          preSelectedClinicId={currentClinicId || undefined}
-          onClearPendingAction={() => setCurrentClinicId(null)}
-          initialSearchMode={initialSearchMode}
-        />
-      )}
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </>
   );
 }
