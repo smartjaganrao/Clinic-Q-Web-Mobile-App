@@ -754,8 +754,8 @@ export default function App() {
             </div>
         } />
 
-        {/* PATIENT TRACKER */}
-        <Route path="/patient" element={
+        {/* PATIENT TRACKER - Updated with Wildcard for Sub-Routes */}
+        <Route path="/patient/*" element={
             <PatientTracker 
                 clinics={clinics}
                 userPhone={patientAuth?.phone || ''}

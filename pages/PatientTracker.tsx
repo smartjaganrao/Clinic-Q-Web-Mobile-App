@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useMatch, useLocation } from 'react-router-dom';
 import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode } from '../types';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -193,13 +193,63 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   clinics, userPhone, userName, isGuest, onLoginClick, onBack, onGetToken, addToast, onUpdateDetails, onCancelVisit, onCheckIn, preSelectedClinicId, onClearPendingAction, initialSearchMode
 }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'ACTIVE' | 'BOOK' | 'HISTORY' | 'PROFILE'>('BOOK');
-  const [selectedClinicId, setSelectedClinicId] = useState<string | null>(preSelectedClinicId || null);
-  const [bookingView, setBookingView] = useState<'LIST' | 'CLINIC_DETAILS' | 'FORM'>('LIST');
+  const location = useLocation();
+
+  // ROUTER-DRIVEN STATE (Derived from URL)
+  // Route Structure:
+  // - /patient/find (default)
+  // - /patient/find/clinic/:clinicId
+  // - /patient/find/clinic/:clinicId/book/:doctorId
+  // - /patient/visits (active)
+  // - /patient/history
+  // - /patient/profile
+
+  // Use useMatch to parse route params manually since this component is rendered on wildcard parent
+  const matchBook = useMatch('/patient/find/clinic/:clinicId/book/:doctorId');
+  const matchClinic = useMatch('/patient/find/clinic/:clinicId');
+  const matchActive = useMatch('/patient/visits');
+  const matchHistory = useMatch('/patient/history');
+  const matchProfile = useMatch('/patient/profile');
+  const matchFind = useMatch('/patient/find');
+
+  // Derive State from Routes
+  const activeTab = useMemo<'ACTIVE' | 'BOOK' | 'HISTORY' | 'PROFILE'>(() => {
+    if (matchActive) return 'ACTIVE';
+    if (matchHistory) return 'HISTORY';
+    if (matchProfile) return 'PROFILE';
+    return 'BOOK'; // Default fallback
+  }, [matchActive, matchHistory, matchProfile]);
+
+  const bookingView = useMemo<'LIST' | 'CLINIC_DETAILS' | 'FORM'>(() => {
+    if (matchBook) return 'FORM';
+    if (matchClinic) return 'CLINIC_DETAILS';
+    return 'LIST';
+  }, [matchBook, matchClinic]);
+
+  const selectedClinicId = matchBook?.params.clinicId || matchClinic?.params.clinicId || null;
+  const selectedDoctorId = matchBook?.params.doctorId || null;
+
+  // Handle Redirect on Mount if needed
+  useEffect(() => {
+      // If we are at root /patient, redirect to find
+      if (location.pathname === '/patient' || location.pathname === '/patient/') {
+          navigate('/patient/find', { replace: true });
+      }
+  }, [location.pathname, navigate]);
+
+  // Handle Pre-selected ID (e.g. from QR Scan)
+  useEffect(() => { 
+      if (preSelectedClinicId) { 
+          // Use router navigation instead of state
+          navigate(`/patient/find/clinic/${preSelectedClinicId}`);
+          onClearPendingAction(); 
+          const clinic = clinics.find(c => c.id === preSelectedClinicId); 
+          if (clinic) { setSelectedCity(clinic.city); } 
+      } 
+  }, [preSelectedClinicId, clinics, onClearPendingAction, navigate]);
+
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // NEW: Search Mode Switch (Doctor vs Clinic)
   const [searchMode, setSearchMode] = useState<'DOCTOR' | 'CLINIC'>(initialSearchMode || 'CLINIC');
 
   // FILTERS STATE
@@ -214,7 +264,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [newMember, setNewMember] = useState<FamilyMember>({ name: '', age: '', gender: 'Male', relation: '' });
   const [editingMemberIndex, setEditingMemberIndex] = useState<number | null>(null);
   const [isCustomRelation, setIsCustomRelation] = useState(false); // State for custom relation input
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
+  
   const [symptoms, setSymptoms] = useState('');
   const [visitType, setVisitType] = useState<'WALK_IN' | 'APPOINTMENT'>('WALK_IN');
   const [apptDate, setApptDate] = useState('');
@@ -246,6 +296,31 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
   const selectedClinic = clinics.find(c => c.id === selectedClinicId);
   const selectedDoctor = selectedClinic?.doctors.find(d => d.id === selectedDoctorId);
+
+  // Navigation Helpers
+  const navigateToView = (view: 'LIST' | 'CLINIC_DETAILS' | 'FORM', clinicId: string | null, doctorId?: string) => {
+      if (view === 'LIST') navigate('/patient/find');
+      else if (view === 'CLINIC_DETAILS' && clinicId) navigate(`/patient/find/clinic/${clinicId}`);
+      else if (view === 'FORM' && clinicId && doctorId) navigate(`/patient/find/clinic/${clinicId}/book/${doctorId}`);
+  };
+
+  const handleTabSwitch = (newTab: 'ACTIVE' | 'BOOK' | 'HISTORY' | 'PROFILE') => {
+      if (newTab === 'ACTIVE') navigate('/patient/visits');
+      else if (newTab === 'HISTORY') navigate('/patient/history');
+      else if (newTab === 'PROFILE') navigate('/patient/profile');
+      else navigate('/patient/find');
+  };
+
+  const handleUIBack = () => {
+      // Logic to go back one level
+      if (bookingView === 'FORM') {
+           navigate(`/patient/find/clinic/${selectedClinicId}`);
+      } else if (bookingView === 'CLINIC_DETAILS') {
+           navigate('/patient/find');
+      } else {
+          onBack();
+      }
+  };
 
   // Get clinic associated with viewing doctor (needed for finding operation mode)
   const viewingDoctorClinic = useMemo(() => {
@@ -279,37 +354,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           else setTravelTime('60');
       }
   }, [travelEstimate]);
-
-  // --- HISTORY MANAGEMENT ---
-  // Using simple internal state management instead of window.history for React Router compatibility
-  // The 'back' button on top of the UI handles moving up the stack.
-  // The browser back button is handled by React Router in App.tsx (which exits the patient view)
-
-  const navigateToView = (view: 'LIST' | 'CLINIC_DETAILS' | 'FORM', clinicId: string | null) => {
-      setBookingView(view);
-      setSelectedClinicId(clinicId);
-  };
-
-  const handleTabSwitch = (newTab: 'ACTIVE' | 'BOOK' | 'HISTORY' | 'PROFILE') => {
-      setActiveTab(newTab);
-      // When switching tabs, we generally reset the drill-down view to LIST
-      setBookingView('LIST');
-      setSelectedClinicId(null);
-  };
-
-  const handleUIBack = () => {
-      if (bookingView === 'FORM') {
-           // Fallback to details
-           setBookingView('CLINIC_DETAILS');
-      } else if (bookingView === 'CLINIC_DETAILS') {
-           // Fallback to List
-           setBookingView('LIST');
-           setSelectedClinicId(null);
-      } else {
-          // At root of tab, go to home or call parent back
-          onBack();
-      }
-  };
 
   useEffect(() => {
       if (isGuest) return; 
@@ -346,17 +390,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       clinics.forEach(c => c.doctors.forEach(d => set.add(d.specialty)));
       return ['All Specialties', ...Array.from(set).sort()];
   }, [clinics]);
-
-  useEffect(() => { 
-      if (preSelectedClinicId) { 
-          setSelectedClinicId(preSelectedClinicId); 
-          setBookingView('CLINIC_DETAILS'); 
-          setActiveTab('BOOK'); 
-          onClearPendingAction(); 
-          const clinic = clinics.find(c => c.id === preSelectedClinicId); 
-          if (clinic) { setSelectedCity(clinic.city); } 
-      } 
-  }, [preSelectedClinicId, clinics, onClearPendingAction]);
 
   const activeVisits = useMemo(() => { if(isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown', room: doc?.roomNumber || '-' }); } }); }); return visits.sort((a,b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
   const historyVisits = useMemo(() => { if(isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && (p.status === PatientStatus.COMPLETED || p.status === PatientStatus.CANCELLED)) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown', notes: p.notes }); } }); }); return visits.sort((a,b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
@@ -590,7 +623,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
   const getSmartQueueDetails = (visit: any) => { const clinic = clinics.find(c => c.id === visit.clinicId); const doctor = clinic?.doctors.find(d => d.id === visit.doctorId); if (!clinic || !doctor) return { peopleAhead: 0, waitTime: 0, currentToken: '-', message: 'Loading...', color: 'text-slate-500' }; const peopleAhead = clinic.patients.filter(p => p.doctorId === visit.doctorId && p.status === PatientStatus.WAITING && p.timeAdded < visit.timeAdded ).length; const servingPatient = clinic.patients.find(p => p.doctorId === visit.doctorId && p.status === PatientStatus.WITH_DOCTOR); const currentToken = servingPatient ? `#${servingPatient.tokenNumber}` : 'Not Started'; let baseWait = peopleAhead * 15; if (doctor.delayMinutes > 0) baseWait += doctor.delayMinutes; const now = new Date(); now.setMinutes(now.getMinutes() + baseWait); const expectedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); let message = `~${baseWait} mins wait`; let color = 'text-slate-600'; let bgColor = 'bg-slate-100'; if (doctor.status === DoctorStatus.ON_BREAK) { message = "Doctor is on break"; color = "text-orange-700"; bgColor = "bg-orange-100"; } else if (doctor.delayMinutes > 0) { message = `Delayed by ${doctor.delayMinutes} mins`; color = "text-red-700"; bgColor = "bg-red-100"; } else if (visit.isCheckedIn) { if (peopleAhead === 0) { message = "You are next! Get ready."; color = "text-green-700"; bgColor = "bg-green-100"; } else if (peopleAhead < 3) { message = "Almost your turn. Stay close."; color = "text-blue-700"; bgColor = "bg-blue-100"; } else { message = "Checked in. Relax in lobby."; color = "text-green-700"; bgColor = "bg-green-5"; } } else { if (peopleAhead < 3) { message = "Rush! Reaching your turn."; color = "text-red-700"; bgColor = "bg-red-100"; } else { message = "Start travelling to clinic."; color = "text-blue-700"; bgColor = "bg-blue-100"; } } return { peopleAhead, waitTime: baseWait, expectedTime, currentToken, message, color, bgColor, doctorStatus: doctor.status }; };
   
-  useEffect(() => { let timer: ReturnType<typeof setTimeout>; if (showQRScanner) { timer = setTimeout(() => { if (clinics.length > 0) { let targetClinicId = selectedClinicId; if (!targetClinicId) { const visitNeedsCheckIn = activeVisits.find(v => !v.isCheckedIn && v.status === PatientStatus.WAITING); targetClinicId = visitNeedsCheckIn ? visitNeedsCheckIn.clinicId : clinics[0].id; } const activeVisit = activeVisits.find(v => v.clinicId === targetClinicId && v.status !== PatientStatus.COMPLETED && v.status !== PatientStatus.CANCELLED); if (activeVisit) { if (!activeVisit.isCheckedIn) { onCheckIn(targetClinicId!, activeVisit.id); addToast(`Checked in at ${activeVisit.clinicName}!`, "success"); } else { addToast(`Already checked in at ${activeVisit.clinicName}.`, "info"); } setActiveTab('ACTIVE'); } else { if (targetClinicId) { navigateToView('CLINIC_DETAILS', targetClinicId); addToast("QR Detected. Loading clinic details...", "success"); } } setShowQRScanner(false); } }, 2000); } return () => clearTimeout(timer); }, [showQRScanner, clinics, activeVisits, selectedClinicId, onCheckIn, addToast]);
+  useEffect(() => { let timer: ReturnType<typeof setTimeout>; if (showQRScanner) { timer = setTimeout(() => { if (clinics.length > 0) { let targetClinicId = selectedClinicId; if (!targetClinicId) { const visitNeedsCheckIn = activeVisits.find(v => !v.isCheckedIn && v.status === PatientStatus.WAITING); targetClinicId = visitNeedsCheckIn ? visitNeedsCheckIn.clinicId : clinics[0].id; } const activeVisit = activeVisits.find(v => v.clinicId === targetClinicId && v.status !== PatientStatus.COMPLETED && v.status !== PatientStatus.CANCELLED); if (activeVisit) { if (!activeVisit.isCheckedIn) { onCheckIn(targetClinicId!, activeVisit.id); addToast(`Checked in at ${activeVisit.clinicName}!`, "success"); } else { addToast(`Already checked in at ${activeVisit.clinicName}.`, "info"); } navigate('/patient/visits'); } else { if (targetClinicId) { navigateToView('CLINIC_DETAILS', targetClinicId); addToast("QR Detected. Loading clinic details...", "success"); } } setShowQRScanner(false); } }, 2000); } return () => clearTimeout(timer); }, [showQRScanner, clinics, activeVisits, selectedClinicId, onCheckIn, addToast, navigate]);
 
   const submitBooking = (overrideName?: string, overridePhone?: string) => {
       let pName = overrideName || userName;
@@ -615,9 +648,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       onGetToken(pName, pPhone, selectedDoctorId!, selectedClinicId!, visitType === 'APPOINTMENT' ? apptTime : undefined, visitType === 'APPOINTMENT' ? apptDate : undefined, pAge, pGender, symptoms);
       
       // Update state and history to jump to Active tab
-      setActiveTab('ACTIVE'); 
-      setBookingView('LIST'); 
-      setSelectedDoctorId(null); 
+      navigate('/patient/visits');
       setSymptoms(''); 
       setVisitType('WALK_IN'); 
       setApptDate(''); 
@@ -662,15 +693,13 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       const clinic = clinics.find(c => c.doctors.some(d => d.id === viewingDoctor.id));
       
       if (clinic) {
-          setSelectedClinicId(clinic.id);
-          setSelectedDoctorId(viewingDoctor.id);
           // Set initial visit type based on mode
           if (clinic.operationMode === ClinicOperationMode.WALK_IN) {
               setVisitType('WALK_IN');
           } else {
               setVisitType('APPOINTMENT');
           }
-          navigateToView('FORM', clinic.id);
+          navigateToView('FORM', clinic.id, viewingDoctor.id);
       } else {
           addToast("Could not find clinic details", "error");
       }
@@ -769,7 +798,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
               }
           }
       }
-  }, [selectedClinicId, selectedDoctorId, isWalkInAllowed, clinics]);
+  }, [selectedClinicId, selectedDoctorId, isWalkInAllowed, clinics, visitType]);
 
   const confirmCancel = () => { if (cancelModal.visit) { onCancelVisit(cancelModal.visit.clinicId, cancelModal.visit.id); addToast("Appointment Cancelled", "info"); setCancelModal({ isOpen: false, visit: null }); } };
   
@@ -937,19 +966,11 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                 if (clinic) {
                                                     const doc = clinic.doctors.find(d => d.id === visit.doctorId);
                                                     if (doc) {
-                                                        setSelectedClinicId(clinic.id);
-                                                        setSelectedDoctorId(doc.id);
-                                                        
-                                                        // Determine visit type based on operation mode
-                                                        if (clinic.operationMode === ClinicOperationMode.WALK_IN) {
-                                                            setVisitType('WALK_IN');
-                                                        } else {
-                                                            setVisitType('APPOINTMENT');
-                                                        }
-
-                                                        // Switch View & Tab correctly
-                                                        setActiveTab('BOOK');
-                                                        navigateToView('FORM', clinic.id);
+                                                        // Use Router Navigation for rebooking
+                                                        // Logic for mode
+                                                        const mode = clinic.operationMode === ClinicOperationMode.WALK_IN ? 'WALK_IN' : 'APPOINTMENT';
+                                                        setVisitType(mode);
+                                                        navigateToView('FORM', clinic.id, doc.id);
                                                     } else {
                                                         addToast("Doctor is no longer available.", "error");
                                                     }
@@ -1196,8 +1217,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             nextSlotLabel={nextSlotLabel}
                                                             isWalkInAllowed={isWalkInAllowed}
                                                             onBook={() => {
-                                                                setSelectedClinicId(clinic.id);
-                                                                setSelectedDoctorId(doctor.id);
                                                                 if (clinic.operationMode === ClinicOperationMode.WALK_IN) {
                                                                     setVisitType('WALK_IN');
                                                                 } else if (clinic.operationMode === ClinicOperationMode.APPOINTMENT) {
@@ -1205,7 +1224,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                 } else {
                                                                     setVisitType('APPOINTMENT');
                                                                 }
-                                                                navigateToView('FORM', clinic.id);
+                                                                navigateToView('FORM', clinic.id, doctor.id);
                                                             }}
                                                             onViewProfile={() => setViewingDoctor(doctor)}
                                                         />
@@ -1311,12 +1330,12 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                 <div className="flex flex-col text-xs text-slate-500"> <div className="uppercase font-bold text-[10px] tracking-wide text-slate-400">Availability & Fees</div> <div className="mt-1 flex items-center gap-2 text-sm text-slate-700">{getDoctorTodaySchedule(doc)}<span className="text-xs text-slate-400">·</span><span className="font-bold text-sm text-slate-900">₹{doc.consultationFee}</span></div> </div>
                                                                 <div className="flex items-center gap-3">
                                                                     {!isClinicApptOnly && (
-                                                                        <Button onClick={() => { navigateToView('FORM', selectedClinic.id); setSelectedDoctorId(doc.id); setVisitType('WALK_IN'); }} disabled={!canBook || !activeNow} size="sm" variant="ghost" className={`h-9 px-3 text-xs ${!activeNow ? 'opacity-50' : 'text-slate-700'}`} title="Join Queue directly"> 
+                                                                        <Button onClick={() => { navigateToView('FORM', selectedClinic.id, doc.id); setVisitType('WALK_IN'); }} disabled={!canBook || !activeNow} size="sm" variant="ghost" className={`h-9 px-3 text-xs ${!activeNow ? 'opacity-50' : 'text-slate-700'}`} title="Join Queue directly"> 
                                                                             {isClinicWalkInOnly ? 'Details' : 'Queue'} 
                                                                         </Button>
                                                                     )}
                                                                     {!isClinicWalkInOnly && (
-                                                                        <Button onClick={() => { navigateToView('FORM', selectedClinic.id); setSelectedDoctorId(doc.id); setVisitType('APPOINTMENT'); }} disabled={!canBook} size="sm" className={`h-9 px-4 ${canBook ? 'shadow-md' : 'opacity-60 cursor-not-allowed'}`}> Book </Button>
+                                                                        <Button onClick={() => { navigateToView('FORM', selectedClinic.id, doc.id); setVisitType('APPOINTMENT'); }} disabled={!canBook} size="sm" className={`h-9 px-4 ${canBook ? 'shadow-md' : 'opacity-60 cursor-not-allowed'}`}> Book </Button>
                                                                     )}
                                                                 </div>
                                                             </div>
