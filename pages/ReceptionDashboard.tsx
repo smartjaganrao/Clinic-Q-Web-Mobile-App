@@ -1,12 +1,14 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff } from '../types';
+import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff, ClinicOperationMode, Clinic } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
 import { 
-    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin
+    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin, Settings, Footprints, CalendarClock, Shuffle, Building2, ImageIcon, Plus, X, Globe, Crosshair
 } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
 import { QueueTable } from '../features/reception/components/QueueTable';
 import { PatientDatabaseTable } from '../features/reception/components/PatientDatabaseTable';
 import { DoctorManager } from '../features/reception/components/DoctorManager';
@@ -15,12 +17,39 @@ import { ReceptionStats } from '../features/reception/components/ReceptionStats'
 import { AddPatientModal } from '../features/reception/components/AddPatientModal';
 import { DoctorFormModal } from '../features/reception/components/DoctorFormModal';
 
+// --- MAP COMPONENTS ---
+const DefaultIcon = L.divIcon({
+    className: 'custom-pin',
+    html: `<div style="background-color: #ef4444; width: 1.5rem; height: 1.5rem; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);"></div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+});
+
+const MapClickHandler = ({ onLocationSelect }: { onLocationSelect: (lat: number, lng: number) => void }) => {
+    useMapEvents({
+        click(e) {
+            onLocationSelect(e.latlng.lat, e.latlng.lng);
+        },
+    });
+    return null;
+};
+
+const MapUpdater = ({ center }: { center: [number, number] }) => {
+    const map = useMap();
+    useEffect(() => {
+        map.flyTo(center, map.getZoom());
+    }, [center, map]);
+    return null;
+};
+
 interface ReceptionDashboardProps {
     doctors: Doctor[];
     patients: Patient[];
     staff?: Staff[];
     clinicName: string;
     clinicType?: ClinicType;
+    operationMode?: ClinicOperationMode; 
+    clinicData?: Clinic; // Pass full clinic data for settings
     onAddPatient: (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string, nextOfKin?: {name: string, phone: string}, address?: string, city?: string, country?: string, location?: {lat: number, lng: number}) => void;
     onEditPatient: (id: string, updates: Partial<Patient>) => void;
     onDeletePatient: (id: string) => void;
@@ -31,7 +60,7 @@ interface ReceptionDashboardProps {
     onDeleteDoctor: (id: string) => void;
     onUpdateStatus: (id: string, status: PatientStatus) => void;
     onCancelPatient: (id: string) => void;
-    onUpdateClinicName: (name: string) => void;
+    onUpdateClinicSettings: (updates: Partial<Clinic>) => void; 
     onToggleEmergency: (id: string) => void;
     onManualReorder: (id: string, direction: 'UP' | 'DOWN') => void;
     onDragDrop: (draggedId: string, targetId: string) => void;
@@ -44,9 +73,16 @@ interface ReceptionDashboardProps {
     addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
+const COMMON_AMENITIES = [
+  'Pharmacy', 'Pathology Lab', 'X-Ray', 'Ultrasound',
+  'Parking', 'Wheelchair Access', 'Wifi', 'Cafeteria',
+  'Ambulance', '24x7 Emergency', 'ICU', 'Operation Theater'
+];
+
 export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
-    doctors, patients, staff = [], clinicName, onAddPatient, onEditPatient, onDeletePatient, onDeleteMultiplePatients, 
-    onAddDoctor, onCheckMasterDoctor, onEditDoctor, onDeleteDoctor, onUpdateStatus, onCancelPatient, onUpdateClinicName, 
+    doctors, patients, staff = [], clinicName, clinicType, operationMode = ClinicOperationMode.HYBRID, clinicData,
+    onAddPatient, onEditPatient, onDeletePatient, onDeleteMultiplePatients, 
+    onAddDoctor, onCheckMasterDoctor, onEditDoctor, onDeleteDoctor, onUpdateStatus, onCancelPatient, onUpdateClinicSettings, 
     onToggleEmergency, onManualReorder, onDragDrop, onManualCheckIn, onBulkUpdateStatus, 
     onAddStaff, onUpdateStaff, onDeleteStaff, addToast
 }) => {
@@ -57,6 +93,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     const [filterType, setFilterType] = useState<string>('ALL');
 
     const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
+    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false); // Settings Modal
     
     // Doctor Modal State
     const [isDoctorModalOpen, setIsDoctorModalOpen] = useState(false);
@@ -69,6 +106,13 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     const [vitalsPatient, setVitalsPatient] = useState<Patient | null>(null);
     const [historyPatient, setHistoryPatient] = useState<Patient | null>(null);
 
+    // Settings State
+    const [activeSettingsTab, setActiveSettingsTab] = useState<'GENERAL' | 'LOCATION' | 'BRANDING'>('GENERAL');
+    const [settingsForm, setSettingsForm] = useState<Partial<Clinic>>({});
+    const [newAmenity, setNewAmenity] = useState('');
+    const [mapSearchQuery, setMapSearchQuery] = useState('');
+    const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+
     // Deck State
     const [isDeckExpanded, setIsDeckExpanded] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
@@ -78,6 +122,57 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    // Sync settings state when modal opens
+    useEffect(() => {
+        if (isSettingsModalOpen && clinicData) {
+            setSettingsForm({
+                name: clinicName,
+                operationMode: operationMode,
+                type: clinicData.type,
+                about: clinicData.about || '',
+                contactPhone: clinicData.contactPhone || '',
+                address: clinicData.address || '',
+                city: clinicData.city || '',
+                pincode: clinicData.pincode || '',
+                imageUrl: clinicData.imageUrl || '',
+                amenities: clinicData.amenities || [],
+                operatingHours: clinicData.operatingHours || '09:00 AM - 09:00 PM',
+                geoLocation: clinicData.geoLocation || { lat: 13.0827, lng: 80.2707 } // Default Chennai if missing
+            });
+            setActiveSettingsTab('GENERAL');
+            setMapSearchQuery('');
+        } else if (isSettingsModalOpen) {
+            // Fallback if clinicData not passed (should ideally be passed)
+            setSettingsForm({
+                name: clinicName,
+                operationMode: operationMode,
+                type: clinicType,
+                geoLocation: { lat: 13.0827, lng: 80.2707 }
+            });
+        }
+    }, [isSettingsModalOpen, clinicName, operationMode, clinicData, clinicType]);
+
+    const handleSearchLocation = async () => {
+        if (!mapSearchQuery) return;
+        setIsSearchingLocation(true);
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(mapSearchQuery)}`);
+            const data = await response.json();
+            if (data && data.length > 0) {
+                const lat = parseFloat(data[0].lat);
+                const lon = parseFloat(data[0].lon);
+                setSettingsForm(prev => ({ ...prev, geoLocation: { lat, lng: lon } }));
+                addToast("Location found!", "success");
+            } else {
+                addToast("Location not found", "error");
+            }
+        } catch (e) {
+            addToast("Error searching location", "error");
+        } finally {
+            setIsSearchingLocation(false);
+        }
+    };
 
     // Estimated Times Calculation
     const estimatedTimes = useMemo(() => {
@@ -291,6 +386,22 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         }
     };
 
+    const handleSaveSettings = () => {
+        onUpdateClinicSettings(settingsForm);
+        setIsSettingsModalOpen(false);
+        addToast("Settings Updated", "success");
+    };
+
+    const handleAddAmenity = (name: string) => {
+        if (!name || (settingsForm.amenities || []).includes(name)) return;
+        setSettingsForm({ ...settingsForm, amenities: [...(settingsForm.amenities || []), name] });
+        setNewAmenity('');
+    };
+
+    const handleRemoveAmenity = (name: string) => {
+        setSettingsForm({ ...settingsForm, amenities: (settingsForm.amenities || []).filter(a => a !== name) });
+    };
+
     const getPatientHistoryData = (patient: Patient) => {
         return patients.filter(p => p.phone === patient.phone).sort((a, b) => b.timeAdded - a.timeAdded);
     };
@@ -335,11 +446,16 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             <div className="flex flex-col flex-shrink-0 bg-white shadow-sm z-30 w-full">
                 <div className="px-4 py-3 flex justify-between items-center border-b border-slate-100">
                     <div className="min-w-0">
-                        <h1 className="text-lg sm:text-xl font-bold text-slate-900 truncate">{clinicName}</h1>
-                        <div className="hidden sm:flex flex-wrap gap-3 mt-0.5 text-xs text-slate-500">
-                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Avg Wait: 15m</span>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-lg sm:text-xl font-bold text-slate-900 truncate">{clinicName}</h1>
+                            <button onClick={() => setIsSettingsModalOpen(true)} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1 rounded-full"><Settings className="h-4 w-4" /></button>
+                        </div>
+                        <div className="hidden sm:flex flex-wrap gap-3 mt-0.5 text-xs text-slate-500 items-center">
+                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {clinicData?.operatingHours || '9am - 9pm'}</span>
                             <span>•</span>
-                            <span>{patients.filter(p => p.status === PatientStatus.WAITING).length} Waiting</span>
+                            <span className={`px-1.5 py-0.5 rounded font-bold uppercase text-[9px] ${operationMode === ClinicOperationMode.WALK_IN ? 'bg-green-100 text-green-700' : operationMode === ClinicOperationMode.APPOINTMENT ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                                {operationMode.replace('_', ' ')}
+                            </span>
                         </div>
                     </div>
                     {/* DESKTOP TABS */}
@@ -579,6 +695,182 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             <AddPatientModal isOpen={isPatientModalOpen} onClose={() => setIsPatientModalOpen(false)} onAdd={onAddPatient} doctors={doctors} patients={patients} addToast={addToast} />
             <DoctorFormModal isOpen={isDoctorModalOpen} onClose={() => setIsDoctorModalOpen(false)} mode={doctorModalMode} initialData={editingDoctorData} onSave={handleSaveDoctor} onCheckMasterDoctor={onCheckMasterDoctor} addToast={addToast} />
             
+            {/* Improved Settings Modal */}
+            <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} title="Clinic Configuration" maxWidth="max-w-2xl">
+                <div className="flex border-b border-slate-200 mb-6">
+                    <button onClick={() => setActiveSettingsTab('GENERAL')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'GENERAL' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>General</button>
+                    <button onClick={() => setActiveSettingsTab('LOCATION')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'LOCATION' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>Location</button>
+                    <button onClick={() => setActiveSettingsTab('BRANDING')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'BRANDING' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>Branding & Amenities</button>
+                </div>
+
+                <div className="space-y-6">
+                    {activeSettingsTab === 'GENERAL' && (
+                        <div className="space-y-4 animate-in fade-in">
+                            <Input label="Clinic Name" value={settingsForm.name || ''} onChange={e => setSettingsForm({ ...settingsForm, name: e.target.value })} />
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Clinic Type</label>
+                                    <select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white" value={settingsForm.type} onChange={e => setSettingsForm({ ...settingsForm, type: e.target.value as ClinicType })}>
+                                        {Object.values(ClinicType).map(t => <option key={t} value={t}>{t}</option>)}
+                                    </select>
+                                </div>
+                                <Input label="Contact Phone" value={settingsForm.contactPhone || ''} onChange={e => setSettingsForm({ ...settingsForm, contactPhone: e.target.value })} />
+                            </div>
+
+                            <Input label="Operating Hours (e.g. 09:00 AM - 09:00 PM)" value={settingsForm.operatingHours || ''} onChange={e => setSettingsForm({ ...settingsForm, operatingHours: e.target.value })} />
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">About / Tagline</label>
+                                <textarea className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none h-20" value={settingsForm.about || ''} onChange={e => setSettingsForm({ ...settingsForm, about: e.target.value })} placeholder="Brief description of your clinic..." />
+                            </div>
+
+                            <div className="space-y-3 pt-2">
+                                <label className="block text-sm font-medium text-slate-700">Operation Mode</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    {[ClinicOperationMode.WALK_IN, ClinicOperationMode.APPOINTMENT, ClinicOperationMode.HYBRID].map(mode => (
+                                        <button 
+                                            key={mode}
+                                            onClick={() => setSettingsForm({ ...settingsForm, operationMode: mode })}
+                                            className={`p-2 rounded-lg border text-center text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 h-20 ${settingsForm.operationMode === mode ? 'bg-primary-50 border-primary-500 ring-1 ring-primary-500 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                                        >
+                                            {mode === ClinicOperationMode.WALK_IN ? <Footprints className="h-5 w-5" /> : mode === ClinicOperationMode.APPOINTMENT ? <CalendarClock className="h-5 w-5" /> : <Shuffle className="h-5 w-5" />}
+                                            {mode.replace('_', ' ')}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeSettingsTab === 'LOCATION' && (
+                        <div className="space-y-4 animate-in fade-in">
+                            <Input label="Address Line 1" value={settingsForm.address || ''} onChange={e => setSettingsForm({ ...settingsForm, address: e.target.value })} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <Input label="City" value={settingsForm.city || ''} onChange={e => setSettingsForm({ ...settingsForm, city: e.target.value })} />
+                                <Input label="Pincode" value={settingsForm.pincode || ''} onChange={e => setSettingsForm({ ...settingsForm, pincode: e.target.value })} />
+                            </div>
+                            
+                            <div className="border-t border-slate-200 pt-4 mt-2">
+                                <label className="block text-sm font-bold text-slate-800 mb-2">Pin Location on Map</label>
+                                
+                                {/* Search Bar */}
+                                <div className="flex gap-2 mb-3">
+                                    <div className="relative flex-1">
+                                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Search location (e.g. Anna Nagar, Chennai)" 
+                                            className="w-full pl-9 pr-3 h-10 rounded-lg border border-slate-300 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                                            value={mapSearchQuery}
+                                            onChange={(e) => setMapSearchQuery(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleSearchLocation()}
+                                        />
+                                    </div>
+                                    <Button onClick={handleSearchLocation} disabled={!mapSearchQuery || isSearchingLocation}>
+                                        {isSearchingLocation ? '...' : 'Search'}
+                                    </Button>
+                                </div>
+
+                                {/* Map */}
+                                <div className="h-64 w-full rounded-xl overflow-hidden border border-slate-300 shadow-sm relative z-0">
+                                    <MapContainer 
+                                        center={[settingsForm.geoLocation?.lat || 13.0827, settingsForm.geoLocation?.lng || 80.2707]} 
+                                        zoom={13} 
+                                        style={{ height: '100%', width: '100%' }}
+                                    >
+                                        <TileLayer attribution='&copy; CARTO' url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+                                        <MapUpdater center={[settingsForm.geoLocation?.lat || 13.0827, settingsForm.geoLocation?.lng || 80.2707]} />
+                                        <Marker position={[settingsForm.geoLocation?.lat || 13.0827, settingsForm.geoLocation?.lng || 80.2707]} icon={DefaultIcon} />
+                                        <MapClickHandler onLocationSelect={(lat, lng) => setSettingsForm(prev => ({ ...prev, geoLocation: { lat, lng } }))} />
+                                    </MapContainer>
+                                    <div className="absolute top-2 right-2 bg-white/90 backdrop-blur px-2 py-1 rounded text-[10px] font-bold shadow-sm z-[400] pointer-events-none">
+                                        Tap to pin
+                                    </div>
+                                </div>
+
+                                {/* Lat/Lng Manual Input */}
+                                <div className="grid grid-cols-2 gap-4 mt-3">
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Lat</span>
+                                        <input 
+                                            type="number" 
+                                            className="w-full pl-10 pr-3 py-2 rounded-lg border border-slate-300 text-xs font-mono" 
+                                            value={settingsForm.geoLocation?.lat || ''} 
+                                            onChange={e => setSettingsForm(prev => ({ ...prev, geoLocation: { ...prev.geoLocation!, lat: parseFloat(e.target.value) } }))} 
+                                        />
+                                    </div>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Lng</span>
+                                        <input 
+                                            type="number" 
+                                            className="w-full pl-10 pr-3 py-2 rounded-lg border border-slate-300 text-xs font-mono" 
+                                            value={settingsForm.geoLocation?.lng || ''} 
+                                            onChange={e => setSettingsForm(prev => ({ ...prev, geoLocation: { ...prev.geoLocation!, lng: parseFloat(e.target.value) } }))} 
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeSettingsTab === 'BRANDING' && (
+                        <div className="space-y-6 animate-in fade-in">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-2">Clinic Image URL</label>
+                                <div className="flex gap-4 items-start">
+                                    <div className="w-24 h-24 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                        {settingsForm.imageUrl ? <img src={settingsForm.imageUrl} className="w-full h-full object-cover" /> : <ImageIcon className="h-8 w-8 text-slate-300" />}
+                                    </div>
+                                    <div className="flex-1">
+                                        <Input placeholder="https://example.com/image.jpg" value={settingsForm.imageUrl || ''} onChange={e => setSettingsForm({ ...settingsForm, imageUrl: e.target.value })} />
+                                        <p className="text-xs text-slate-500 mt-2">Enter a direct image link. This will be shown to patients.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-2">Amenities</label>
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                    {(settingsForm.amenities || []).map(amenity => (
+                                        <span key={amenity} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold border border-blue-100">
+                                            {amenity}
+                                            <button onClick={() => handleRemoveAmenity(amenity)} className="hover:text-blue-900"><X className="h-3 w-3" /></button>
+                                        </span>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2 mb-4">
+                                    <input 
+                                        className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                        placeholder="Add amenity (e.g. Parking)"
+                                        value={newAmenity}
+                                        onChange={e => setNewAmenity(e.target.value)}
+                                        onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); handleAddAmenity(newAmenity); } }}
+                                    />
+                                    <Button onClick={() => handleAddAmenity(newAmenity)} size="sm" variant="secondary"><Plus className="h-4 w-4" /></Button>
+                                </div>
+                                
+                                <div>
+                                    <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Popular</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {COMMON_AMENITIES.filter(a => !(settingsForm.amenities || []).includes(a)).map(a => (
+                                            <button key={a} onClick={() => handleAddAmenity(a)} className="px-2 py-1 rounded border border-slate-200 text-xs text-slate-600 hover:bg-slate-50 transition-colors">
+                                                + {a}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                        <Button variant="secondary" onClick={() => setIsSettingsModalOpen(false)}>Cancel</Button>
+                        <Button onClick={handleSaveSettings}>Save Changes</Button>
+                    </div>
+                </div>
+            </Modal>
+
             <Modal isOpen={!!editingPatient} onClose={() => setEditingPatient(null)} title="Edit Patient Profile" maxWidth="max-w-md">
                 {editingPatient && (
                     <form onSubmit={handleSaveEditedPatient} className="space-y-4">

@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Patient, Doctor, PatientStatus } from '../../../types';
-import { Users, Clock, CheckCircle, XCircle, Activity, CalendarDays, Filter } from 'lucide-react';
+import { Users, Clock, CheckCircle, XCircle, Activity, CalendarDays, Filter, Star, Heart } from 'lucide-react';
 import { DateRangePicker } from './DateRangePicker';
 
 interface ReceptionStatsProps {
@@ -87,6 +87,11 @@ export const ReceptionStats: React.FC<ReceptionStatsProps> = ({ patients, doctor
     
     const avgWaitMinutes = waitTimeCount > 0 ? Math.round((totalWaitTime / waitTimeCount) / 60000) : 0;
 
+    // Calculate Satisfaction Score
+    const ratedPatients = completed.filter(p => p.rating !== undefined && p.rating > 0);
+    const totalRating = ratedPatients.reduce((sum, p) => sum + (p.rating || 0), 0);
+    const avgRating = ratedPatients.length > 0 ? (totalRating / ratedPatients.length).toFixed(1) : 'N/A';
+
     // Doctor Performance (Enhanced with Actual Consult Time)
     const doctorStats = doctors.map(doc => {
         const docPatients = filteredPatients.filter(p => p.doctorId === doc.id);
@@ -157,7 +162,9 @@ export const ReceptionStats: React.FC<ReceptionStatsProps> = ({ patients, doctor
         avgWaitMinutes,
         doctorStats,
         heatmapGrid,
-        dateRangeLabel: formatRange()
+        dateRangeLabel: formatRange(),
+        avgRating,
+        ratedCount: ratedPatients.length
     };
   }, [patients, doctors, filterType, customStart, customEnd]);
 
@@ -224,14 +231,14 @@ export const ReceptionStats: React.FC<ReceptionStatsProps> = ({ patients, doctor
             </div>
         </div>
 
-        {/* Top KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* Top KPI Cards - UPDATED TO 5 COLUMNS ON LARGE SCREENS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
                     <Users className="h-6 w-6" />
                 </div>
                 <div>
-                    <p className="text-sm font-medium text-slate-500">Visits ({stats.dateRangeLabel})</p>
+                    <p className="text-sm font-medium text-slate-500">Visits</p>
                     <p className="text-2xl font-black text-slate-900">{stats.total}</p>
                 </div>
             </div>
@@ -251,8 +258,20 @@ export const ReceptionStats: React.FC<ReceptionStatsProps> = ({ patients, doctor
                     <Clock className="h-6 w-6" />
                 </div>
                 <div>
-                    <p className="text-sm font-medium text-slate-500">Avg Wait Time</p>
-                    <p className="text-2xl font-black text-slate-900">{stats.avgWaitMinutes} <span className="text-sm font-bold text-slate-400">mins</span></p>
+                    <p className="text-sm font-medium text-slate-500">Avg Wait</p>
+                    <p className="text-2xl font-black text-slate-900">{stats.avgWaitMinutes}<span className="text-sm font-bold text-slate-400 ml-1">m</span></p>
+                </div>
+            </div>
+
+            {/* NEW SATISFACTION CARD */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-yellow-50 text-yellow-600 flex items-center justify-center">
+                    <Star className="h-6 w-6 fill-current" />
+                </div>
+                <div>
+                    <p className="text-sm font-medium text-slate-500">Satisfaction</p>
+                    <p className="text-2xl font-black text-slate-900">{stats.avgRating} <span className="text-xs font-medium text-slate-400">/ 5</span></p>
+                    <p className="text-[10px] text-slate-400">{stats.ratedCount} reviews</p>
                 </div>
             </div>
 

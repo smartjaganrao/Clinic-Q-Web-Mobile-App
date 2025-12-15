@@ -1,8 +1,9 @@
+
 import React from 'react';
 import { Doctor, Clinic } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
-import { User, Stethoscope, ArrowLeft } from 'lucide-react';
+import { User, Stethoscope, ArrowLeft, AlertCircle } from 'lucide-react';
 
 interface DoctorLoginProps {
   clinic: Clinic;
@@ -23,26 +24,36 @@ export const DoctorLogin: React.FC<DoctorLoginProps> = ({ clinic, onSelectDoctor
         </div>
 
         <div className="space-y-3">
-          {clinic.doctors.map((doc) => (
-            <Card 
-              key={doc.id} 
-              className="p-4 cursor-pointer hover:ring-2 hover:ring-primary-500 transition-all group"
-              onClick={() => onSelectDoctor(doc.id)}
-            >
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm group-hover:border-primary-200">
-                  <img src={doc.avatarUrl} alt={doc.name} className="h-full w-full object-cover" />
+          {clinic.doctors.length > 0 ? (
+            clinic.doctors.map((doc) => (
+              <Card 
+                key={doc.id} 
+                className="p-4 cursor-pointer hover:ring-2 hover:ring-primary-500 transition-all group"
+                onClick={() => onSelectDoctor(doc.id)}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm group-hover:border-primary-200">
+                    <img src={doc.avatarUrl} alt={doc.name} className="h-full w-full object-cover" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-slate-900">{doc.name}</h3>
+                    <p className="text-sm text-slate-500">{doc.specialty}</p>
+                  </div>
+                  <div className="text-slate-300 group-hover:text-primary-500">
+                    <ArrowLeft className="h-5 w-5 rotate-180" />
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-slate-900">{doc.name}</h3>
-                  <p className="text-sm text-slate-500">{doc.specialty}</p>
-                </div>
-                <div className="text-slate-300 group-hover:text-primary-500">
-                  <ArrowLeft className="h-5 w-5 rotate-180" />
-                </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            ))
+          ) : (
+            <div className="bg-white p-8 rounded-xl border border-slate-200 text-center shadow-sm">
+                <AlertCircle className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                <h3 className="font-bold text-slate-900">No Doctors Registered</h3>
+                <p className="text-sm text-slate-500 mt-2">
+                    Please ask the reception or admin to add your doctor profile to this clinic.
+                </p>
+            </div>
+          )}
         </div>
 
         <div className="mt-8">

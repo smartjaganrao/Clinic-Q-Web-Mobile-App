@@ -41,6 +41,12 @@ export enum ClinicType {
     OTHER = 'OTHER'
 }
 
+export enum ClinicOperationMode {
+    WALK_IN = 'WALK_IN',       // Reception adds tokens, Patients view only
+    APPOINTMENT = 'APPOINTMENT', // Pre-booked slots only
+    HYBRID = 'HYBRID'          // Both allowed
+}
+
 export interface TimeSlot {
     id?: string;
     startTime: string; // "09:00"
@@ -179,6 +185,7 @@ export interface Clinic {
   slug: string;
   plan: PlanType;
   type?: ClinicType; 
+  operationMode: ClinicOperationMode; // New: Clinic Operational Mode
   doctors: Doctor[];
   patients: Patient[];
   staff: Staff[]; // New: Staff list
@@ -190,6 +197,7 @@ export interface Clinic {
   geoLocation?: { lat: number, lng: number }; // Real GPS coordinates for distance calc
   operatingHours?: string; // e.g. "09:00 AM - 09:00 PM"
   imageUrl?: string; // New: Clinic Image URL
+  contactPhone?: string; // New: Clinic Contact Phone
   // Details
   about?: string; // New: Description
   amenities?: string[]; // New: List of facilities (Pharmacy, Parking, etc.)
@@ -213,4 +221,50 @@ export interface AdminProfile {
   role: 'SUPER_ADMIN';
   avatarUrl: string;
   lastLogin: string;
+}
+
+// Global declaration to fix JSX IntrinsicElements error
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      [elemName: string]: any;
+      div: any;
+      span: any;
+      p: any;
+      button: any;
+      input: any;
+      label: any;
+      select: any;
+      option: any;
+      img: any;
+      form: any;
+      h1: any;
+      h2: any;
+      h3: any;
+      h4: any;
+      h5: any;
+      h6: any;
+      br: any;
+      nav: any;
+      header: any;
+      main: any;
+      section: any;
+      table: any;
+      thead: any;
+      tbody: any;
+      tr: any;
+      th: any;
+      td: any;
+      ul: any;
+      li: any;
+      textarea: any;
+      a: any;
+      svg: any;
+      path: any;
+      circle: any;
+      rect: any;
+      g: any;
+      aside: any;
+    }
+  }
 }

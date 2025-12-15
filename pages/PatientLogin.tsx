@@ -10,25 +10,20 @@ interface PatientLoginProps {
   onBack: () => void;
   addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   pendingActionMessage?: string;
-  pendingBookingDetails?: {
-      name: string;
-      age: string;
-      gender: string;
-  };
 }
 
 type LoginStep = 'PHONE' | 'OTP' | 'REGISTER';
 
-export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, addToast, pendingActionMessage, pendingBookingDetails }) => {
+export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, addToast, pendingActionMessage }) => {
   const [step, setStep] = useState<LoginStep>('PHONE');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   
   // Registration Form
-  const [name, setName] = useState(pendingBookingDetails?.name || '');
-  const [age, setAge] = useState(pendingBookingDetails?.age || '');
-  const [gender, setGender] = useState(pendingBookingDetails?.gender || 'Male');
+  const [name, setName] = useState('');
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState('Male');
 
   // Timer State
   const [timer, setTimer] = useState(30);
@@ -43,14 +38,6 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
     }
     return () => clearInterval(interval);
   }, [step, timer]);
-
-  useEffect(() => {
-      if (pendingBookingDetails) {
-          setName(pendingBookingDetails.name);
-          setAge(pendingBookingDetails.age);
-          setGender(pendingBookingDetails.gender);
-      }
-  }, [pendingBookingDetails]);
 
   const checkExistingUser = (phoneNumber: string) => {
     try {
@@ -80,18 +67,6 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
     }, 800);
   };
 
-  const autoRegisterUser = () => {
-      const newProfile = {
-          name: name || pendingBookingDetails?.name || 'Guest',
-          phone,
-          age: age || pendingBookingDetails?.age,
-          gender: gender || pendingBookingDetails?.gender || 'Male',
-          familyMembers: []
-      };
-      localStorage.setItem(`clinicq_patient_${phone}`, JSON.stringify(newProfile));
-      onLogin(phone, newProfile.name); 
-  };
-
   const handleVerifyOTP = (e: React.FormEvent) => {
       e.preventDefault();
       if (otp.length !== 4) {
@@ -108,11 +83,7 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
                   addToast(`Welcome back, ${existingProfile.name}!`, "success");
                   onLogin(phone, existingProfile.name);
               } else {
-                  if (pendingBookingDetails && pendingBookingDetails.name) {
-                      autoRegisterUser();
-                  } else {
-                      setStep('REGISTER');
-                  }
+                  setStep('REGISTER');
               }
           } else {
               addToast("Invalid OTP. Try 1234.", "error");

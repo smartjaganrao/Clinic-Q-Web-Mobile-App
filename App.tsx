@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, AppNotification, ClinicStats, TimeSlot, ClinicType, Vitals, PainPoint, Staff } from './types';
-// Removed INITIAL_CLINICS import as it's now handled in storage.ts
+import { UserRole, PatientStatus, Clinic, PlanType, Patient, Doctor, DoctorStatus, DaySchedule, AppNotification, ClinicStats, TimeSlot, ClinicType, Vitals, PainPoint, Staff, ClinicOperationMode } from './types';
 import { LandingPage } from './pages/LandingPage';
 import { ClinicLandingPage } from './pages/ClinicLandingPage'; // New Import
 import { StaffLogin } from './pages/StaffLogin';
@@ -44,18 +43,6 @@ type AppView =
   | 'ADMIN_DASHBOARD'
   | 'KIOSK';
 
-interface PendingBooking {
-    name: string;
-    age: string;
-    gender: string;
-    doctorId: string;
-    clinicId: string;
-    visitType: 'WALK_IN' | 'APPOINTMENT';
-    apptTime?: string;
-    apptDate?: string;
-    symptoms?: string;
-}
-
 export default function App() {
   // ------------------------------------------------------------------
   // SESSION PERSISTENCE
@@ -83,8 +70,8 @@ export default function App() {
   const [patientAuth, setPatientAuth] = useState<{name: string, phone: string} | null>(session?.loggedInPatient || null);
   const [initialSearchMode, setInitialSearchMode] = useState<'DOCTOR' | 'CLINIC'>('CLINIC');
   
-  // Unified Pending Action State
-  const [pendingAction, setPendingAction] = useState<{ type: 'CHECK_IN', clinicId: string, patientId: string } | { type: 'BOOKING', data: PendingBooking } | null>(null);
+  // Pending Action (Only Check-In supported via global redirect now)
+  const [pendingAction, setPendingAction] = useState<{ type: 'CHECK_IN', clinicId: string, patientId: string } | null>(null);
 
   // Notifications
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -188,17 +175,9 @@ export default function App() {
         setCurrentView('PATIENT_TRACKER');
     }
     
-    if (pendingAction) {
-        if (pendingAction.type === 'CHECK_IN') {
-            handlePatientCheckIn(pendingAction.clinicId, pendingAction.patientId);
-            addToast("Check-in confirmed!", "success");
-        } else if (pendingAction.type === 'BOOKING') {
-            const b = pendingAction.data;
-            handleGetToken(
-                b.name, phone, b.doctorId, b.clinicId, b.apptTime, b.apptDate, b.age, b.gender, b.symptoms
-            );
-            addToast("Booking Confirmed Successfully!", "success");
-        }
+    if (pendingAction && pendingAction.type === 'CHECK_IN') {
+        handlePatientCheckIn(pendingAction.clinicId, pendingAction.patientId);
+        addToast("Check-in confirmed!", "success");
         setPendingAction(null);
     } else {
         addToast(`Welcome, ${name}`, "success");
@@ -213,12 +192,6 @@ export default function App() {
     setPatientAuth(null);
     setPendingAction(null);
     localStorage.removeItem('clinicq_session_v2');
-  };
-
-  const handleGuestBookingAttempt = (bookingData: PendingBooking) => {
-      setPendingAction({ type: 'BOOKING', data: bookingData });
-      setCurrentView('PATIENT_LOGIN');
-      addToast("Please verify mobile to confirm booking", "info");
   };
   
   const handlePatientLoginBack = () => {
@@ -565,19 +538,22 @@ export default function App() {
         <ClinicAuth 
           clinics={clinics}
           onSelectClinic={handleClinicSelect}
-          onCreateClinic={async (name, plan, address, city, pincode, services) => {
+          onCreateClinic={async (name, plan, address, city, pincode, services, mode, type, phone, about) => {
             const newClinic: Clinic = {
               id: `clinic_${Date.now()}`,
               name,
               slug: name.toLowerCase().replace(/\s+/g, '-'),
               plan,
-              type: ClinicType.GENERAL,
+              type: type, // Updated from hardcoded GENERAL
+              operationMode: mode,
               doctors: [],
               patients: [],
               staff: [],
               city: city, 
               address: address, 
               pincode: pincode,
+              contactPhone: phone, // NEW
+              about: about, // NEW
               amenities: services
             };
             await storage.createClinic(newClinic);
@@ -626,6 +602,8 @@ export default function App() {
               staff={currentClinic.staff}
               clinicName={currentClinic.name}
               clinicType={currentClinic.type}
+              operationMode={currentClinic.operationMode}
+              clinicData={currentClinic}
               onAddPatient={handleAddPatient}
               onEditPatient={handleEditPatient}
               onDeletePatient={handleDeletePatient}
@@ -636,7 +614,7 @@ export default function App() {
               onDeleteDoctor={handleDeleteDoctor}
               onUpdateStatus={handleUpdateStatus}
               onCancelPatient={(id) => handleUpdateStatus(id, PatientStatus.CANCELLED)}
-              onUpdateClinicName={(name) => storage.updateClinic(currentClinic.id, { name })}
+              onUpdateClinicSettings={(updates) => storage.updateClinic(currentClinic.id, updates)}
               onToggleEmergency={(id) => {
                   const p = currentClinic.patients.find(pat => pat.id === id);
                   if (p) handleEditPatient(id, { isEmergency: !p.isEmergency });
@@ -750,8 +728,7 @@ export default function App() {
           onLogin={handlePatientLogin}
           onBack={handlePatientLoginBack}
           addToast={addToast}
-          pendingActionMessage={pendingAction?.type === 'CHECK_IN' ? 'Login to confirm your arrival' : pendingAction?.type === 'BOOKING' ? 'Verify mobile number to confirm booking' : undefined}
-          pendingBookingDetails={pendingAction?.type === 'BOOKING' ? pendingAction.data : undefined}
+          pendingActionMessage={pendingAction?.type === 'CHECK_IN' ? 'Login to confirm your arrival' : undefined}
         />
       )}
 
@@ -768,7 +745,6 @@ export default function App() {
                   setCurrentView('PATIENT_LOGIN');
               }
           }}
-          onGuestBook={handleGuestBookingAttempt}
           onBack={handleLogout}
           onGetToken={handleGetToken}
           addToast={addToast}

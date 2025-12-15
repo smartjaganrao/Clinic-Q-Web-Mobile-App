@@ -1,5 +1,5 @@
 
-import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient, TimeSlot, Review, AdminProfile, Staff } from './types';
+import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient, TimeSlot, Review, AdminProfile, Staff, ClinicOperationMode } from './types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const genId = () => Math.random().toString(36).substr(2, 5);
@@ -270,6 +270,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     slug: 'apollo-anna-nagar',
     plan: PlanType.SMALL,
     type: ClinicType.GENERAL,
+    operationMode: ClinicOperationMode.HYBRID,
     city: 'Chennai',
     address: 'Plot 12, 4th Avenue, Shanthi Colony, Anna Nagar',
     pincode: '600040',
@@ -288,6 +289,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     slug: 'sankara-nethralaya',
     plan: PlanType.PREMIUM,
     type: ClinicType.OTHER,
+    operationMode: ClinicOperationMode.APPOINTMENT, // Demo: Appt Only
     city: 'Chennai',
     address: '41, College Road, Nungambakkam',
     pincode: '600006',
@@ -306,6 +308,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     slug: 'cloudnine-tnagar',
     plan: PlanType.PREMIUM,
     type: ClinicType.GYNECOLOGY,
+    operationMode: ClinicOperationMode.HYBRID,
     city: 'Chennai',
     address: '54, Vijaya Raghava Rd, T. Nagar',
     pincode: '600017',
@@ -324,6 +327,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     slug: 'miot-hospital',
     plan: PlanType.PREMIUM,
     type: ClinicType.ORTHOPEDIC,
+    operationMode: ClinicOperationMode.HYBRID,
     city: 'Chennai',
     address: '4/112, Mount Poonamallee Rd, Manapakkam',
     pincode: '600089',
@@ -342,6 +346,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     slug: 'parasu-dental',
     plan: PlanType.SOLO,
     type: ClinicType.DENTAL,
+    operationMode: ClinicOperationMode.HYBRID,
     city: 'Chennai',
     address: '11, 3rd Cross St, Kasturba Nagar, Adyar',
     pincode: '600020',
@@ -360,6 +365,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     slug: 'fortis-malar',
     plan: PlanType.PREMIUM,
     type: ClinicType.CARDIOLOGY,
+    operationMode: ClinicOperationMode.HYBRID,
     city: 'Chennai',
     address: '52, 1st Main Rd, Gandhi Nagar, Adyar',
     pincode: '600020',
@@ -378,6 +384,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     slug: 'oliva-alwarpet',
     plan: PlanType.SOLO,
     type: ClinicType.DERMATOLOGY,
+    operationMode: ClinicOperationMode.APPOINTMENT,
     city: 'Chennai',
     address: '2nd Floor, TTK Road, Alwarpet',
     pincode: '600018',
@@ -396,6 +403,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     slug: 'kkr-ent',
     plan: PlanType.SMALL,
     type: ClinicType.OTHER,
+    operationMode: ClinicOperationMode.WALK_IN, // Demo: Walk-in Only
     city: 'Chennai',
     address: '827, Poonamallee High Rd, Kilpauk',
     pincode: '600010',
@@ -414,6 +422,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     slug: 'mehtas-chetpet',
     plan: PlanType.SMALL,
     type: ClinicType.PEDIATRIC,
+    operationMode: ClinicOperationMode.HYBRID,
     city: 'Chennai',
     address: '2, McNichols Rd, Chetpet',
     pincode: '600031',
@@ -432,6 +441,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     slug: 'city-general-chennai',
     plan: PlanType.SMALL,
     type: ClinicType.GENERAL,
+    operationMode: ClinicOperationMode.WALK_IN,
     city: 'Chennai',
     address: '123 Main Street',
     pincode: '600001',
@@ -452,6 +462,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     slug: 'manipal-old-airport',
     plan: PlanType.PREMIUM,
     type: ClinicType.GENERAL,
+    operationMode: ClinicOperationMode.HYBRID,
     city: 'Bangalore',
     address: '98, HAL Old Airport Rd, Kodihalli',
     pincode: '560017',
@@ -470,6 +481,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     slug: 'ovum-hrbr',
     plan: PlanType.SMALL,
     type: ClinicType.PEDIATRIC,
+    operationMode: ClinicOperationMode.APPOINTMENT,
     city: 'Bangalore',
     address: '4th Block, HRBR Layout, Kalyan Nagar',
     pincode: '560043',
@@ -488,6 +500,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     slug: 'clove-indiranagar',
     plan: PlanType.SOLO,
     type: ClinicType.DENTAL,
+    operationMode: ClinicOperationMode.HYBRID,
     city: 'Bangalore',
     address: '12th Main Rd, Indiranagar',
     pincode: '560038',

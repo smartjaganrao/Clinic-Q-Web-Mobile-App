@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor } from '../types';
+import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode } from '../types';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
@@ -12,6 +12,7 @@ import { ClinicCard } from '../features/patient/components/ClinicCard';
 import { DoctorSearchCard } from '../features/patient/components/DoctorSearchCard'; // New Import
 import { MapPanel } from '../features/patient/components/MapPanel';
 import { DoctorProfileModal } from '../features/patient/components/DoctorProfileModal';
+import { Modal } from '../components/Modal';
 import L from 'leaflet';
 
 import { 
@@ -21,7 +22,7 @@ import {
     Navigation, Timer, Building2, 
     Info, Lock, History, X, AlertCircle, Sun, Moon,
     User, Users, Plus, LogOut, Coffee, LogIn, CloudSun, List as ListIcon, Crosshair, Zap, ExternalLink, ShieldCheck,
-    CheckCircle2, Globe, Edit2, Trash2
+    CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, FileText, MoonStar, MessageSquare
 } from 'lucide-react';
 
 interface PatientTrackerProps {
@@ -30,7 +31,6 @@ interface PatientTrackerProps {
   userName: string;
   isGuest?: boolean;
   onLoginClick?: (phone?: string, name?: string) => void;
-  onGuestBook?: (bookingData: any) => void;
   onBack: () => void;
   onGetToken: (name: string, phone: string, doctorId: string, clinicId: string, time?: string, date?: string, age?: string, gender?: any, symptoms?: string) => void;
   addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
@@ -185,10 +185,11 @@ interface GroupedSlots {
     Morning: {value: string, label: string}[];
     Afternoon: {value: string, label: string}[];
     Evening: {value: string, label: string}[];
+    Night: {value: string, label: string}[];
 }
 
 export const PatientTracker: React.FC<PatientTrackerProps> = ({
-  clinics, userPhone, userName, isGuest, onLoginClick, onGuestBook, onBack, onGetToken, addToast, onUpdateDetails, onCancelVisit, onCheckIn, preSelectedClinicId, onClearPendingAction, initialSearchMode
+  clinics, userPhone, userName, isGuest, onLoginClick, onBack, onGetToken, addToast, onUpdateDetails, onCancelVisit, onCheckIn, preSelectedClinicId, onClearPendingAction, initialSearchMode
 }) => {
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'BOOK' | 'HISTORY' | 'PROFILE'>('BOOK');
   const [selectedClinicId, setSelectedClinicId] = useState<string | null>(preSelectedClinicId || null);
@@ -238,8 +239,20 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   // DOCTOR PROFILE MODAL STATE
   const [viewingDoctor, setViewingDoctor] = useState<Doctor | null>(null);
 
+  // FEEDBACK STATE
+  const [feedbackModal, setFeedbackModal] = useState<{ isOpen: boolean; visit: any | null; rating: number; text: string }>({ isOpen: false, visit: null, rating: 0, text: '' });
+
   const selectedClinic = clinics.find(c => c.id === selectedClinicId);
   const selectedDoctor = selectedClinic?.doctors.find(d => d.id === selectedDoctorId);
+
+  // Get clinic associated with viewing doctor (needed for finding operation mode)
+  const viewingDoctorClinic = useMemo(() => {
+      if (!viewingDoctor) return undefined;
+      // If we are already in a clinic context (selectedClinicId), use that
+      if (selectedClinicId) return clinics.find(c => c.id === selectedClinicId);
+      // Otherwise find the clinic this doctor belongs to
+      return clinics.find(c => c.doctors.some(d => d.id === viewingDoctor.id));
+  }, [viewingDoctor, selectedClinicId, clinics]);
 
   // --- TRAVEL TIME ESTIMATE ---
   const travelEstimate = useMemo(() => {
@@ -406,7 +419,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   }, [preSelectedClinicId, clinics, onClearPendingAction]);
 
   const activeVisits = useMemo(() => { if(isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown', room: doc?.roomNumber || '-' }); } }); }); return visits.sort((a,b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
-  const historyVisits = useMemo(() => { if(isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && (p.status === PatientStatus.COMPLETED || p.status === PatientStatus.CANCELLED)) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown' }); } }); }); return visits.sort((a,b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
+  const historyVisits = useMemo(() => { if(isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && (p.status === PatientStatus.COMPLETED || p.status === PatientStatus.CANCELLED)) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown', notes: p.notes }); } }); }); return visits.sort((a,b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
   
   // --- FILTERING LOGIC ---
   const filteredClinics = useMemo(() => { 
@@ -719,9 +732,26 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       if (clinic) {
           setSelectedClinicId(clinic.id);
           setSelectedDoctorId(viewingDoctor.id);
+          // Set initial visit type based on mode
+          if (clinic.operationMode === ClinicOperationMode.WALK_IN) {
+              setVisitType('WALK_IN');
+          } else {
+              setVisitType('APPOINTMENT');
+          }
           navigateToView('FORM', clinic.id);
       } else {
           addToast("Could not find clinic details", "error");
+      }
+  };
+
+  const handleSubmitFeedback = () => {
+      if (feedbackModal.visit) {
+          onUpdateDetails(feedbackModal.visit.id, {
+              rating: feedbackModal.rating,
+              feedback: feedbackModal.text
+          });
+          addToast("Thank you for your feedback!", "success");
+          setFeedbackModal({ isOpen: false, visit: null, rating: 0, text: '' });
       }
   };
 
@@ -792,14 +822,30 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       }); 
   }, [selectedDoctor]);
   
-  useEffect(() => { if (selectedDoctorId && !isWalkInAllowed && visitType === 'WALK_IN') { setVisitType('APPOINTMENT'); } }, [selectedDoctorId, isWalkInAllowed]);
+  // Force visit type based on Clinic Mode
+  useEffect(() => { 
+      if (selectedClinicId) {
+          const clinic = clinics.find(c => c.id === selectedClinicId);
+          if (clinic) {
+              if (clinic.operationMode === ClinicOperationMode.WALK_IN) {
+                  setVisitType('WALK_IN');
+              } else if (clinic.operationMode === ClinicOperationMode.APPOINTMENT) {
+                  setVisitType('APPOINTMENT');
+              } else if (selectedDoctorId && !isWalkInAllowed && visitType === 'WALK_IN') {
+                  // Hybrid Logic: If Walk-in shift over, switch to appt
+                  setVisitType('APPOINTMENT'); 
+              }
+          }
+      }
+  }, [selectedClinicId, selectedDoctorId, isWalkInAllowed, clinics]);
+
   const confirmCancel = () => { if (cancelModal.visit) { onCancelVisit(cancelModal.visit.clinicId, cancelModal.visit.id); addToast("Appointment Cancelled", "info"); setCancelModal({ isOpen: false, visit: null }); } };
   
   // Memoized Booking Dates/Slots (same logic)
   const bookingDates = useMemo(() => { if (!selectedDoctor) return []; const days = []; const today = new Date(); for(let i=0; i<14; i++) { const d = new Date(today); d.setDate(today.getDate() + i); const dayName = d.toLocaleDateString('en-US', { weekday: 'long' }); const schedule = selectedDoctor.weeklySchedule.find(s => s.day === dayName); days.push({ date: d, dateStr: d.toISOString().split('T')[0], dayShort: d.toLocaleDateString('en-US', { weekday: 'short' }), dayNum: d.getDate(), isOff: !schedule || schedule.isOff, schedule }); } return days; }, [selectedDoctor]);
   
   const groupedTimeSlots = useMemo<GroupedSlots>(() => { 
-      const groups: GroupedSlots = { Morning: [], Afternoon: [], Evening: [] }; 
+      const groups: GroupedSlots = { Morning: [], Afternoon: [], Evening: [], Night: [] }; 
       if (!selectedDoctor || !apptDate) return groups; 
       const selectedDayObj = bookingDates.find(d => d.dateStr === apptDate); 
       if (!selectedDayObj || selectedDayObj.isOff || !selectedDayObj.schedule) return groups; 
@@ -812,26 +858,17 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           let endMins = endH * 60 + endM; 
           const shiftStartMins = startH * 60 + startM; 
           
-          // Fix for overnight slots (e.g., 22:00 to 06:00)
           if (endMins <= currentMins) endMins += 24 * 60;
 
           const now = new Date(); 
           const isToday = apptDate === now.toISOString().split('T')[0]; 
           const nowMins = now.getHours() * 60 + now.getMinutes(); 
           
-          if (isToday && nowMins >= shiftStartMins) { 
-              // If shift started, we might allow late booking or not. 
-              // Usually appointments must be future. 
-              // But for this demo, let's just use currentMins logic inside loop
-          } 
-          
           const MIN_NOTICE_MINS = 30; 
           
           while (currentMins + 15 <= endMins) { 
               if (!isToday || currentMins > (nowMins + MIN_NOTICE_MINS)) { 
-                  // Normalize for display (modulo 24h)
                   let displayMins = currentMins % (24 * 60);
-                  
                   const h = Math.floor(displayMins / 60); 
                   const m = displayMins % 60; 
                   const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`; 
@@ -840,9 +877,10 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                   const displayStr = `${displayH}:${m.toString().padStart(2, '0')} ${suffix}`; 
                   const slotObj = { value: timeStr, label: displayStr }; 
                   
-                  if (h >= 4 && h < 12) groups.Morning.push(slotObj); 
+                  if (h >= 5 && h < 12) groups.Morning.push(slotObj); 
                   else if (h >= 12 && h < 17) groups.Afternoon.push(slotObj); 
-                  else groups.Evening.push(slotObj); 
+                  else if (h >= 17 && h < 21) groups.Evening.push(slotObj);
+                  else groups.Night.push(slotObj); 
               } 
               currentMins += 15; 
           } 
@@ -850,7 +888,12 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       return groups; 
   }, [selectedDoctor, apptDate, bookingDates]);
   
-  const hasAnySlots = useMemo(() => { return groupedTimeSlots.Morning.length > 0 || groupedTimeSlots.Afternoon.length > 0 || groupedTimeSlots.Evening.length > 0; }, [groupedTimeSlots]);
+  const hasAnySlots = useMemo(() => { 
+      return groupedTimeSlots.Morning.length > 0 || 
+             groupedTimeSlots.Afternoon.length > 0 || 
+             groupedTimeSlots.Evening.length > 0 || 
+             groupedTimeSlots.Night.length > 0; 
+  }, [groupedTimeSlots]);
 
   const getDoctorTodaySchedule = (doc: any) => { const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']; const today = days[new Date().getDay()]; const schedule = doc.weeklySchedule.find((s: any) => s.day === today); if (!schedule || schedule.isOff) return <span className="text-red-500 font-bold text-[10px]">OFF Today</span>; if (schedule.slots.length === 1) return <span className="text-green-700 font-bold text-[10px]">{schedule.slots[0].startTime} - {schedule.slots[0].endTime}</span>; return <span className="text-green-700 font-bold text-[10px]">{schedule.slots.length} Shifts Today</span>; };
   const getLinkedClinics = (doc: Doctor) => { return clinics.filter(c => c.doctors.some(d => d.masterId === doc.masterId && c.id !== selectedClinicId)); };
@@ -858,6 +901,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const navItems = [ { id: 'BOOK', label: 'Find Care', icon: Search }, { id: 'ACTIVE', label: 'Active Visits', icon: Ticket }, { id: 'HISTORY', label: 'History', icon: History }, { id: 'PROFILE', label: 'Profile', icon: User } ];
   function Ticket({ className }: { className?: string }) { return ( <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}> <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /> <path d="M13 5v2" /> <path d="M13 17v2" /> <path d="M13 11v2" /> </svg> ); }
   const GuestLoginCard = () => ( <div className="flex flex-col items-center justify-center h-[60vh] p-8 text-center"> <div className="bg-slate-100 p-6 rounded-full mb-6"><Lock className="h-10 w-10 text-slate-400" /></div> <h3 className="text-xl font-bold text-slate-800 mb-2">Login Required</h3> <p className="text-slate-500 mb-8 max-w-xs">Please login to access your appointments and medical history.</p> <Button onClick={() => onLoginClick && onLoginClick()} size="lg" className="shadow-lg px-10">Login / Register</Button> </div> );
+
+  const isClinicWalkInOnly = selectedClinic?.operationMode === ClinicOperationMode.WALK_IN;
+  const isClinicApptOnly = selectedClinic?.operationMode === ClinicOperationMode.APPOINTMENT;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row overflow-hidden font-sans">
@@ -896,114 +942,229 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             <header className="hidden md:flex bg-white border-b border-slate-200 px-8 py-4 items-center justify-between shrink-0 z-10"> <div><h2 className="text-2xl font-bold text-slate-900">{activeTab === 'BOOK' && bookingView !== 'LIST' ? 'Appointment Details' : activeTab === 'ACTIVE' ? 'Your Active Visits' : activeTab === 'HISTORY' ? 'Visit History' : activeTab === 'PROFILE' ? 'My Profile' : 'Find Care'}</h2></div> <div className="flex items-center gap-4"><Button variant="outline" onClick={() => setShowQRScanner(true)} className="hidden md:flex"><QrCode className="h-4 w-4 mr-2" /> Scan QR Code</Button></div> </header>
 
             <div className={`flex-1 flex flex-col w-full relative ${activeTab === 'BOOK' && bookingView === 'LIST' ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden scroll-smooth pb-24 md:pb-0'}`}>
-                {activeTab === 'ACTIVE' && ( isGuest ? <GuestLoginCard /> : ( <div className="px-4 md:px-0 max-w-7xl mx-auto pt-4 md:pt-8 md:px-8"> {activeVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"> {activeVisits.map(visit => { const queueStats = getSmartQueueDetails(visit); return ( <Card key={visit.id} className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"> <div className="p-5 pb-2 flex justify-between items-start"><div><h3 className="font-bold text-lg text-slate-900">{visit.clinicName}</h3><p className="text-sm text-slate-500">Dr. {visit.doctorName} • {visit.room ? `Room ${visit.room}` : ''}</p></div><Badge status={visit.status} /></div> <div className="px-5 mb-4"><span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit"><User className="h-3 w-3" /> {visit.name}</span></div> <div className="bg-slate-50 border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center"><div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Token</div><div className="text-3xl font-black text-slate-900">#{visit.tokenNumber}</div></div><div className="border-x border-slate-200"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Now Serving</div><div className={`text-3xl font-bold ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-blue-600 animate-pulse' : 'text-slate-400'}`}>{visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken}</div></div><div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">People Ahead</div><div className="text-3xl font-bold text-slate-900">{queueStats.peopleAhead}</div></div></div> <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold`}>{queueStats.doctorStatus === DoctorStatus.ON_BREAK ? <Coffee className="h-5 w-5" /> : queueStats.doctorStatus === DoctorStatus.AVAILABLE ? <Timer className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}<div className="flex-1"><p>{queueStats.message}</p>{visit.status === PatientStatus.WAITING && (<p className="text-[10px] opacity-80 font-normal">Est. Time: {queueStats.expectedTime}</p>)}</div></div> {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (<div className="bg-orange-50 px-4 py-2 text-xs font-bold text-orange-700 flex items-center gap-2 border-t border-orange-100"><Info className="h-4 w-4 flex-shrink-0" /><span>{queueStats.peopleAhead < 3 ? "Almost your turn! Please ask receptionist to Check-in now." : "Please ask receptionist to Check-in once you arrive."}</span></div>)} <div className="p-4 flex gap-2 mt-auto">{!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (<Button className="flex-1 bg-slate-900 hover:bg-slate-800" onClick={() => setShowQRScanner(true)}><QrCode className="h-4 w-4 mr-2" /> Scan to Check-In</Button>)}<Button variant="secondary" className="flex-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => setCancelModal({ isOpen: true, visit })} disabled={visit.status === PatientStatus.WITH_DOCTOR}>Cancel</Button></div> </Card> ); })} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><Calendar className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No active visits</h3><p className="text-slate-500 mb-6 text-center max-w-sm">Book an appointment or scan a QR code at a clinic to see your live status here.</p><Button onClick={() => handleTabSwitch('BOOK')} size="lg" className="shadow-lg">Find a Doctor</Button></div> )} </div> ) )}
+                {activeTab === 'ACTIVE' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto"> {activeVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6"> {activeVisits.map(visit => { const queueStats = getSmartQueueDetails(visit); return ( <Card key={visit.id} className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"> <div className="p-5 pb-2 flex justify-between items-start"><div><h3 className="font-bold text-lg text-slate-900">{visit.clinicName}</h3><p className="text-sm text-slate-500">Dr. {visit.doctorName} • {visit.room ? `Room ${visit.room}` : ''}</p></div><Badge status={visit.status} /></div> <div className="px-5 mb-4"><span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit"><User className="h-3 w-3" /> {visit.name}</span></div> <div className="bg-slate-50 border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center"><div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Token</div><div className="text-3xl font-black text-slate-900">#{visit.tokenNumber}</div></div><div className="border-x border-slate-200"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Now Serving</div><div className={`text-3xl font-bold ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-blue-600 animate-pulse' : 'text-slate-400'}`}>{visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken}</div></div><div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">People Ahead</div><div className="text-3xl font-bold text-slate-900">{queueStats.peopleAhead}</div></div></div> <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold`}>{queueStats.doctorStatus === DoctorStatus.ON_BREAK ? <Coffee className="h-5 w-5" /> : queueStats.doctorStatus === DoctorStatus.AVAILABLE ? <Timer className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}<div className="flex-1"><p>{queueStats.message}</p>{visit.status === PatientStatus.WAITING && (<p className="text-[10px] opacity-80 font-normal">Est. Time: {queueStats.expectedTime}</p>)}</div></div> {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (<div className="bg-orange-50 px-4 py-2 text-xs font-bold text-orange-700 flex items-center gap-2 border-t border-orange-100"><Info className="h-4 w-4 flex-shrink-0" /><span>{queueStats.peopleAhead < 3 ? "Almost your turn! Please ask receptionist to Check-in now." : "Please ask receptionist to Check-in once you arrive."}</span></div>)} <div className="p-4 flex gap-2 mt-auto">{!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (<Button className="flex-1 bg-slate-900 hover:bg-slate-800" onClick={() => setShowQRScanner(true)}><QrCode className="h-4 w-4 mr-2" /> Scan to Check-In</Button>)}<Button variant="secondary" className="flex-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => setCancelModal({ isOpen: true, visit })} disabled={visit.status === PatientStatus.WITH_DOCTOR}>Cancel</Button></div> </Card> ); })} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><Calendar className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No active visits</h3><p className="text-slate-500 mb-6 text-center max-w-sm">Book an appointment or scan a QR code at a clinic to see your live status here.</p><Button onClick={() => handleTabSwitch('BOOK')} size="lg" className="shadow-lg">Find a Doctor</Button></div> )} </div> ) )}
+
+                {activeTab === 'HISTORY' && (
+                    isGuest ? <GuestLoginCard /> : (
+                        <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto">
+                            {historyVisits.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
+                                {historyVisits.map(visit => (
+                                    <div key={visit.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between gap-4 h-full hover:border-primary-200 transition-colors">
+                                        <div className="flex-1">
+                                            <div className="flex items-start gap-3 mb-3">
+                                                <div className={`p-3 rounded-lg flex-shrink-0 ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                                    {visit.status === PatientStatus.COMPLETED ? <CheckCircle2 className="h-6 w-6" /> : <X className="h-6 w-6" />}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <h3 className="font-bold text-slate-900 truncate text-base">{visit.clinicName}</h3>
+                                                    <p className="text-sm text-slate-500 truncate">Dr. {visit.doctorName}</p>
+                                                    <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(visit.timeAdded).toLocaleDateString()} at {new Date(visit.timeAdded).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="space-y-2">
+                                                {visit.diagnosis && (
+                                                    <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
+                                                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Diagnosis</p>
+                                                        <p className="text-sm text-slate-700 font-medium">{visit.diagnosis}</p>
+                                                    </div>
+                                                )}
+                                                {visit.notes && (
+                                                    <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
+                                                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5 flex items-center gap-1"><FileText className="h-3 w-3" /> Doctor Notes</p>
+                                                        <p className="text-sm text-slate-600 italic leading-relaxed">"{visit.notes}"</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-50">
+                                            {/* Rating Section */}
+                                            {visit.status === PatientStatus.COMPLETED && (
+                                                <div className="flex-1">
+                                                    {visit.rating ? (
+                                                        <div className="flex items-center gap-1 text-yellow-400">
+                                                            {Array.from({length: 5}).map((_, i) => (
+                                                                <Star key={i} className={`h-4 w-4 ${i < visit.rating ? 'fill-current' : 'text-slate-200'}`} />
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <button 
+                                                            onClick={() => setFeedbackModal({ isOpen: true, visit, rating: 0, text: '' })}
+                                                            className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline"
+                                                        >
+                                                            Rate Visit
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            <Button size="sm" variant="outline" className="text-primary-700 border-primary-200 hover:bg-primary-50" onClick={() => {
+                                                const clinic = clinics.find(c => c.id === visit.clinicId);
+                                                if (clinic) {
+                                                    const doc = clinic.doctors.find(d => d.id === visit.doctorId);
+                                                    if (doc) {
+                                                        setSelectedClinicId(clinic.id);
+                                                        setSelectedDoctorId(doc.id);
+                                                        
+                                                        // Determine visit type based on operation mode
+                                                        if (clinic.operationMode === ClinicOperationMode.WALK_IN) {
+                                                            setVisitType('WALK_IN');
+                                                        } else {
+                                                            setVisitType('APPOINTMENT');
+                                                        }
+
+                                                        // Switch View & Tab correctly
+                                                        setActiveTab('BOOK');
+                                                        navigateToView('FORM', clinic.id);
+                                                    } else {
+                                                        addToast("Doctor is no longer available.", "error");
+                                                    }
+                                                } else {
+                                                    addToast("Clinic is no longer available.", "error");
+                                                }
+                                            }}>
+                                                Book Again
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-12 opacity-50">
+                                    <History className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+                                    <p>No visit history found.</p>
+                                </div>
+                            )}
+                        </div>
+                    )
+                )}
+
+                {activeTab === 'PROFILE' && (
+                    isGuest ? <GuestLoginCard /> : (
+                        <div className="w-full px-4 md:px-8 py-6 max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                            {/* Left Col: Profile Card */}
+                            <div className="lg:col-span-1 space-y-6">
+                                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center text-center">
+                                    <div className="w-24 h-24 rounded-full bg-slate-100 flex items-center justify-center text-4xl font-bold text-slate-400 mb-4 border-4 border-white shadow-md">
+                                        {userName.charAt(0)}
+                                    </div>
+                                    <h2 className="text-2xl font-bold text-slate-900">{userName}</h2>
+                                    <p className="text-slate-500 font-mono text-lg mb-4">{userPhone}</p>
+                                    <div className="flex gap-2 text-sm text-slate-600 bg-slate-50 px-4 py-2 rounded-xl">
+                                        <span className="font-bold">{userProfile?.age || '--'} Yrs</span>
+                                        <span>•</span>
+                                        <span className="font-bold">{userProfile?.gender || '--'}</span>
+                                    </div>
+                                    <div className="mt-8 w-full">
+                                        <button onClick={onBack} className="w-full flex items-center justify-center gap-2 text-red-600 font-bold hover:bg-red-50 px-4 py-3 rounded-xl transition-colors border border-red-100">
+                                            <LogOut className="h-5 w-5" /> Logout
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Right Col: Family Members */}
+                            <div className="lg:col-span-2 space-y-6">
+                                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2"><Users className="h-5 w-5 text-primary-600" /> Family Members</h3>
+                                        <Button size="sm" variant="outline" onClick={() => { setEditingMemberIndex(null); setNewMember({ name: '', age: '', gender: 'Male', relation: '' }); setShowAddMember(true); }}>
+                                            <Plus className="h-4 w-4 mr-2" /> Add New
+                                        </Button>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {userProfile?.familyMembers && userProfile.familyMembers.length > 0 ? (
+                                            userProfile.familyMembers.map((member, idx) => (
+                                                <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-primary-200 transition-colors">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-500 shadow-sm">
+                                                            {member.name.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-slate-900">{member.name}</p>
+                                                            <p className="text-xs text-slate-500 font-medium">{member.relation} • {member.age} Yrs</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-1">
+                                                        <button onClick={() => handleEditMember(idx)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-colors"><Edit2 className="h-4 w-4" /></button>
+                                                        <button onClick={() => handleDeleteMember(idx)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg transition-colors"><Trash2 className="h-4 w-4" /></button>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="col-span-full text-center py-8 text-slate-400 text-sm italic bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                                                No family members added yet.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )
+                )}
 
                 {activeTab === 'BOOK' && (
                     <div className="h-full flex flex-col">
                         {bookingView === 'LIST' && (
                             <div className="h-full flex flex-col">
-                                {/* Search & Filters Header */}
-                                <div className="px-4 md:px-8 py-4 bg-white border-b border-slate-200 shadow-sm z-10 shrink-0 space-y-3">
-                                    <div className="max-w-7xl mx-auto space-y-3">
-                                        
-                                        {/* NEW: MODE SWITCHER */}
-                                        <div className="flex justify-center mb-2">
-                                            <div className="bg-slate-100 p-1 rounded-lg flex text-sm font-bold shadow-inner">
-                                                <button 
-                                                    onClick={() => setSearchMode('DOCTOR')}
-                                                    className={`px-6 py-2 rounded-md transition-all flex items-center gap-2 ${searchMode === 'DOCTOR' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}
-                                                >
-                                                    <Stethoscope className="h-4 w-4" /> Doctors
-                                                </button>
-                                                <button 
-                                                    onClick={() => setSearchMode('CLINIC')}
-                                                    className={`px-6 py-2 rounded-md transition-all flex items-center gap-2 ${searchMode === 'CLINIC' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}
-                                                >
-                                                    <Building2 className="h-4 w-4" /> Clinics
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* Search Row */}
-                                        <div className="flex flex-col md:flex-row gap-4">
-                                            <div className="relative flex-1">
+                                {/* Search & Filters Header - Compact */}
+                                <div className="px-4 py-2 bg-white border-b border-slate-200 shadow-sm z-10 shrink-0 w-full">
+                                    <div className="w-full flex flex-col gap-2">
+                                        <div className="flex flex-col md:flex-row gap-2 items-center w-full">
+                                            {/* Search Input - Expands */}
+                                            <div className="relative flex-1 w-full">
                                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                                 <input 
-                                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 shadow-sm" 
-                                                    placeholder={searchMode === 'DOCTOR' ? "Search doctor name or specialty..." : "Search clinic name or city..."}
+                                                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 shadow-sm" 
+                                                    placeholder={searchMode === 'DOCTOR' ? "Search doctor..." : "Search clinic..."}
                                                     value={searchQuery} 
                                                     onChange={(e) => setSearchQuery(e.target.value)} 
                                                 />
                                             </div>
-                                        </div>
 
-                                        {/* Dynamic Filters Row */}
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                            {/* LOCATE ME BUTTON GROUP */}
-                                            <div className="col-span-2 sm:col-span-1 flex gap-2">
-                                                <button 
-                                                    onClick={handleLocateMe}
-                                                    disabled={isLocating}
-                                                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-100 font-bold text-sm transition-colors"
-                                                    title="Use GPS Location"
-                                                >
-                                                    {isLocating ? <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></span> : <Crosshair className="h-4 w-4" />}
-                                                    {userLocation && !isPickingLocation ? 'Update' : 'Locate'}
+                                            {/* Controls Row */}
+                                            <div className="flex gap-2 w-full md:w-auto overflow-x-auto no-scrollbar">
+                                                {/* Mode Switcher */}
+                                                <div className="flex bg-slate-100 p-0.5 rounded-lg shrink-0">
+                                                    <button onClick={() => setSearchMode('CLINIC')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all ${searchMode === 'CLINIC' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Building2 className="h-3 w-3" /> Clinics</button>
+                                                    <button onClick={() => setSearchMode('DOCTOR')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all ${searchMode === 'DOCTOR' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Stethoscope className="h-3 w-3" /> Doctors</button>
+                                                </div>
+
+                                                {/* Locate Button */}
+                                                <button onClick={handleLocateMe} className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100 hover:bg-blue-100 font-bold text-xs whitespace-nowrap shrink-0">
+                                                    {isLocating ? <span className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full"></span> : <Crosshair className="h-3 w-3" />} {userLocation ? 'Near Me' : 'Locate'}
                                                 </button>
-                                                
-                                                <button
-                                                    onClick={() => {
-                                                        setIsPickingLocation(!isPickingLocation);
-                                                        setShowMap(true);
-                                                        if (!isPickingLocation) addToast("Click anywhere on the map to set your location", "info");
-                                                    }}
-                                                    className={`hidden md:flex flex-none items-center justify-center gap-2 px-3 py-2 rounded-lg border font-bold text-sm transition-colors ${isPickingLocation ? 'bg-indigo-600 text-white border-indigo-600 shadow-inner' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
-                                                    title="Set Pin on Map"
-                                                >
+
+                                                {/* Map Toggle (Mobile Only) */}
+                                                <button onClick={() => setShowMap(!showMap)} className="md:hidden p-2 bg-slate-100 text-slate-600 rounded-lg border border-slate-200">
                                                     <MapPin className="h-4 w-4" />
                                                 </button>
                                             </div>
-
-                                            <div className="relative">
-                                                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                                                <select 
-                                                    className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 appearance-none cursor-pointer"
-                                                    value={selectedCity}
-                                                    onChange={(e) => setSelectedCity(e.target.value)}
-                                                >
-                                                    {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="relative">
-                                                <Stethoscope className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                                                <select 
-                                                    className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 appearance-none cursor-pointer"
-                                                    value={selectedSpecialty}
-                                                    onChange={(e) => setSelectedSpecialty(e.target.value)}
-                                                >
-                                                    {uniqueSpecialties.map(spec => <option key={spec} value={spec}>{spec}</option>)}
-                                                </select>
-                                            </div>
                                         </div>
 
-                                        {/* Quick Categories & Open Now Toggle */}
-                                        <div className="flex gap-3 overflow-x-auto no-scrollbar pt-1 items-center pb-1">
-                                            <button
-                                                onClick={() => setShowOpenOnly(!showOpenOnly)}
-                                                className={`flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold transition-all ${
-                                                    showOpenOnly 
-                                                    ? 'bg-green-100 text-green-700 border-green-200 shadow-inner' 
-                                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                                                }`}
-                                            >
-                                                <Clock className={`h-3 w-3 ${showOpenOnly ? 'text-green-600' : 'text-slate-400'}`} />
-                                                Open Now
+                                        {/* Filters Row */}
+                                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                                            {/* City Filter */}
+                                            <div className="relative shrink-0">
+                                                <select className="pl-2 pr-6 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 appearance-none cursor-pointer focus:ring-2 focus:ring-primary-500" value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)}>
+                                                    {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
+                                                </select>
+                                                <ChevronRight className="absolute right-1 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400 rotate-90 pointer-events-none" />
+                                            </div>
+
+                                            {/* Open Now Toggle */}
+                                            <button onClick={() => setShowOpenOnly(!showOpenOnly)} className={`shrink-0 px-3 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-all ${showOpenOnly ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
+                                                <Clock className="h-3 w-3" /> Open Now
                                             </button>
 
-                                            <div className="w-px h-6 bg-slate-200 mx-1 flex-shrink-0"></div>
+                                            <div className="w-px h-6 bg-slate-200 mx-1 flex-shrink-0 self-center"></div>
 
+                                            {/* Categories */}
                                             {CATEGORIES.map(cat => (
-                                                <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border whitespace-nowrap ${selectedCategory === cat.id ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                                                <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all border whitespace-nowrap shrink-0 ${selectedCategory === cat.id ? 'bg-slate-800 text-white border-slate-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                                                     <cat.icon className="h-3 w-3" />
                                                     <span className="text-xs font-bold">{cat.label}</span>
                                                 </button>
@@ -1014,25 +1175,24 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 
                                 {/* SPLIT VIEW CONTENT */}
                                 <div className="flex-1 overflow-hidden flex relative">
-                                    {/* LIST PANEL (Always Visible on Mobile, Left on Desktop) */}
-                                    <div className={`w-full md:w-[60%] lg:w-[55%] xl:w-[50%] h-full overflow-y-auto bg-slate-50 p-4 md:p-6 lg:p-8 custom-scrollbar block`}>
-                                         <div className="max-w-2xl mx-auto space-y-4 pb-20 md:pb-0">
-                                            <div className="flex justify-between items-center mb-2">
-                                                <h3 className="font-bold text-slate-900">
+                                    {/* LIST PANEL - Adjusted Width to 65% on Desktop */}
+                                    <div className={`w-full md:w-[65%] h-full overflow-y-auto bg-slate-50/50 p-2 md:p-4 custom-scrollbar block`}>
+                                         <div className="w-full space-y-3 pb-20 md:pb-0">
+                                            <div className="flex justify-between items-center px-1">
+                                                <h3 className="font-bold text-slate-900 text-sm">
                                                     {searchMode === 'CLINIC' 
-                                                        ? `${filteredClinics.length} Clinics Found` 
-                                                        : `${filteredDoctors.length} Doctors Found`}
+                                                        ? `${filteredClinics.length} Clinics` 
+                                                        : `${filteredDoctors.length} Doctors`}
                                                 </h3>
-                                                <div className="hidden md:flex gap-2 text-xs">
-                                                    <select className="bg-transparent font-bold text-slate-500 cursor-pointer focus:outline-none" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
-                                                        <option value="NEAR">Sort: Nearest</option>
-                                                        <option value="WAIT">Sort: Less Wait</option>
-                                                        <option value="FEE">Sort: Low Fee</option>
-                                                    </select>
-                                                </div>
+                                                <select className="bg-transparent text-xs font-bold text-slate-500 cursor-pointer focus:outline-none" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
+                                                    <option value="NEAR">Nearest</option>
+                                                    <option value="WAIT">Short Wait</option>
+                                                    <option value="FEE">Low Fee</option>
+                                                </select>
                                             </div>
 
-                                            <div className="grid grid-cols-1 gap-4">
+                                            {/* Responsive Grid for Cards */}
+                                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                                                 {/* CLINIC MODE RENDERING */}
                                                 {searchMode === 'CLINIC' && filteredClinics.map(clinic => {
                                                     const waitInfo = getClinicWaitStats(clinic); 
@@ -1065,8 +1225,16 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             isHighlighted={isHighlighted}
                                                             cardRef={(el) => { clinicCardRefs.current[clinic.id] = el; }}
                                                             onSelect={() => navigateToView('CLINIC_DETAILS', clinic.id)}
-                                                            onBook={() => { navigateToView('CLINIC_DETAILS', clinic.id); setVisitType('APPOINTMENT'); }}
-                                                            onQueue={() => { navigateToView('CLINIC_DETAILS', clinic.id); setVisitType('WALK_IN'); }}
+                                                            onBook={() => { 
+                                                                if (clinic.operationMode === ClinicOperationMode.WALK_IN) return;
+                                                                navigateToView('CLINIC_DETAILS', clinic.id); 
+                                                                setVisitType('APPOINTMENT'); 
+                                                            }}
+                                                            onQueue={() => { 
+                                                                if (clinic.operationMode === ClinicOperationMode.APPOINTMENT) return;
+                                                                navigateToView('CLINIC_DETAILS', clinic.id); 
+                                                                setVisitType('WALK_IN'); 
+                                                            }}
                                                             onViewDoctor={(doc) => setViewingDoctor(doc)}
                                                         />
                                                     );
@@ -1098,7 +1266,13 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             onBook={() => {
                                                                 setSelectedClinicId(clinic.id);
                                                                 setSelectedDoctorId(doctor.id);
-                                                                setVisitType('APPOINTMENT');
+                                                                if (clinic.operationMode === ClinicOperationMode.WALK_IN) {
+                                                                    setVisitType('WALK_IN');
+                                                                } else if (clinic.operationMode === ClinicOperationMode.APPOINTMENT) {
+                                                                    setVisitType('APPOINTMENT');
+                                                                } else {
+                                                                    setVisitType('APPOINTMENT');
+                                                                }
                                                                 navigateToView('FORM', clinic.id);
                                                             }}
                                                             onViewProfile={() => setViewingDoctor(doctor)}
@@ -1107,7 +1281,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                 })}
 
                                                 {((searchMode === 'CLINIC' && filteredClinics.length === 0) || (searchMode === 'DOCTOR' && filteredDoctors.length === 0)) && ( 
-                                                    <div className="text-center py-12 opacity-50"> 
+                                                    <div className="col-span-full text-center py-12 opacity-50"> 
                                                         <Filter className="h-12 w-12 mx-auto mb-3 text-slate-300" /> 
                                                         <p>No results found.</p> 
                                                     </div> 
@@ -1180,6 +1354,10 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                     let waitColor = 'bg-green-100 text-green-700';
                                                     if (waitDetails.time > 20) waitColor = 'bg-yellow-100 text-yellow-700';
                                                     if (waitDetails.time > 45) waitColor = 'bg-red-100 text-red-700';
+                                                    
+                                                    const isClinicWalkInOnly = selectedClinic.operationMode === ClinicOperationMode.WALK_IN;
+                                                    const isClinicApptOnly = selectedClinic.operationMode === ClinicOperationMode.APPOINTMENT;
+
                                                     return (
                                                         <div key={doc.id} className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm hover:shadow-lg transition-all hover:border-primary-200 group relative">
                                                             <div 
@@ -1200,8 +1378,14 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             <div className="mt-4 sm:mt-6 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
                                                                 <div className="flex flex-col text-xs text-slate-500"> <div className="uppercase font-bold text-[10px] tracking-wide text-slate-400">Availability & Fees</div> <div className="mt-1 flex items-center gap-2 text-sm text-slate-700">{getDoctorTodaySchedule(doc)}<span className="text-xs text-slate-400">·</span><span className="font-bold text-sm text-slate-900">₹{doc.consultationFee}</span></div> </div>
                                                                 <div className="flex items-center gap-3">
-                                                                    <Button onClick={() => { navigateToView('FORM', selectedClinic.id); setSelectedDoctorId(doc.id); setVisitType('WALK_IN'); }} disabled={!canBook || !activeNow} size="sm" variant="ghost" className={`h-9 px-3 text-xs ${!activeNow ? 'opacity-50' : 'text-slate-700'}`} title="Join Queue directly"> Queue </Button>
-                                                                    <Button onClick={() => { navigateToView('FORM', selectedClinic.id); setSelectedDoctorId(doc.id); setVisitType('APPOINTMENT'); }} disabled={!canBook} size="sm" className={`h-9 px-4 ${canBook ? 'shadow-md' : 'opacity-60 cursor-not-allowed'}`}> Book </Button>
+                                                                    {!isClinicApptOnly && (
+                                                                        <Button onClick={() => { navigateToView('FORM', selectedClinic.id); setSelectedDoctorId(doc.id); setVisitType('WALK_IN'); }} disabled={!canBook || !activeNow} size="sm" variant="ghost" className={`h-9 px-3 text-xs ${!activeNow ? 'opacity-50' : 'text-slate-700'}`} title="Join Queue directly"> 
+                                                                            {isClinicWalkInOnly ? 'Details' : 'Queue'} 
+                                                                        </Button>
+                                                                    )}
+                                                                    {!isClinicWalkInOnly && (
+                                                                        <Button onClick={() => { navigateToView('FORM', selectedClinic.id); setSelectedDoctorId(doc.id); setVisitType('APPOINTMENT'); }} disabled={!canBook} size="sm" className={`h-9 px-4 ${canBook ? 'shadow-md' : 'opacity-60 cursor-not-allowed'}`}> Book </Button>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -1214,323 +1398,274 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         )}
                         {/* Booking Form reused from earlier (ensure it works with imports) */}
                         {bookingView === 'FORM' && selectedClinic && selectedDoctorId && (
-                             <div className="animate-in slide-in-from-right duration-300 bg-slate-50 min-h-full flex flex-col md:items-center md:justify-center md:py-8 pt-4 md:pt-0">
-                                 <div className="w-full max-w-2xl bg-white md:rounded-3xl md:shadow-2xl md:border md:border-slate-200 overflow-hidden flex flex-col max-h-full h-full md:h-auto">
-                                    <div className="bg-white border-b border-slate-200 px-4 py-4 flex items-center gap-3 shadow-sm flex-shrink-0">
-                                        <Button variant="ghost" size="sm" className="p-0 rounded-full w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100" onClick={handleUIBack}>
-                                            <ArrowLeft className="h-4 w-4" />
+                             <div className="animate-in slide-in-from-right duration-300 bg-slate-100 min-h-full flex justify-center">
+                                 {/* Single Column Container */}
+                                 <div className="w-full max-w-2xl bg-white shadow-2xl h-full flex flex-col relative">
+                                    
+                                    {/* Header */}
+                                    <div className="flex items-center gap-3 p-4 border-b border-slate-100 bg-white/80 backdrop-blur-md sticky top-0 z-30">
+                                        <Button variant="ghost" size="sm" onClick={handleUIBack} className="rounded-full w-10 h-10 p-0 border border-slate-200 hover:bg-slate-100">
+                                            <ArrowLeft className="h-5 w-5" />
                                         </Button>
-                                        <h2 className="font-bold text-slate-900 text-lg">Confirm Booking</h2>
+                                        <div>
+                                            <h2 className="font-bold text-slate-900 text-lg leading-tight">Booking Summary</h2>
+                                            <p className="text-xs text-slate-500">Complete your visit details</p>
+                                        </div>
                                     </div>
-                                    <div className="p-6 space-y-6 flex-1 overflow-y-auto pb-24 md:pb-6 custom-scrollbar">
-                                        {isGuest ? (
-                                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                                                <div className="flex items-center gap-2 mb-4"><div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600"><User className="h-5 w-5" /></div><div><h3 className="font-bold text-slate-900">Guest Details</h3><p className="text-xs text-slate-500">Enter details to book instantly.</p></div></div>
-                                                <div className="space-y-3"><Input label="Patient Name" placeholder="e.g. Rahul Verma" value={guestName} onChange={e => setGuestName(e.target.value)} required /><div className="grid grid-cols-2 gap-4"><Input label="Age" type="number" placeholder="25" value={guestAge} onChange={e => setGuestAge(e.target.value)} required /><div><label className="block text-sm font-medium text-slate-700 mb-1">Gender</label><select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={guestGender} onChange={e => setGuestGender(e.target.value)}><option>Male</option><option>Female</option><option>Other</option></select></div></div></div>
-                                                <div className="mt-3 text-xs text-blue-800 flex items-center gap-1"><Info className="h-3 w-3" /> We will verify your mobile number next.</div>
+
+                                    {/* Scrollable Content */}
+                                    <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 pb-24">
+                                        
+                                        {/* Doctor Summary Card */}
+                                        <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex gap-4 items-start">
+                                            <img src={selectedDoctor.avatarUrl} className="w-16 h-16 rounded-xl object-cover bg-white shadow-sm border border-slate-100" />
+                                            <div className="flex-1 min-w-0">
+                                                <h3 className="font-bold text-slate-900 text-lg truncate">{selectedDoctor.name}</h3>
+                                                <p className="text-sm text-primary-700 font-medium mb-1">{selectedDoctor.specialty}</p>
+                                                <div className="flex items-center gap-1 text-xs text-slate-500">
+                                                    <MapPin className="h-3 w-3" /> {selectedClinic.name}
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="font-bold text-slate-900">₹{selectedDoctor.consultationFee}</div>
+                                                <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Fee</div>
+                                            </div>
+                                        </div>
+
+                                        {/* Queue Stats Row */}
+                                        {!isClinicWalkInOnly && !isClinicApptOnly && (
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl flex flex-col items-center justify-center text-center">
+                                                    <span className="text-blue-800 text-[10px] font-bold uppercase tracking-wide mb-1">Patients Waiting</span>
+                                                    <span className="text-2xl font-black text-slate-900">{waitStats.count}</span>
+                                                </div>
+                                                <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl flex flex-col items-center justify-center text-center">
+                                                    <span className="text-amber-800 text-[10px] font-bold uppercase tracking-wide mb-1">Est. Wait Time</span>
+                                                    <span className="text-2xl font-black text-slate-900">~{waitStats.time}<span className="text-sm font-bold text-slate-500 ml-1">m</span></span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Walk-in Only Blocker */}
+                                        {isClinicWalkInOnly ? (
+                                            <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
+                                                <Footprints className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                                                <h3 className="font-bold text-slate-900 mb-1">Walk-In Only</h3>
+                                                <p className="text-sm text-slate-500">This clinic does not accept online tokens. Please visit the reception.</p>
                                             </div>
                                         ) : (
-                                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Who is this for?</label><div className="flex gap-3 overflow-x-auto no-scrollbar pb-2"><button onClick={() => setBookingFor('MYSELF')} className={`flex-shrink-0 flex flex-col items-center gap-1 min-w-[80px] p-3 rounded-xl border-2 transition-all ${bookingFor === 'MYSELF' ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-slate-100 bg-white text-slate-500 hover:border-slate-300'}`}><User className={`h-6 w-6 ${bookingFor === 'MYSELF' ? 'text-primary-600' : 'text-slate-400'}`} /><span className="text-xs font-bold">Myself</span></button>{userProfile?.familyMembers?.map((m, idx) => (<button key={idx} onClick={() => setBookingFor(m.name)} className={`flex-shrink-0 flex flex-col items-center gap-1 min-w-[80px] p-3 rounded-xl border-2 transition-all ${bookingFor === m.name ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-slate-100 bg-white text-slate-500 hover:border-slate-300'}`}><Users className={`h-6 w-6 ${bookingFor === m.name ? 'text-primary-600' : 'text-slate-400'}`} /><span className="text-xs font-bold truncate max-w-[60px]">{m.name}</span></button>))}<button onClick={() => { setEditingMemberIndex(null); setNewMember({ name: '', age: '', gender: 'Male', relation: '' }); setIsCustomRelation(false); setShowAddMember(true); }} className="flex-shrink-0 flex flex-col items-center justify-center gap-1 min-w-[80px] p-3 rounded-xl border-2 border-dashed border-slate-300 text-slate-400 hover:text-primary-600 hover:border-primary-400 hover:bg-slate-50 transition-colors"><Plus className="h-6 w-6" /><span className="text-xs font-bold">Add New</span></button></div></div>
-                                        )}
-                                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Visit Type</label>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <button 
-                                                    className={`p-3 rounded-xl border-2 text-sm font-bold transition-all text-left relative overflow-hidden flex flex-col justify-between min-h-[100px] ${!isWalkInAllowed ? 'bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed' : visitType === 'WALK_IN' ? 'bg-primary-50 border-primary-500 text-primary-700' : 'bg-white border-slate-100 text-slate-600 hover:border-slate-300'}`} 
-                                                    onClick={() => isWalkInAllowed && setVisitType('WALK_IN')} 
-                                                    disabled={!isWalkInAllowed}
-                                                >
-                                                    <div className="flex items-center justify-between w-full">
-                                                        <span>Wait in Queue</span>
-                                                        {!isWalkInAllowed && <Lock className="h-3 w-3" />}
-                                                    </div>
-                                                    
-                                                    {isWalkInAllowed ? (
-                                                        <div>
-                                                            <div className="text-2xl font-black leading-none mb-1">~{waitStats.time}<span className="text-sm font-medium ml-0.5">min</span></div>
-                                                            <div className="text-[10px] font-medium opacity-80">{waitStats.count} People Ahead</div>
+                                            <>
+                                                <hr className="border-slate-100" />
+
+                                                {/* 1. Patient Details */}
+                                                <div className="space-y-3">
+                                                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                                        <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold">1</span>
+                                                        Who is this for?
+                                                    </h3>
+                                                    {/* ... Patient Selector Logic ... */}
+                                                    {isGuest ? (
+                                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                                                            <Input label="Name" value={guestName} onChange={e => setGuestName(e.target.value)} className="bg-white" />
+                                                            <div className="grid grid-cols-2 gap-3">
+                                                                <Input label="Age" type="number" value={guestAge} onChange={e => setGuestAge(e.target.value)} className="bg-white" />
+                                                                <div>
+                                                                    <label className="block text-sm font-medium mb-1">Gender</label>
+                                                                    <select className="w-full p-2 border rounded-lg bg-white" value={guestGender} onChange={e => setGuestGender(e.target.value)}><option>Male</option><option>Female</option></select>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-[10px] font-normal opacity-70">Shift Over</span>
-                                                    )}
-                                                    
-                                                    {visitType === 'WALK_IN' && isWalkInAllowed && <div className="absolute top-2 right-2 w-3 h-3 bg-primary-500 rounded-full animate-pulse"></div>}
-                                                </button>
-                                                
-                                                <button 
-                                                    className={`p-3 rounded-xl border-2 text-sm font-bold transition-all text-left flex flex-col justify-between min-h-[100px] ${visitType === 'APPOINTMENT' ? 'bg-purple-50 border-purple-500 text-purple-700' : 'bg-white border-slate-100 text-slate-600 hover:border-slate-300'}`} 
-                                                    onClick={() => setVisitType('APPOINTMENT')}
-                                                >
-                                                    <span>Book Slot</span>
-                                                    <div className="mt-auto">
-                                                        <Calendar className="h-5 w-5 mb-1 opacity-50" />
-                                                        <span className="block text-[10px] font-normal opacity-70">Schedule for Later</span>
-                                                    </div>
-                                                </button>
-                                            </div>
-                                            {!isWalkInAllowed && (<div className="mt-3 flex items-start gap-2 text-xs text-orange-600 bg-orange-50 p-2 rounded-lg"><Info className="h-4 w-4 flex-shrink-0" /><span>Doctor is not available for walk-ins right now. Please book an appointment slot.</span></div>)}
-                                        </div>
-                                        {visitType === 'APPOINTMENT' && (
-                                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm animate-in fade-in">
-                                                <div className="mb-6"><label className="block text-sm font-bold text-slate-700 mb-3">Select Date</label><div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">{bookingDates.map((d, idx) => (<button key={idx} disabled={d.isOff} onClick={() => { setApptDate(d.dateStr); setApptTime(''); }} className={`flex-shrink-0 w-16 h-20 rounded-xl flex flex-col items-center justify-center border-2 transition-all ${d.dateStr === apptDate ? 'border-primary-500 bg-primary-50 text-primary-700' : d.isOff ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed' : 'border-slate-200 bg-white text-slate-600 hover:border-primary-200'}`}><span className="text-[10px] font-bold uppercase mb-1">{d.dayShort}</span><span className="text-xl font-bold">{d.dayNum}</span>{d.isOff && <span className="text-[8px] font-bold mt-1 text-red-300">OFF</span>}</button>))}</div></div>
-                                                <div>
-                                                    <div className="flex justify-between items-end mb-3">
-                                                        <label className="block text-sm font-bold text-slate-700">Select Time {apptDate ? '' : '(Pick a date first)'}</label>
-                                                        {apptDate && new Date().toISOString().split('T')[0] === apptDate && (
-                                                            <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded flex items-center gap-1">
-                                                                <Info className="h-3 w-3" /> Active shifts are Walk-in only
-                                                            </span>
-                                                        )}
-                                                        {apptDate && new Date().toISOString().split('T')[0] !== apptDate && (
-                                                            <span className="text-[10px] font-bold text-primary-600 bg-primary-50 px-2 py-1 rounded max-w-[360px] block truncate">Date: {new Date(apptDate).toLocaleDateString()}</span>
-                                                        )}
-                                                    </div>
-                                                    
-                                                    {hasAnySlots ? (
-                                                        <div className="space-y-4">
-                                                            {groupedTimeSlots.Morning.length > 0 && (
-                                                                <div className="mb-2">
-                                                                    <div className="flex items-center gap-2 mb-2 px-1">
-                                                                        <Sun className="h-4 w-4 text-orange-400" />
-                                                                        <span className="font-bold text-xs text-slate-700 uppercase tracking-wide">Morning ({groupedTimeSlots.Morning.length})</span>
-                                                                    </div>
-                                                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                                                                        {groupedTimeSlots.Morning.map(slot => (
-                                                                            <button key={slot.value} onClick={() => setApptTime(slot.value)} className={`py-2 px-1 rounded-lg text-xs font-bold border transition-all ${apptTime === slot.value ? 'bg-primary-600 text-white border-primary-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-primary-300'}`}>{slot.label}</button>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                            {groupedTimeSlots.Afternoon.length > 0 && (
-                                                                <div className="mb-2">
-                                                                     <div className="flex items-center gap-2 mb-2 px-1 pt-2 border-t border-dashed border-slate-100">
-                                                                        <CloudSun className="h-4 w-4 text-yellow-500" />
-                                                                        <span className="font-bold text-xs text-slate-700 uppercase tracking-wide">Afternoon ({groupedTimeSlots.Afternoon.length})</span>
-                                                                    </div>
-                                                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                                                                        {groupedTimeSlots.Afternoon.map(slot => (
-                                                                            <button key={slot.value} onClick={() => setApptTime(slot.value)} className={`py-2 px-1 rounded-lg text-xs font-bold border transition-all ${apptTime === slot.value ? 'bg-primary-600 text-white border-primary-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-primary-300'}`}>{slot.label}</button>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                            {groupedTimeSlots.Evening.length > 0 && (
-                                                                <div className="mb-2">
-                                                                     <div className="flex items-center gap-2 mb-2 px-1 pt-2 border-t border-dashed border-slate-100">
-                                                                        <Moon className="h-4 w-4 text-indigo-400" />
-                                                                        <span className="font-bold text-xs text-slate-700 uppercase tracking-wide">Evening ({groupedTimeSlots.Evening.length})</span>
-                                                                    </div>
-                                                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                                                                        {groupedTimeSlots.Evening.map(slot => (
-                                                                            <button key={slot.value} onClick={() => setApptTime(slot.value)} className={`py-2 px-1 rounded-lg text-xs font-bold border transition-all ${apptTime === slot.value ? 'bg-primary-600 text-white border-primary-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-primary-300'}`}>{slot.label}</button>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                                                            <p className="text-slate-400 text-sm">
-                                                                {apptDate && new Date().toISOString().split('T')[0] === apptDate 
-                                                                    ? "Online booking closed for active shifts. Please use Walk-in." 
-                                                                    : "No available slots for this date."}
-                                                            </p>
+                                                        <div className="overflow-x-auto pb-2 no-scrollbar -mx-4 px-4">
+                                                            <div className="flex gap-3">
+                                                                <button onClick={() => setBookingFor('MYSELF')} className={`flex-shrink-0 flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${bookingFor === 'MYSELF' ? 'border-primary-500 bg-primary-50 text-primary-900' : 'border-slate-100 bg-white text-slate-500'}`}>
+                                                                    <div className="w-8 h-8 rounded-full bg-primary-200 flex items-center justify-center text-primary-700 font-bold text-xs"><User className="h-4 w-4" /></div>
+                                                                    <div className="text-left"><div className="text-xs font-bold">Myself</div></div>
+                                                                </button>
+                                                                {userProfile?.familyMembers?.map((m, i) => (
+                                                                    <button key={i} onClick={() => setBookingFor(m.name)} className={`flex-shrink-0 flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${bookingFor === m.name ? 'border-primary-500 bg-primary-50 text-primary-900' : 'border-slate-100 bg-white text-slate-500'}`}>
+                                                                        <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-xs"><Users className="h-4 w-4" /></div>
+                                                                        <div className="text-left"><div className="text-xs font-bold truncate max-w-[80px]">{m.name}</div></div>
+                                                                    </button>
+                                                                ))}
+                                                                <button onClick={() => { setEditingMemberIndex(null); setNewMember({name:'', age:'', gender:'Male', relation:''}); setShowAddMember(true); }} className="flex-shrink-0 w-12 flex items-center justify-center rounded-xl border-2 border-dashed border-slate-300 text-slate-400 hover:border-primary-400 hover:text-primary-600"><Plus className="h-5 w-5" /></button>
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
-                                            </div>
-                                        )}
-                                        {visitType === 'WALK_IN' && (<div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                            <div className="flex justify-between items-center mb-2">
-                                                <label className="block text-sm font-medium text-slate-700">Time to reach clinic?</label>
-                                                {userLocation && selectedClinic?.geoLocation ? (
-                                                    <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded border border-blue-100">
-                                                        GPS Est: ~{travelEstimate?.mins} mins ({travelEstimate?.dist} km)
-                                                    </span>
+
+                                                {/* 2. Visit Type */}
+                                                <div className="space-y-3">
+                                                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                                        <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold">2</span>
+                                                        Visit Type
+                                                    </h3>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <button disabled={!isWalkInAllowed || isClinicApptOnly} onClick={() => setVisitType('WALK_IN')} className={`p-3 rounded-xl border text-left transition-all ${visitType === 'WALK_IN' ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'} ${(!isWalkInAllowed || isClinicApptOnly) && 'opacity-50 cursor-not-allowed'}`}>
+                                                            <Zap className="h-5 w-5 mb-2" />
+                                                            <div className="font-bold text-sm">Join Queue</div>
+                                                            <div className="text-[10px] opacity-70">Get token now</div>
+                                                        </button>
+                                                        <button disabled={isClinicWalkInOnly} onClick={() => setVisitType('APPOINTMENT')} className={`p-3 rounded-xl border text-left transition-all ${visitType === 'APPOINTMENT' ? 'bg-purple-600 text-white border-purple-600 shadow-lg' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'} ${isClinicWalkInOnly && 'opacity-50 cursor-not-allowed'}`}>
+                                                            <Calendar className="h-5 w-5 mb-2" />
+                                                            <div className="font-bold text-sm">Book Slot</div>
+                                                            <div className="text-[10px] opacity-70">Schedule for later</div>
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* 3. Conditional Input */}
+                                                {visitType === 'WALK_IN' ? (
+                                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">Travel Time</label>
+                                                        <div className="flex items-center gap-3">
+                                                            <input type="range" min="5" max="60" step="5" value={travelTime} onChange={e => setTravelTime(e.target.value)} className="flex-1 accent-slate-900 h-2 bg-slate-200 rounded-lg appearance-none" />
+                                                            <span className="font-bold text-slate-900 w-16 text-right">{travelTime} m</span>
+                                                        </div>
+                                                    </div>
                                                 ) : (
-                                                    <button 
-                                                        onClick={handleLocateMe} 
-                                                        className="text-xs text-primary-600 font-bold flex items-center gap-1 hover:underline disabled:opacity-50"
-                                                        type="button"
-                                                        disabled={isLocating}
-                                                    >
-                                                        {isLocating ? <span className="animate-spin h-3 w-3 border-2 border-primary-600 border-t-transparent rounded-full"></span> : <Crosshair className="h-3 w-3" />}
-                                                        {isLocating ? 'Locating...' : 'Verify with GPS'}
-                                                    </button>
+                                                    <div className="space-y-4">
+                                                        <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar -mx-4 px-4">
+                                                            {bookingDates.map((d, i) => (
+                                                                <button key={i} disabled={d.isOff} onClick={() => { setApptDate(d.dateStr); setApptTime(''); }} className={`flex-shrink-0 w-14 h-16 flex flex-col items-center justify-center rounded-xl border transition-all ${apptDate === d.dateStr ? 'bg-purple-600 text-white border-purple-600 shadow-md' : d.isOff ? 'bg-slate-50 text-slate-300 border-slate-100' : 'bg-white text-slate-600 border-slate-200'}`}>
+                                                                    <span className="text-[10px] font-bold uppercase">{d.dayShort}</span>
+                                                                    <span className="text-lg font-bold">{d.dayNum}</span>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        {apptDate && hasAnySlots ? (
+                                                            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+                                                                {groupedTimeSlots.Morning.length > 0 && (
+                                                                    <div>
+                                                                        <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1"><Sun className="h-3 w-3" /> Morning</h4>
+                                                                        <div className="grid grid-cols-4 gap-2">
+                                                                            {groupedTimeSlots.Morning.map(slot => (
+                                                                                <button key={slot.value} onClick={() => setApptTime(slot.value)} className={`py-2 px-1 rounded-lg text-[10px] font-bold border transition-all ${apptTime === slot.value ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 border-slate-200 hover:border-purple-300'}`}>
+                                                                                    {slot.label}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                {groupedTimeSlots.Afternoon.length > 0 && (
+                                                                    <div>
+                                                                        <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1"><CloudSun className="h-3 w-3" /> Afternoon</h4>
+                                                                        <div className="grid grid-cols-4 gap-2">
+                                                                            {groupedTimeSlots.Afternoon.map(slot => (
+                                                                                <button key={slot.value} onClick={() => setApptTime(slot.value)} className={`py-2 px-1 rounded-lg text-[10px] font-bold border transition-all ${apptTime === slot.value ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 border-slate-200 hover:border-purple-300'}`}>
+                                                                                    {slot.label}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                {groupedTimeSlots.Evening.length > 0 && (
+                                                                    <div>
+                                                                        <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1"><Moon className="h-3 w-3" /> Evening</h4>
+                                                                        <div className="grid grid-cols-4 gap-2">
+                                                                            {groupedTimeSlots.Evening.map(slot => (
+                                                                                <button key={slot.value} onClick={() => setApptTime(slot.value)} className={`py-2 px-1 rounded-lg text-[10px] font-bold border transition-all ${apptTime === slot.value ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 border-slate-200 hover:border-purple-300'}`}>
+                                                                                    {slot.label}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                {groupedTimeSlots.Night.length > 0 && (
+                                                                    <div>
+                                                                        <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1"><MoonStar className="h-3 w-3" /> Night</h4>
+                                                                        <div className="grid grid-cols-4 gap-2">
+                                                                            {groupedTimeSlots.Night.map(slot => (
+                                                                                <button key={slot.value} onClick={() => setApptTime(slot.value)} className={`py-2 px-1 rounded-lg text-[10px] font-bold border transition-all ${apptTime === slot.value ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 border-slate-200 hover:border-purple-300'}`}>
+                                                                                    {slot.label}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-center text-xs text-slate-400 py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                                                                No slots available for this date
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 )}
-                                            </div>
-                                            <select className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm" value={travelTime} onChange={(e) => setTravelTime(e.target.value)}>
-                                                <option value="5">5 mins</option>
-                                                <option value="15">15 mins</option>
-                                                <option value="30">30 mins</option>
-                                                <option value="45">45 mins</option>
-                                                <option value="60">1 Hour+</option>
-                                            </select>
-                                            
-                                            {/* Conflict Logic for Remote Booking */}
-                                            {(parseInt(travelTime) > waitStats.time + 10) && (
-                                                <div className="mt-3 text-xs text-amber-700 bg-amber-50 p-3 rounded-lg flex items-start gap-2 border border-amber-100">
-                                                    <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                                                    <div className="flex-1">
-                                                        <p className="font-bold mb-1">Late Arrival Risk</p>
-                                                        <p>Your travel time ({travelTime}m) is longer than the current queue ({waitStats.time}m). You may be placed at the end of the line upon arrival.</p>
-                                                    </div>
-                                                </div>
-                                            )}
 
-                                            {(waitStats.time < 15 && parseInt(travelTime) > 30) && (
-                                                <div className="mt-3 text-xs text-red-700 bg-red-50 p-3 rounded-lg flex items-start gap-2 border border-red-100">
-                                                    <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                                                    <div className="flex-1">
-                                                        <p className="font-bold mb-1">Doctor is Waiting</p>
-                                                        <p className="mb-2">The queue is almost empty, but you are far away. We cannot hold the doctor for 30+ mins.</p>
-                                                        <Button size="sm" variant="secondary" className="w-full h-8 text-xs bg-white border-red-200 text-red-700 hover:bg-red-50" onClick={() => setVisitType('APPOINTMENT')}>
-                                                            Switch to Appointment
-                                                        </Button>
-                                                    </div>
+                                                {/* 4. Symptoms */}
+                                                <div className="space-y-2">
+                                                    <h3 className="text-sm font-bold text-slate-900">Reason for visit</h3>
+                                                    <textarea className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-primary-500 outline-none resize-none" rows={2} placeholder="e.g. Fever, Headache..." value={symptoms} onChange={e => setSymptoms(e.target.value)} />
                                                 </div>
-                                            )}
-                                        </div>)}
-                                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><Input label="Reason for Visit (Symptoms)" placeholder="e.g. High fever, stomach ache" value={symptoms} onChange={e => setSymptoms(e.target.value)} /></div>
-                                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100"><div className="flex justify-between text-sm mb-2"><span className="text-slate-500">Patient</span><span className="font-bold text-slate-900">{isGuest ? (guestName || 'Guest User') : (bookingFor === 'MYSELF' ? userProfile?.name : bookingFor)}</span></div><div className="flex justify-between text-sm mb-2"><span className="text-slate-500">Doctor</span><span className="font-bold text-slate-900">{selectedClinic.doctors.find(d => d.id === selectedDoctorId)?.name}</span></div><div className="flex justify-between text-sm pt-2 border-t border-blue-200"><span className="text-slate-600 font-medium">Consultation Fee</span><span className="font-bold text-primary-700">₹{selectedClinic.doctors.find(d => d.id === selectedDoctorId)?.consultationFee}</span></div></div>
+                                            </>
+                                        )}
                                     </div>
-                                    <div className="p-4 md:p-6 bg-white border-t border-slate-200 flex-shrink-0 sticky bottom-0 z-10">
-                                        <Button type="button" className="w-full h-12 text-lg shadow-xl shadow-primary-100" onClick={(e) => handleBookToken(e)}>{isGuest ? 'Verify Mobile & Confirm' : 'Confirm Booking'}</Button>
-                                    </div>
+
+                                    {/* Bottom Bar */}
+                                    {!isClinicWalkInOnly && (
+                                        <div className="p-4 border-t border-slate-200 bg-white sticky bottom-0 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                                            <Button 
+                                                className="w-full h-14 text-lg font-bold rounded-xl shadow-xl shadow-primary-200"
+                                                onClick={handleBookToken}
+                                                disabled={(!isGuest && !userProfile) || (visitType === 'APPOINTMENT' && (!apptDate || !apptTime))}
+                                            >
+                                                {visitType === 'APPOINTMENT' ? 'Confirm Booking' : 'Get Token Now'}
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
+                             </div>
                         )}
                     </div>
                 )}
-                
-                {activeTab === 'HISTORY' && (
-                    isGuest ? <GuestLoginCard /> : (
-                    <div className="px-4 md:px-0 max-w-7xl mx-auto pt-4 md:pt-8 md:px-8">
-                         {historyVisits.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4 md:pt-0">
-                                {historyVisits.map(visit => (<Card key={visit.id} className={`p-5 shadow-sm border hover:shadow-md transition-shadow ${visit.status === PatientStatus.CANCELLED ? 'border-red-100 bg-red-50/30' : 'border-slate-200 bg-white'}`}><div className="flex justify-between items-start mb-2"><div><div className="text-xs text-slate-500 mb-1">{new Date(visit.timeAdded).toLocaleDateString()} at {new Date(visit.timeAdded).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div><h3 className="font-bold text-lg text-slate-900">{visit.clinicName}</h3><p className="text-sm text-slate-500">Dr. {visit.doctorName}</p></div><Badge status={visit.status} /></div><div className="text-xs text-slate-600 mb-2 font-bold flex items-center gap-1"><User className="h-3 w-3" /> {visit.name}</div><div className="mt-3 pt-3 border-t border-slate-100">{visit.symptoms && <div className="mb-2 text-sm text-slate-600"><span className="font-semibold">Reason:</span> {visit.symptoms}</div>}{visit.status === PatientStatus.COMPLETED && visit.notes && (<div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm text-slate-700 italic"><span className="block text-xs font-bold text-slate-400 uppercase mb-1">Doctor's Note</span>"{visit.notes}"</div>)}{visit.status === PatientStatus.CANCELLED && (<div className="bg-white p-3 rounded-lg border border-red-100 text-sm text-red-600 flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5" /><span>Appointment cancelled. Please re-book if symptoms persist.</span></div>)}</div></Card>))}
-                            </div>
-                        ) : (
-                            <div className="text-center py-20 opacity-50"><History className="h-16 w-16 mx-auto mb-4 text-slate-300" /><h3 className="text-lg font-bold text-slate-700">No History Found</h3><p className="text-slate-500">Your past appointments will appear here.</p></div>
-                        )}
-                    </div>
-                    )
-                )}
-                
-                {activeTab === 'PROFILE' && (
-                    isGuest ? <GuestLoginCard /> : (userProfile && (
-                    <div className="px-4 md:px-0 max-w-4xl mx-auto pt-4 md:pt-8 md:px-8">
-                        <div className="grid md:grid-cols-3 gap-8">
-                            <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-lg md:col-span-1 h-fit"><div className="flex flex-col items-center text-center mb-6"><div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 mb-4 shadow-inner"><User className="h-12 w-12" /></div><h2 className="text-2xl font-bold text-slate-900">{userProfile.name}</h2><p className="text-slate-500 font-medium">{userProfile.phone}</p></div><div className="flex justify-center gap-3 text-sm font-medium text-slate-600"><span className="bg-slate-100 px-3 py-1 rounded-full border border-slate-200">{userProfile.age || '--'} Yrs</span><span className="bg-slate-100 px-3 py-1 rounded-full border border-slate-200">{userProfile.gender || '--'}</span></div></div>
-                            <div className="md:col-span-2"><div className="flex justify-between items-center mb-6"><h3 className="font-bold text-xl text-slate-800 flex items-center gap-2"><Users className="h-5 w-5 text-primary-600" /> Family Members</h3><Button size="sm" onClick={() => { setEditingMemberIndex(null); setNewMember({ name: '', age: '', gender: 'Male', relation: '' }); setIsCustomRelation(false); setShowAddMember(true); }}><Plus className="h-4 w-4 mr-2" /> Add Member</Button></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{userProfile.familyMembers?.map((member, idx) => (<div key={idx} className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 hover:border-primary-200 hover:shadow-md transition-all group"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 mr-2 flex-shrink-0"><Users className="h-5 w-5" /></div><div><div className="font-bold text-slate-900">{member.name}</div><div className="text-xs text-slate-500 font-medium uppercase tracking-wide mt-0.5">{member.relation} • {member.age} Yrs</div></div></div><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEditMember(idx)} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"><Edit2 className="h-4 w-4" /></button><button onClick={() => handleDeleteMember(idx)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="h-4 w-4" /></button></div></div>))}{(!userProfile.familyMembers || userProfile.familyMembers.length === 0) && (<div className="col-span-full text-center py-12 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200"><p className="text-slate-400 mb-2">No family members added yet.</p><p className="text-xs text-slate-400">Add family to book appointments for them easily.</p></div>)}</div></div>
-                        </div>
-                        {/* New Logout Button for Mobile (Bottom of Profile) */}
-                        <div className="mt-8 md:hidden mb-12">
-                            <Button variant="secondary" onClick={onBack} className="w-full text-red-600 border-red-200 hover:bg-red-50 justify-center h-12 text-lg font-bold shadow-sm">
-                                <LogOut className="h-5 w-5 mr-2" /> Logout
-                            </Button>
-                        </div>
-                    </div>
-                    ))
-                )}
-            </div>
 
-            <nav className="md:hidden bg-white border-t border-slate-200 flex justify-around py-2 px-1 pb-safe fixed bottom-0 w-full z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">{navItems.map(item => (<button key={item.id} onClick={() => handleTabSwitch(item.id as any)} className={`flex flex-col items-center gap-1 p-2 rounded-xl w-full transition-all ${activeTab === item.id ? 'text-primary-600' : 'text-slate-400 hover:text-slate-600'}`}><div className={`p-1 rounded-full ${activeTab === item.id ? 'bg-primary-50' : ''}`}><item.icon className={`h-5 w-5 ${activeTab === item.id ? 'fill-primary-100' : ''}`} /></div><span className="text-[10px] font-bold">{item.label}</span></button>))}</nav>
-            {showQRScanner && (<div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-8 animate-in fade-in"><div className="w-64 h-64 border-2 border-primary-500 rounded-2xl relative mb-8 flex items-center justify-center overflow-hidden"><div className="absolute inset-0 bg-primary-500/20 animate-pulse"></div><div className="absolute top-0 left-0 w-full h-1 bg-primary-500 shadow-[0_0_20px_rgba(14,165,233,1)] animate-[scan_2s_ease-in-out_infinite]"></div><p className="text-white font-bold z-10">Scanning...</p></div><p className="text-slate-400 text-center mb-8">Point at clinic QR code.</p><Button variant="secondary" onClick={() => setShowQRScanner(false)}>Cancel</Button></div>)}
-            {cancelModal.isOpen && (<div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 animate-in fade-in"><div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 text-center animate-in zoom-in-95"><div className="bg-red-100 h-12 w-12 rounded-full flex items-center justify-center mx-auto mb-4"><AlertCircle className="h-6 w-6 text-red-600" /></div><h3 className="text-lg font-bold text-slate-900 mb-2">Cancel Appointment?</h3><p className="text-sm text-slate-500 mb-6">Are you sure you want to cancel your visit with <span className="font-bold text-slate-900">{cancelModal.visit?.doctorName}</span>? This action cannot be undone.</p><div className="flex gap-3 justify-center"><Button variant="secondary" onClick={() => setCancelModal({ isOpen: false, visit: null })}>No, Keep It</Button><Button className="bg-red-600 hover:bg-red-700 border-red-600" onClick={confirmCancel}>Yes, Cancel</Button></div></div></div>)}
-            {showAddMember && (
-                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 animate-in zoom-in-95">
-                        <h3 className="font-bold text-lg mb-4">{editingMemberIndex !== null ? 'Edit Member' : 'Add Family Member'}</h3>
-                        <div className="space-y-4">
-                            <Input label="Name" value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} placeholder="e.g. Priya" />
-                            <div className="grid grid-cols-2 gap-4">
-                                <Input label="Age" type="number" value={newMember.age} onChange={e => setNewMember({...newMember, age: e.target.value})} placeholder="25" />
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
-                                    <select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={newMember.gender} onChange={e => setNewMember({...newMember, gender: e.target.value})}><option>Male</option><option>Female</option><option>Other</option></select>
-                                </div>
-                            </div>
-                            
-                            {/* Updated Relationship Selector with Other */}
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Relationship</label>
-                                <select 
-                                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm mb-2 focus:ring-2 focus:ring-primary-500 outline-none"
-                                    value={isCustomRelation ? 'Other' : newMember.relation}
-                                    onChange={(e) => {
-                                        if (e.target.value === 'Other') {
-                                            setIsCustomRelation(true);
-                                            setNewMember({ ...newMember, relation: '' }); 
-                                        } else {
-                                            setIsCustomRelation(false);
-                                            setNewMember({ ...newMember, relation: e.target.value });
-                                        }
-                                    }}
+
+                {/* MODALS */}
+                <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onSuccess={handleAuthSuccess} initialName={guestName} initialAge={guestAge} initialGender={guestGender} addToast={addToast} />
+                <DoctorProfileModal isOpen={!!viewingDoctor} onClose={() => setViewingDoctor(null)} doctor={viewingDoctor} operationMode={viewingDoctorClinic?.operationMode} onBook={handleBookFromProfile} />
+                {showAddMember && (<div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4"><div className="bg-white w-full max-w-sm rounded-t-2xl sm:rounded-2xl p-6 animate-in slide-in-from-bottom-10"><h3 className="text-lg font-bold mb-4">{editingMemberIndex !== null ? 'Edit Family Member' : 'Add Family Member'}</h3><div className="space-y-3"><Input label="Name" value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} /><div className="grid grid-cols-2 gap-3"><Input label="Age" type="number" value={newMember.age} onChange={e => setNewMember({...newMember, age: e.target.value})} /><div><label className="block text-sm font-medium mb-1">Gender</label><select className="w-full p-2 border rounded-lg" value={newMember.gender} onChange={e => setNewMember({...newMember, gender: e.target.value})}><option>Male</option><option>Female</option></select></div></div><div><label className="block text-sm font-medium mb-1">Relation</label>{isCustomRelation ? (<div className="flex gap-2"><Input value={newMember.relation} onChange={e => setNewMember({...newMember, relation: e.target.value})} placeholder="Enter relation" autoFocus /><button onClick={() => setIsCustomRelation(false)} className="text-xs text-blue-600 underline whitespace-nowrap px-2">Select List</button></div>) : (<select className="w-full p-2 border rounded-lg" value={RELATIONSHIP_OPTIONS.includes(newMember.relation) ? newMember.relation : ''} onChange={(e) => { if (e.target.value === 'OTHER') setIsCustomRelation(true); else setNewMember({...newMember, relation: e.target.value}); }}><option value="" disabled>Select...</option>{RELATIONSHIP_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}<option value="OTHER">Other (Type Custom)</option></select>)}</div></div><div className="flex gap-3 mt-6"><Button variant="secondary" className="flex-1" onClick={() => setShowAddMember(false)}>Cancel</Button><Button className="flex-1" onClick={handleAddMember}>Save</Button></div></div></div>)}
+                {/* Cancel Modal */}
+                {cancelModal.isOpen && (<div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95"><div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600"><AlertCircle className="h-6 w-6" /></div><h3 className="text-lg font-bold text-center mb-2">Cancel Appointment?</h3><p className="text-slate-500 text-center text-sm mb-6">Are you sure you want to cancel your visit with <strong>{cancelModal.visit?.doctorName}</strong>?</p><div className="flex gap-3"><Button variant="secondary" className="flex-1" onClick={() => setCancelModal({ isOpen: false, visit: null })}>Keep it</Button><Button className="flex-1 bg-red-600 hover:bg-red-700 text-white border-red-600" onClick={confirmCancel}>Yes, Cancel</Button></div></div></div>)}
+                {/* Late Warning Modal */}
+                {showLateWarningModal && (<div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95"><div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 text-yellow-600"><Timer className="h-6 w-6" /></div><h3 className="text-lg font-bold text-center mb-2">High Wait Time Risk</h3><p className="text-slate-500 text-center text-sm mb-6">Your travel time ({travelTime} mins) is longer than the estimated wait ({waitStats.time} mins). You might miss your turn.</p><div className="flex gap-3"><Button variant="secondary" className="flex-1" onClick={() => setShowLateWarningModal(false)}>Go Back</Button><Button className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-500" onClick={() => { setShowLateWarningModal(false); submitBooking(); }}>Book Anyway</Button></div></div></div>)}
+                
+                {/* FEEDBACK MODAL */}
+                <Modal isOpen={feedbackModal.isOpen} onClose={() => setFeedbackModal({...feedbackModal, isOpen: false})} title="Rate Your Visit">
+                    <div className="space-y-6 text-center pt-2">
+                        <p className="text-slate-600">How was your experience with<br/><strong className="text-lg text-slate-900">Dr. {feedbackModal.visit?.doctorName}</strong>?</p>
+                        
+                        <div className="flex justify-center gap-2">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                                <button 
+                                    key={star}
+                                    onClick={() => setFeedbackModal({...feedbackModal, rating: star})}
+                                    className="transition-transform hover:scale-110 focus:outline-none"
                                 >
-                                    <option value="" disabled>Select Relationship</option>
-                                    {RELATIONSHIP_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                    <option value="Other">Other (Type Custom)</option>
-                                </select>
-                                
-                                {isCustomRelation && (
-                                    <Input 
-                                        placeholder="Enter specific relationship (e.g. Uncle)" 
-                                        value={newMember.relation} 
-                                        onChange={e => setNewMember({...newMember, relation: e.target.value})} 
-                                        autoFocus
+                                    <Star 
+                                        className={`h-10 w-10 ${star <= feedbackModal.rating ? 'fill-yellow-400 text-yellow-400' : 'text-slate-300'}`} 
                                     />
-                                )}
-                            </div>
-
-                            <div className="flex gap-3 justify-end pt-2">
-                                <Button variant="secondary" onClick={() => setShowAddMember(false)}>Cancel</Button>
-                                <Button onClick={handleAddMember}>Save</Button>
-                            </div>
+                                </button>
+                            ))}
                         </div>
+
+                        <textarea 
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+                            placeholder="Tell us what you liked or what we can improve..."
+                            rows={3}
+                            value={feedbackModal.text}
+                            onChange={(e) => setFeedbackModal({...feedbackModal, text: e.target.value})}
+                        />
+
+                        <Button 
+                            className="w-full" 
+                            disabled={feedbackModal.rating === 0}
+                            onClick={handleSubmitFeedback}
+                        >
+                            Submit Feedback
+                        </Button>
                     </div>
-                </div>
-            )}
-            
-            {/* Late Arrival Warning Modal */}
-            {showLateWarningModal && (
-                <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4 animate-in fade-in">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 text-center animate-in zoom-in-95">
-                        <div className="bg-amber-100 h-12 w-12 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <AlertTriangle className="h-6 w-6 text-amber-600" />
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-900 mb-2">Late Arrival Risk</h3>
-                        <p className="text-sm text-slate-500 mb-6 leading-relaxed">
-                            Your travel time (<strong>{travelTime}m</strong>) is longer than the estimated wait (<strong>{waitStats.time}m</strong>).
-                            <br/><br/>
-                            You will likely be skipped or placed at the back of the queue when you arrive.
-                        </p>
-                        <div className="flex gap-3 justify-center">
-                            <Button variant="secondary" onClick={() => setShowLateWarningModal(false)}>Cancel</Button>
-                            <Button className="bg-amber-600 hover:bg-amber-700 border-amber-600" onClick={() => submitBooking()}>I Understand</Button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Auth Modal for Guests */}
-            <AuthModal 
-                isOpen={showAuthModal}
-                onClose={() => setShowAuthModal(false)}
-                onSuccess={handleAuthSuccess}
-                initialName={guestName}
-                initialAge={guestAge}
-                initialGender={guestGender}
-                addToast={addToast}
-            />
-
-            {/* Doctor Profile Modal */}
-            <DoctorProfileModal 
-                isOpen={!!viewingDoctor}
-                onClose={() => setViewingDoctor(null)}
-                doctor={viewingDoctor}
-                onBook={handleBookFromProfile}
-            />
+                </Modal>
+            </div>
         </main>
     </div>
   );

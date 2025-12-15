@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Patient, Doctor, PatientStatus } from '../../../types';
-import { History, Edit2, Trash2, CalendarDays, Phone, User, CheckSquare, Square, X, PauseCircle } from 'lucide-react';
+import { History, Edit2, Trash2, CalendarDays, Phone, User, CheckSquare, Square, X, PauseCircle, Star, MessageSquare } from 'lucide-react';
 
 interface PatientDatabaseTableProps {
   patients: Patient[];
@@ -86,7 +86,7 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
           </div>
       )}
 
-      <div className="min-w-[800px] overflow-x-auto bg-white rounded-xl shadow-sm border border-slate-200">
+      <div className="min-w-[900px] overflow-x-auto bg-white rounded-xl shadow-sm border border-slate-200">
         <table className="w-full text-sm text-left border-separate border-spacing-y-0">
           <thead className="text-slate-500 font-bold text-xs uppercase tracking-wider bg-slate-50 sticky top-0 z-10">
             <tr>
@@ -98,6 +98,7 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
               <th className="px-6 py-4 border-b border-slate-200">Patient Profile</th>
               <th className="px-6 py-4 border-b border-slate-200">Contact Info</th>
               <th className="px-6 py-4 border-b border-slate-200">Last Visit</th>
+              <th className="px-6 py-4 border-b border-slate-200">Rating</th>
               <th className="px-6 py-4 border-b border-slate-200 text-right">Actions</th>
             </tr>
           </thead>
@@ -138,6 +139,24 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
                               Last seen by Dr. {doctors.find(d => d.id === patient.doctorId)?.name || 'Unknown'}
                           </div>
                       </td>
+                      <td className="px-6 py-4">
+                          {patient.rating ? (
+                              <div className="flex items-center gap-2">
+                                  <div className="flex text-yellow-400">
+                                      {Array.from({length: 5}).map((_, i) => (
+                                          <Star key={i} className={`h-3 w-3 ${i < (patient.rating || 0) ? 'fill-current' : 'text-slate-200'}`} />
+                                      ))}
+                                  </div>
+                                  {patient.feedback && (
+                                      <div className="text-slate-400" title={patient.feedback}>
+                                          <MessageSquare className="h-4 w-4" />
+                                      </div>
+                                  )}
+                              </div>
+                          ) : (
+                              <span className="text-xs text-slate-300 italic">No rating</span>
+                          )}
+                      </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                           <button onClick={() => onHistoryClick(patient)} className="flex items-center gap-1.5 px-3 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors">
@@ -156,7 +175,7 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
             })}
             {patients.length === 0 && (
                 <tr>
-                    <td colSpan={5} className="text-center py-12 text-slate-400 italic">
+                    <td colSpan={6} className="text-center py-12 text-slate-400 italic">
                         No patients found in database.
                     </td>
                 </tr>

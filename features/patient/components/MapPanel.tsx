@@ -1,3 +1,4 @@
+
 import React, { useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -78,7 +79,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     getClinicWaitStats, onLocationSelect, onMarkerDragEnd, onLocateMe, onMarkerClick, onBookClick, onClosePickingLocation
 }) => {
     return (
-        <div className={`w-full md:w-[40%] lg:w-[45%] xl:w-[50%] h-full bg-slate-100 border-l border-slate-200 relative hidden md:block`}>
+        <div className={`w-full md:w-[35%] h-full bg-slate-100 border-l border-slate-200 relative hidden md:block`}>
             <MapContainer center={mapCenter} zoom={13} scrollWheelZoom={true} className={isPickingLocation ? 'cursor-crosshair' : ''} style={{ height: '100%', width: '100%' }}>
                 <MapInvalidator showMap={showMap} />
                 <TileLayer attribution='&copy; CARTO' url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
