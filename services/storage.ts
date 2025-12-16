@@ -108,6 +108,36 @@ class StorageService {
       this.save();
   }
 
+  async reorderQueue(clinicId: string, draggedId: string, targetId: string) {
+      await delay(50);
+      const clinic = this.clinics.find(c => c.id === clinicId);
+      if (!clinic) return;
+
+      const queue = clinic.patients.filter(p => p.status === PatientStatus.WAITING).sort((a,b) => (a.queueOrder || 0) - (b.queueOrder || 0));
+      const draggedIndex = queue.findIndex(p => p.id === draggedId);
+      const targetIndex = queue.findIndex(p => p.id === targetId);
+
+      if (draggedIndex === -1 || targetIndex === -1) return;
+
+      // Reorder logic
+      const [movedItem] = queue.splice(draggedIndex, 1);
+      queue.splice(targetIndex, 0, movedItem);
+
+      // Assign new order indices
+      queue.forEach((p, idx) => { p.queueOrder = idx; });
+
+      // Merge back into main list
+      this.clinics = this.clinics.map(c => 
+          c.id === clinicId 
+          ? { ...c, patients: c.patients.map(p => {
+              const inQueue = queue.find(q => q.id === p.id);
+              return inQueue ? { ...p, queueOrder: inQueue.queueOrder } : p;
+          }) }
+          : c
+      );
+      this.save();
+  }
+
   async deletePatient(clinicId: string, patientId: string) {
     await delay(50);
     this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, patients: c.patients.filter(p => p.id !== patientId) } : c);

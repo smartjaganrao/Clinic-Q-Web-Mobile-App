@@ -13,7 +13,7 @@ import { Button } from '../components/Button';
 import { Logo } from '../components/Logo';
 
 interface LandingPageProps {
-  onPatientEnter: (mode?: 'DOCTOR' | 'CLINIC') => void;
+  onPatientEnter: (mode?: 'DOCTOR' | 'CLINIC', query?: string, location?: string) => void;
   onClinicMarketing: () => void;
   onStaffLogin: () => void;
   onSimulateQRScan: (clinicId: string) => void;
@@ -27,7 +27,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onClin
   
   // --- SEARCH WIDGET STATE ---
   const [searchMode, setSearchMode] = useState<'DOCTOR' | 'CLINIC'>('CLINIC');
-  const [location, setLocation] = useState('Chennai');
+  const [location, setLocation] = useState('');
+  const [query, setQuery] = useState(''); // New query state if needed for refined search
 
   // Simulate a living system
   useEffect(() => {
@@ -118,12 +119,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onClin
                                       type="text" 
                                       value={location}
                                       onChange={(e) => setLocation(e.target.value)}
+                                      onKeyDown={(e) => e.key === 'Enter' && onPatientEnter(searchMode, undefined, location)}
                                       className="w-full pl-12 pr-4 h-14 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 outline-none font-medium text-slate-900 transition-all placeholder:text-slate-400"
-                                      placeholder="City or Area"
+                                      placeholder="City (e.g. Chennai)"
                                   />
                               </div>
                               <Button 
-                                  onClick={() => onPatientEnter(searchMode)} 
+                                  onClick={() => onPatientEnter(searchMode, undefined, location)} 
                                   className="h-14 rounded-2xl px-8 bg-teal-600 hover:bg-teal-700 shadow-lg shadow-teal-200 text-lg font-bold flex items-center justify-center gap-2 shrink-0"
                               >
                                   <Search className="h-5 w-5" /> Search
@@ -294,10 +296,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onClin
                    Search clinics now and skip waiting rooms forever.
                </p>
                <div className="flex flex-col sm:flex-row justify-center gap-4">
-                   <Button size="lg" className="bg-white hover:bg-slate-100 text-slate-900 h-14 px-10 rounded-full text-lg font-bold shadow-2xl" onClick={() => onPatientEnter('CLINIC')}>
+                   <Button size="lg" className="bg-white hover:bg-slate-100 text-slate-900 h-14 px-10 rounded-full text-lg font-bold shadow-2xl" onClick={() => onPatientEnter('CLINIC', undefined, location)}>
                        Find Clinics Near Me
                    </Button>
-                   <Button size="lg" variant="outline" className="border-slate-700 text-white hover:bg-slate-800 h-14 px-10 rounded-full text-lg" onClick={() => onPatientEnter('DOCTOR')}>
+                   <Button size="lg" variant="outline" className="border-slate-700 text-white hover:bg-slate-800 h-14 px-10 rounded-full text-lg" onClick={() => onPatientEnter('DOCTOR', undefined, location)}>
                        Find Doctors
                    </Button>
                </div>

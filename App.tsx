@@ -124,9 +124,12 @@ export default function App() {
 
   const handleStaffLogin = () => navigate('/login/staff');
   
-  const handlePatientEnter = (mode?: 'DOCTOR' | 'CLINIC') => {
+  const handlePatientEnter = (mode?: 'DOCTOR' | 'CLINIC', query?: string, loc?: string) => {
       setInitialSearchMode(mode || 'CLINIC');
-      navigate('/patient');
+      const params = new URLSearchParams();
+      if (query) params.append('q', query);
+      if (loc) params.append('city', loc);
+      navigate({ pathname: '/patient', search: params.toString() });
   };
 
   const handleRoleSelect = (role: UserRole) => {
@@ -462,6 +465,12 @@ export default function App() {
       }
   };
 
+  const handleDragDrop = async (draggedId: string, targetId: string) => {
+      if (!currentClinicId) return;
+      await storage.reorderQueue(currentClinicId, draggedId, targetId);
+      addToast("Queue reordered", "success");
+  };
+
   // ADMIN HANDLERS
   const handleUpdateClinicPlan = async (clinicId: string, plan: PlanType) => {
       await storage.updateClinic(clinicId, { plan });
@@ -645,9 +654,7 @@ export default function App() {
                                 onManualReorder={(id, direction) => {
                                     addToast("Reordering not fully implemented in demo", "info");
                                 }}
-                                onDragDrop={(draggedId, targetId) => {
-                                    addToast("Reordering updated", "success");
-                                }}
+                                onDragDrop={handleDragDrop}
                                 onManualCheckIn={(id) => handlePatientCheckIn(currentClinic.id, id)}
                                 onBulkUpdateStatus={handleBulkUpdateStatus}
                                 onAddStaff={handleLocalAddStaff}

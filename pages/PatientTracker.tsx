@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, useMatch, useLocation } from 'react-router-dom';
+import { useNavigate, useMatch, useLocation, useSearchParams } from 'react-router-dom';
 import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode } from '../types';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -206,15 +206,15 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   // --- ROUTER STATE MANAGEMENT ---
-  // Using location.pathname instead of useMatch for top-level tabs to ensure robust matching
   const activeTab = useMemo<'ACTIVE' | 'BOOK' | 'HISTORY' | 'PROFILE'>(() => {
     const path = location.pathname;
     if (path.includes('/patient/visits')) return 'ACTIVE';
     if (path.includes('/patient/history')) return 'HISTORY';
     if (path.includes('/patient/profile')) return 'PROFILE';
-    return 'BOOK'; // Default to BOOK (Find Care)
+    return 'BOOK';
   }, [location.pathname]);
 
   const bookingView = useMemo<'LIST' | 'CLINIC_DETAILS' | 'FORM'>(() => {
@@ -234,16 +234,14 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
   const selectedClinic = useMemo(() => {
       if (!selectedClinicSlug) return undefined;
-      return clinics.find(c => c.slug === selectedClinicSlug || c.id === selectedClinicSlug); // Fallback to ID if needed
+      return clinics.find(c => c.slug === selectedClinicSlug || c.id === selectedClinicSlug);
   }, [clinics, selectedClinicSlug]);
 
   const selectedDoctor = useMemo(() => {
       if (!selectedDoctorSlug || !selectedClinic) return undefined;
-      // Search by generated slug in the selected clinic
       return selectedClinic.doctors.find(d => createDoctorSlug(d) === selectedDoctorSlug || d.id === selectedDoctorSlug);
   }, [selectedClinic, selectedDoctorSlug]);
 
-  // Derived IDs for internal logic
   const selectedClinicId = selectedClinic?.id || null;
   const selectedDoctorId = selectedDoctor?.id || null;
 
@@ -254,7 +252,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       }
   }, [location.pathname, navigate]);
 
-  // Handle Pre-selected ID (QR Scan) -> Convert to Slug
+  // Handle Pre-selected ID (QR Scan)
   useEffect(() => { 
       if (preSelectedClinicId) { 
           const clinic = clinics.find(c => c.id === preSelectedClinicId); 
@@ -276,6 +274,26 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [selectedSpecialty, setSelectedSpecialty] = useState('All Specialties');
   const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'NEAR' | 'WAIT' | 'FEE'>('NEAR');
+
+  // --- INITIALIZE FROM URL PARAMS ---
+  useEffect(() => {
+      const q = searchParams.get('q');
+      const city = searchParams.get('city');
+      
+      if (q) {
+          setSearchQuery(q);
+      }
+      
+      if (city) {
+          // Check if city exists in uniqueCities (need to calculate first or check loosely)
+          // Simple heuristic: set it, the filter logic handles non-matches by showing empty
+          const hasCity = clinics.some(c => c.city.toLowerCase() === city.toLowerCase());
+          if (hasCity) {
+              const matchedCity = clinics.find(c => c.city.toLowerCase() === city.toLowerCase())?.city;
+              if (matchedCity) setSelectedCity(matchedCity);
+          }
+      }
+  }, [searchParams, clinics]);
   
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [showAddMember, setShowAddMember] = useState(false);
@@ -309,7 +327,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [viewingDoctor, setViewingDoctor] = useState<Doctor | null>(null);
   const [feedbackModal, setFeedbackModal] = useState<{ isOpen: boolean; visit: any | null; rating: number; text: string }>({ isOpen: false, visit: null, rating: 0, text: '' });
 
-  // Navigation Helpers (Updated for SEO URLs)
+  // Navigation Helpers
   const navigateToView = (view: 'LIST' | 'CLINIC_DETAILS' | 'FORM', clinic: Clinic | null, doctor?: Doctor) => {
       if (view === 'LIST') navigate('/patient/find');
       else if (view === 'CLINIC_DETAILS' && clinic) navigate(`/patient/clinic/${clinic.slug}`);
@@ -324,7 +342,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   };
 
   const handleUIBack = () => {
-      // Logic to go back one level
       if (bookingView === 'FORM' && selectedClinic) {
            navigate(`/patient/clinic/${selectedClinic.slug}`);
       } else if (bookingView === 'CLINIC_DETAILS') {
@@ -337,9 +354,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   // Get clinic associated with viewing doctor (needed for finding operation mode)
   const viewingDoctorClinic = useMemo(() => {
       if (!viewingDoctor) return undefined;
-      // If we are already in a clinic context (selectedClinicId), use that
       if (selectedClinicId && selectedClinic) return selectedClinic;
-      // Otherwise find the clinic this doctor belongs to
       return clinics.find(c => c.doctors.some(d => d.id === viewingDoctor.id));
   }, [viewingDoctor, selectedClinicId, clinics, selectedClinic]);
 
@@ -353,7 +368,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       return null;
   }, [userLocation, selectedClinic]);
 
-  // Use travel estimate as default if available
   useEffect(() => {
       if (travelEstimate) {
           const mins = travelEstimate.mins;
@@ -424,12 +438,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   // --- DERIVED DATA FOR FILTERS ---
   const uniqueCities = useMemo(() => ['All Cities', ...Array.from(new Set(clinics.map(c => c.city))).sort()], [clinics]);
   
-  const uniqueSpecialties = useMemo(() => {
-      const set = new Set<string>();
-      clinics.forEach(c => c.doctors.forEach(d => set.add(d.specialty)));
-      return ['All Specialties', ...Array.from(set).sort()];
-  }, [clinics]);
-
   const activeVisits = useMemo(() => { if(isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown', room: doc?.roomNumber || '-' }); } }); }); return visits.sort((a,b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
   const historyVisits = useMemo(() => { if(isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && (p.status === PatientStatus.COMPLETED || p.status === PatientStatus.CANCELLED)) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown', notes: p.notes }); } }); }); return visits.sort((a,b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
   
@@ -647,7 +655,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       }
       onGetToken(pName, pPhone, selectedDoctorId!, selectedClinicId!, visitType === 'APPOINTMENT' ? apptTime : undefined, visitType === 'APPOINTMENT' ? apptDate : undefined, pAge, pGender, symptoms);
       
-      // Update state and history to jump to Active tab
       navigate('/patient/visits');
       setSymptoms(''); 
       setVisitType('WALK_IN'); 
@@ -1400,24 +1407,20 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                         </div>
                                                         {apptDate && hasAnySlots ? (
                                                             <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
-                                                                {['Morning', 'Afternoon', 'Evening', 'Night'].map(label => {
-                                                                    const slots = groupedTimeSlots[label as keyof GroupedSlots];
-                                                                    if (slots.length === 0) return null;
-                                                                    return (
-                                                                        <div key={label}>
-                                                                            <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1">
-                                                                                {label === 'Morning' ? <Sun className="h-3 w-3" /> : label === 'Afternoon' ? <CloudSun className="h-3 w-3" /> : label === 'Evening' ? <Moon className="h-3 w-3" /> : <MoonStar className="h-3 w-3" />} {label}
-                                                                            </h4>
-                                                                            <div className="grid grid-cols-4 gap-2">
-                                                                                {slots.map(slot => (
-                                                                                    <button key={slot.value} onClick={() => setApptTime(slot.value)} className={`py-2 px-1 rounded-lg text-[10px] font-bold border transition-all ${apptTime === slot.value ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 border-slate-200 hover:border-purple-300'}`}>
-                                                                                        {slot.label}
-                                                                                    </button>
-                                                                                ))}
-                                                                            </div>
+                                                                {Object.entries(groupedTimeSlots).map(([label, slots]) => slots.length > 0 && (
+                                                                    <div key={label}>
+                                                                        <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1">
+                                                                            {label === 'Morning' ? <Sun className="h-3 w-3" /> : label === 'Afternoon' ? <CloudSun className="h-3 w-3" /> : label === 'Evening' ? <Moon className="h-3 w-3" /> : <MoonStar className="h-3 w-3" />} {label}
+                                                                        </h4>
+                                                                        <div className="grid grid-cols-4 gap-2">
+                                                                            {slots.map(slot => (
+                                                                                <button key={slot.value} onClick={() => setApptTime(slot.value)} className={`py-2 px-1 rounded-lg text-[10px] font-bold border transition-all ${apptTime === slot.value ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 border-slate-200 hover:border-purple-300'}`}>
+                                                                                    {slot.label}
+                                                                                </button>
+                                                                            ))}
                                                                         </div>
-                                                                    );
-                                                                })}
+                                                                    </div>
+                                                                ))}
                                                             </div>
                                                         ) : (
                                                             <div className="text-center text-xs text-slate-400 py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
