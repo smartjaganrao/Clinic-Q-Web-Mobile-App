@@ -17,8 +17,9 @@ interface DoctorSearchCardProps {
 export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
   doctor, clinic, distLabel, nextSlotLabel, isWalkInAllowed, onBook, onViewProfile
 }) => {
-  const isWalkInOnly = clinic.operationMode === ClinicOperationMode.WALK_IN;
-  const isApptOnly = clinic.operationMode === ClinicOperationMode.APPOINTMENT;
+  const canQueue = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
+  const canBook = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
+  const isDirectWalkIn = clinic.operationMode === ClinicOperationMode.DIRECT_WALK_IN;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group h-full flex flex-col">
@@ -58,7 +59,7 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
                 </p>
                 
                 {/* Live Status Row */}
-                {isWalkInAllowed && !isApptOnly ? (
+                {isWalkInAllowed && canQueue ? (
                     <div className="flex items-center gap-2 mt-1">
                         <span className="flex items-center gap-1 text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-100 font-bold text-[9px]">
                             <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
@@ -81,15 +82,15 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
       {/* Action Footer */}
       <div className="bg-slate-50/50 border-t border-slate-100 p-2 flex items-center gap-2 mt-auto">
           <div className="flex-1 min-w-0">
-              <div className={`text-[10px] font-bold flex items-center gap-1 truncate ${isWalkInAllowed ? 'text-green-600' : 'text-slate-500'}`}>
-                  {isWalkInOnly ? <Footprints className="h-3 w-3" /> : (isWalkInAllowed ? <Zap className="h-3 w-3 fill-current" /> : <Calendar className="h-3 w-3" />)}
-                  {isWalkInOnly ? 'Walk-in Only' : nextSlotLabel}
+              <div className={`text-[10px] font-bold flex items-center gap-1 truncate ${canQueue || isDirectWalkIn ? 'text-green-600' : 'text-slate-500'}`}>
+                  {isDirectWalkIn ? <Footprints className="h-3 w-3" /> : (canQueue && isWalkInAllowed ? <Zap className="h-3 w-3 fill-current" /> : <Calendar className="h-3 w-3" />)}
+                  {isDirectWalkIn ? 'Walk-in Only' : nextSlotLabel}
               </div>
           </div>
           <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); onViewProfile(); }} className="h-8 text-[10px] px-2 font-bold bg-white border-slate-200">
               Profile
           </Button>
-          {!isWalkInOnly ? (
+          {canBook ? (
               <Button size="sm" onClick={(e) => { e.stopPropagation(); onBook(); }} className="h-8 text-[10px] px-3 font-bold shadow-sm">
                   Book
               </Button>

@@ -59,9 +59,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onClin
                 <button onClick={() => { const el = document.getElementById('how-it-works'); el?.scrollIntoView({ behavior: 'smooth' }); }} className="text-sm font-medium text-slate-600 hover:text-teal-600 transition-colors">How it Works</button>
             </div>
 
-            <div className="flex items-center gap-3">
-               <button onClick={onClinicMarketing} className="text-sm font-bold text-slate-500 hover:text-slate-800 hidden sm:block mr-2">For Clinics & Doctors</button>
-               <Button onClick={() => onPatientEnter('CLINIC')} className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 shadow-lg shadow-teal-100 font-bold">Find Care</Button>
+            <div className="flex items-center gap-4">
+               {/* Mode Toggle */}
+               <div className="bg-slate-100 p-1 rounded-full flex items-center">
+                  <button className="px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold bg-white text-slate-900 shadow-sm transition-all cursor-default">
+                      Patient
+                  </button>
+                  <button onClick={onClinicMarketing} className="px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold text-slate-500 hover:text-slate-900 transition-all">
+                      Clinic
+                  </button>
+               </div>
+
+               <Button onClick={() => onPatientEnter('CLINIC')} className="rounded-full px-5 bg-teal-600 hover:bg-teal-700 shadow-lg shadow-teal-100 font-bold hidden sm:flex text-sm">Find Care</Button>
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
 
+// ... existing imports ...
 import React, { useState, useMemo, useEffect } from 'react';
 import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff, ClinicOperationMode, Clinic } from '../types';
 import { Button } from '../components/Button';
@@ -17,6 +18,7 @@ import { ReceptionStats } from '../features/reception/components/ReceptionStats'
 import { AddPatientModal } from '../features/reception/components/AddPatientModal';
 import { DoctorFormModal } from '../features/reception/components/DoctorFormModal';
 
+// ... (KEEP ALL MAP COMPONENTS & INTERFACES) ...
 // --- MAP COMPONENTS ---
 const DefaultIcon = L.divIcon({
     className: 'custom-pin',
@@ -80,7 +82,7 @@ const COMMON_AMENITIES = [
 ];
 
 export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
-    doctors, patients, staff = [], clinicName, clinicType, operationMode = ClinicOperationMode.HYBRID, clinicData,
+    doctors, patients, staff = [], clinicName, clinicType, operationMode = ClinicOperationMode.HYBRID_FULL, clinicData,
     onAddPatient, onEditPatient, onDeletePatient, onDeleteMultiplePatients, 
     onAddDoctor, onCheckMasterDoctor, onEditDoctor, onDeleteDoctor, onUpdateStatus, onCancelPatient, onUpdateClinicSettings, 
     onToggleEmergency, onManualReorder, onDragDrop, onManualCheckIn, onBulkUpdateStatus, 
@@ -153,6 +155,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         }
     }, [isSettingsModalOpen, clinicName, operationMode, clinicData, clinicType]);
 
+    // ... (Keep existing handlers for Map, Doctors, Patients) ...
     const handleSearchLocation = async () => {
         if (!mapSearchQuery) return;
         setIsSearchingLocation(true);
@@ -453,8 +456,8 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         <div className="hidden sm:flex flex-wrap gap-3 mt-0.5 text-xs text-slate-500 items-center">
                             <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {clinicData?.operatingHours || '9am - 9pm'}</span>
                             <span>•</span>
-                            <span className={`px-1.5 py-0.5 rounded font-bold uppercase text-[9px] ${operationMode === ClinicOperationMode.WALK_IN ? 'bg-green-100 text-green-700' : operationMode === ClinicOperationMode.APPOINTMENT ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                                {operationMode.replace('_', ' ')}
+                            <span className="px-1.5 py-0.5 rounded font-bold uppercase text-[9px] bg-indigo-100 text-indigo-700">
+                                {operationMode.replace(/_/g, ' ')}
                             </span>
                         </div>
                     </div>
@@ -471,6 +474,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 {/* DOCTOR STATUS DECK - Only visible in Queue Tab */}
                 {activeTab === 'QUEUE' && (
                     <div className="bg-white border-b border-slate-200 w-full overflow-hidden transition-all duration-300">
+                        {/* ... (Keep Doctor Status Deck) ... */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 gap-2 p-2 max-w-[1920px] mx-auto">
                             {/* "All" Card */}
                             <button 
@@ -727,22 +731,22 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
                             <div className="space-y-3 pt-2">
                                 <label className="block text-sm font-medium text-slate-700">Operation Mode</label>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                    {[ClinicOperationMode.WALK_IN, ClinicOperationMode.APPOINTMENT, ClinicOperationMode.HYBRID].map(mode => (
-                                        <button 
-                                            key={mode}
-                                            onClick={() => setSettingsForm({ ...settingsForm, operationMode: mode })}
-                                            className={`p-2 rounded-lg border text-center text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 h-20 ${settingsForm.operationMode === mode ? 'bg-primary-50 border-primary-500 ring-1 ring-primary-500 text-primary-700' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
-                                        >
-                                            {mode === ClinicOperationMode.WALK_IN ? <Footprints className="h-5 w-5" /> : mode === ClinicOperationMode.APPOINTMENT ? <CalendarClock className="h-5 w-5" /> : <Shuffle className="h-5 w-5" />}
-                                            {mode.replace('_', ' ')}
-                                        </button>
-                                    ))}
-                                </div>
+                                <select 
+                                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                                    value={settingsForm.operationMode} 
+                                    onChange={e => setSettingsForm({ ...settingsForm, operationMode: e.target.value as ClinicOperationMode })}
+                                >
+                                    <option value={ClinicOperationMode.DIRECT_WALK_IN}>Direct Walk-in Only</option>
+                                    <option value={ClinicOperationMode.ONLINE_WALK_IN}>Online Walk-in Only</option>
+                                    <option value={ClinicOperationMode.BOTH_WALK_IN}>Direct Walk-in & Online Token</option>
+                                    <option value={ClinicOperationMode.HYBRID_DIRECT_APPT}>Hybrid: Direct Walk-in & Appointment</option>
+                                    <option value={ClinicOperationMode.HYBRID_FULL}>Hybrid: Direct, Online Token & Appointment</option>
+                                </select>
                             </div>
                         </div>
                     )}
 
+                    {/* ... (Keep Location and Branding Tabs unchanged) ... */}
                     {activeSettingsTab === 'LOCATION' && (
                         <div className="space-y-4 animate-in fade-in">
                             <Input label="Address Line 1" value={settingsForm.address || ''} onChange={e => setSettingsForm({ ...settingsForm, address: e.target.value })} />
@@ -871,7 +875,9 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 </div>
             </Modal>
 
+            {/* ... (Keep existing modals: Patient, Doctor etc) ... */}
             <Modal isOpen={!!editingPatient} onClose={() => setEditingPatient(null)} title="Edit Patient Profile" maxWidth="max-w-md">
+                {/* ... existing content ... */}
                 {editingPatient && (
                     <form onSubmit={handleSaveEditedPatient} className="space-y-4">
                         <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 mb-2 border border-blue-100 flex gap-2"><Activity className="h-5 w-5 flex-shrink-0" /><p>Changes apply to <strong>all visits</strong>.</p></div>
@@ -897,6 +903,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             </Modal>
 
             <Modal isOpen={!!vitalsPatient} onClose={() => setVitalsPatient(null)} title="Record Vitals" maxWidth="max-w-2xl">
+                {/* ... existing content ... */}
                 {vitalsPatient && (
                     <form onSubmit={handleSaveVitals} className="space-y-6">
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center"><div className="flex items-center gap-3"><div className="h-10 w-10 bg-white rounded-full flex items-center justify-center text-slate-500 font-bold border border-slate-200">{vitalsPatient.tokenNumber}</div><div><h3 className="font-bold text-slate-900">{vitalsPatient.name}</h3><p className="text-xs text-slate-500">{vitalsPatient.age} Yrs • {vitalsPatient.gender}</p></div></div></div>
@@ -913,6 +920,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             </Modal>
 
             <Modal isOpen={!!historyPatient} onClose={() => setHistoryPatient(null)} title="Patient History" maxWidth="max-w-2xl">
+                {/* ... existing content ... */}
                 {historyPatient && (() => {
                     const history = getPatientHistoryData(historyPatient);
                     return (

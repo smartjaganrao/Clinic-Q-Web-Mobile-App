@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Doctor, Patient, PatientStatus, DoctorStatus } from '../types';
-import { Coffee, Clock, Zap, AlertTriangle, PlayCircle, LogOut, Maximize, Minimize, User, Calendar, Languages } from 'lucide-react';
+import { Coffee, Clock, Zap, AlertTriangle, PlayCircle, LogOut, Maximize, Minimize, User, Calendar, Languages, Volume2, VolumeX } from 'lucide-react';
 
 interface KioskProps {
   doctors: Doctor[];
@@ -14,7 +14,8 @@ interface KioskProps {
 const LANGUAGES = [
     { code: 'en', label: 'English', langCode: 'en-IN' },
     { code: 'ta', label: 'தமிழ் (Tamil)', langCode: 'ta-IN' },
-    { code: 'te', label: 'తెలుగు (Telugu)', langCode: 'te-IN' }
+    { code: 'te', label: 'తెలుగు (Telugu)', langCode: 'te-IN' },
+    { code: 'hi', label: 'हिंदी (Hindi)', langCode: 'hi-IN' }
 ];
 
 const TRANSLATIONS = {
@@ -44,6 +45,15 @@ const TRANSLATIONS = {
         waiting: "వేచి ఉన్నారు",
         appt: "అపాయింట్మెంట్",
         walkIn: "వాక్-ఇన్"
+    },
+    hi: {
+        emergency: "आपातकालीन घोषणा. मरीज {name}, कृपया कक्ष संख्या {room} में जाएं",
+        token: "टोकन नंबर {token}, {name}, कृपया कक्ष संख्या {room} में जाएं",
+        nowServing: "अब बुला रहे हैं",
+        upNext: "अगला नंबर",
+        waiting: "प्रतीक्षा में",
+        appt: "नियुक्ति",
+        walkIn: "वॉक-इन"
     }
 };
 
@@ -51,11 +61,12 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
   // Browser Audio Policy State
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [currentLang, setCurrentLang] = useState<'en' | 'ta' | 'te'>('en');
+  const [currentLang, setCurrentLang] = useState<'en' | 'ta' | 'te' | 'hi'>('en');
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [missingVoiceWarning, setMissingVoiceWarning] = useState<string>('');
 
-  // Track previous serving tokens to trigger TTS only on change
-  const lastServingRef = useRef<Record<string, number>>({});
+  // Track previous serving tokens AND language to trigger TTS only on change
+  const lastServingRef = useRef<Record<string, { token: number, lang: string }>>({});
   
   // Emergency Flash State
   const [emergencyAlert, setEmergencyAlert] = useState<{ patient: Patient, doctorName: string } | null>(null);
@@ -72,33 +83,65 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
   useEffect(() => {
       const loadVoices = () => {
           const voices = window.speechSynthesis.getVoices();
-          setAvailableVoices(voices);
+          if (voices.length > 0) {
+              setAvailableVoices(voices);
+          }
       };
+      
       loadVoices();
+      
+      // Some browsers fire this asynchronously
       window.speechSynthesis.onvoiceschanged = loadVoices;
+      
+      // Fallback polling for Safari/Chrome sometimes failing to trigger event
+      const interval = setInterval(loadVoices, 1000);
+      return () => {
+          window.speechSynthesis.onvoiceschanged = null;
+          clearInterval(interval);
+      };
   }, []);
 
-  // --- HELPER: GET BEST VOICE (PRIORITIZE FEMALE) ---
+  // --- CHECK VOICE AVAILABILITY ---
+  useEffect(() => {
+      if (availableVoices.length === 0) return;
+      const targetLangConfig = LANGUAGES.find(l => l.code === currentLang);
+      if (targetLangConfig) {
+          const baseLang = targetLangConfig.langCode.split('-')[0];
+          const hasVoice = availableVoices.some(v => v.lang.toLowerCase().includes(baseLang));
+          if (!hasVoice && currentLang !== 'en') {
+              setMissingVoiceWarning(`${targetLangConfig.label} voice not found on device. Using English fallback.`);
+          } else {
+              setMissingVoiceWarning('');
+          }
+      }
+  }, [currentLang, availableVoices]);
+
+  // --- HELPER: GET BEST VOICE (PRIORITIZE FEMALE & REGIONAL) ---
   const getBestVoice = (langCode: string) => {
-      const baseLang = langCode.split('-')[0];
-      const langVoices = availableVoices.filter(v => v.lang.includes(langCode) || v.lang.includes(baseLang));
+      const normalizedLang = langCode.toLowerCase().replace('_', '-');
+      const baseLang = normalizedLang.split('-')[0];
+      
+      // Filter voices that loosely match the language
+      const langVoices = availableVoices.filter(v => {
+          const vLang = v.lang.toLowerCase().replace('_', '-');
+          return vLang.includes(normalizedLang) || vLang.includes(baseLang);
+      });
       
       if (langVoices.length === 0) return null;
 
-      // Priority 1: Explicit Female keywords
-      const femaleVoice = langVoices.find(v => 
-          v.name.toLowerCase().includes('female') || 
-          v.name.toLowerCase().includes('woman') ||
-          v.name.toLowerCase().includes('zira') || 
-          v.name.toLowerCase().includes('samantha') ||
-          v.name.toLowerCase().includes('rishi') === false 
-      );
-      if (femaleVoice) return { voice: femaleVoice, isExplicitFemale: true };
-
-      // Priority 2: Google voices (Often high quality female for regional)
+      // Priority 1: Explicit "Google" voices (usually high quality on Android/Chrome)
       const googleVoice = langVoices.find(v => v.name.toLowerCase().includes('google'));
       if (googleVoice) return { voice: googleVoice, isExplicitFemale: false }; 
 
+      // Priority 2: Female
+      const femaleVoice = langVoices.find(v => 
+          v.name.toLowerCase().includes('female') || 
+          v.name.toLowerCase().includes('woman') ||
+          v.name.toLowerCase().includes('samantha')
+      );
+      if (femaleVoice) return { voice: femaleVoice, isExplicitFemale: true };
+
+      // Fallback: First available
       return { voice: langVoices[0], isExplicitFemale: false };
   };
 
@@ -111,14 +154,16 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
           const result = getBestVoice(targetLangConfig.langCode);
           if (result) {
               utterance.voice = result.voice;
-              utterance.pitch = result.isExplicitFemale ? 1.05 : 1.2; 
+              utterance.pitch = result.isExplicitFemale ? 1.05 : 1.1; 
+              utterance.lang = result.voice.lang; // Ensure lang matches voice
           } else {
+              // Fallback if no specific voice found
+              console.warn(`No voice found for ${targetLangConfig.langCode}, using default.`);
               utterance.lang = targetLangConfig.langCode;
-              utterance.pitch = 1.2; 
           }
       }
       
-      utterance.rate = 0.95;
+      utterance.rate = 0.9; // Slightly slower for clarity
       window.speechSynthesis.speak(utterance);
   };
 
@@ -128,18 +173,13 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
       const width = window.innerWidth;
       const height = window.innerHeight;
       
-      // Prevent squashed cards on short screens (Landscape Mobile/Small Laptop)
       const isShortScreen = height < 600;
 
       if (width < 768) {
-        // Mobile Portrait
         setDoctorsPerPage(1);
       } else if (width < 1280) {
-        // Tablet / Laptop
         setDoctorsPerPage(2);
       } else {
-        // Desktop / TV
-        // If screen is wide but short, show 2 side-by-side instead of 2x2 grid
         if (isShortScreen) {
             setDoctorsPerPage(2);
         } else {
@@ -168,6 +208,8 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
   const handleStart = () => {
       setAudioEnabled(true);
       toggleFullscreen();
+      // Speak a test phrase to warm up TTS
+      speak(""); 
   };
 
   useEffect(() => {
@@ -190,17 +232,27 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
             speak(text);
         }
 
-        const lastToken = lastServingRef.current[doc.id];
-        if (lastToken !== currentPatient.tokenNumber) {
+        // Check if token changed OR language changed since last announcement
+        const lastState = lastServingRef.current[doc.id];
+        const hasTokenChanged = !lastState || lastState.token !== currentPatient.tokenNumber;
+        const hasLangChanged = lastState && lastState.lang !== currentLang;
+
+        if (hasTokenChanged || hasLangChanged) {
           if (!currentPatient.isEmergency) {
               const template = TRANSLATIONS[currentLang].token;
               const text = template
                 .replace('{token}', currentPatient.tokenNumber.toString())
                 .replace('{name}', currentPatient.name)
                 .replace('{room}', doc.roomNumber);
-              speak(text);
+              
+              // Small delay to ensure language switch state has settled if triggered by lang change
+              setTimeout(() => speak(text), 100);
           }
-          lastServingRef.current[doc.id] = currentPatient.tokenNumber;
+          // Update ref with current token AND language
+          lastServingRef.current[doc.id] = { 
+              token: currentPatient.tokenNumber, 
+              lang: currentLang 
+          };
         }
       }
     });
@@ -238,7 +290,6 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
   const getGridTopology = () => {
       if (visibleDoctors.length === 1) return 'grid-cols-1 grid-rows-1';
       if (visibleDoctors.length === 2) return 'grid-cols-1 md:grid-cols-2 grid-rows-1'; 
-      // If we are here, it's 3 or 4 items. Standard 2x2.
       return 'grid-cols-1 md:grid-cols-2 grid-rows-2'; 
   };
 
@@ -263,7 +314,7 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
                       <br className="hidden sm:block"/> Connect to your TV via HDMI or Cast.
                   </p>
                   
-                  <div className="flex justify-center gap-4 mb-8">
+                  <div className="flex justify-center gap-4 mb-8 flex-wrap">
                       {LANGUAGES.map(l => (
                           <button 
                             key={l.code}
@@ -309,6 +360,13 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
             </h1>
         </div>
         <div className="flex items-center gap-4 sm:gap-8 flex-shrink-0">
+            {missingVoiceWarning && (
+                <div className="hidden lg:flex items-center text-orange-400 bg-orange-900/20 px-3 py-1 rounded-full border border-orange-500/30 animate-pulse">
+                    <VolumeX className="h-4 w-4 mr-2" />
+                    <span className="text-xs font-bold">{missingVoiceWarning}</span>
+                </div>
+            )}
+            
             <div className="hidden sm:flex items-center bg-slate-900 border border-slate-800 rounded-lg p-1">
                 <Languages className="h-4 w-4 text-slate-500 mx-2" />
                 <select 

@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { Doctor, DaySchedule } from '../../../types';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { Modal } from '../../../components/Modal';
-import { Plus, Trash2, Copy, Link as LinkIcon, Clock, Calendar, CheckSquare, Coffee, Sun, Moon, ArrowRight, Zap, CloudSun, ToggleLeft, ToggleRight, MoonStar } from 'lucide-react';
+import { Plus, Trash2, Copy, Link as LinkIcon, Clock, Calendar, CheckSquare, Coffee, Sun, Moon, ArrowRight, Zap, CloudSun, ToggleLeft, ToggleRight, MoonStar, Mail, Lock } from 'lucide-react';
 
 interface DoctorFormModalProps {
   isOpen: boolean;
@@ -32,7 +33,7 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
   const [qsDays, setQsDays] = useState<string[]>(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']);
 
   const [form, setForm] = useState({
-      name: '', specialty: '', room: '', fee: '500', consultationTime: '15', mobile: '', regNo: '', masterId: '', avatarUrl: '',
+      name: '', specialty: '', room: '', fee: '500', consultationTime: '15', mobile: '', email: '', password: '', regNo: '', masterId: '', avatarUrl: '',
       schedule: [] as DaySchedule[]
   });
 
@@ -46,7 +47,7 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
             setForm({
                 name: initialData.name, specialty: initialData.specialty, room: initialData.roomNumber, 
                 fee: initialData.consultationFee.toString(), consultationTime: (initialData.consultationTime || 15).toString(),
-                mobile: initialData.mobile || '', regNo: initialData.registrationNumber || '', 
+                mobile: initialData.mobile || '', email: initialData.email || '', password: initialData.password || '', regNo: initialData.registrationNumber || '', 
                 masterId: initialData.masterId, avatarUrl: initialData.avatarUrl || '', 
                 schedule: normalized
             });
@@ -54,7 +55,7 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
             const defaultSchedule = DAYS_OF_WEEK.map(d => ({
                 day: d, slots: d === 'Sunday' ? [] : [{ startTime: '09:00', endTime: '17:00', active: true, label: 'Regular' }], isOff: d === 'Sunday'
             }));
-            setForm({ name: '', specialty: '', room: '', fee: '500', consultationTime: '15', mobile: '', regNo: '', masterId: '', avatarUrl: '', schedule: defaultSchedule });
+            setForm({ name: '', specialty: '', room: '', fee: '500', consultationTime: '15', mobile: '', email: '', password: '', regNo: '', masterId: '', avatarUrl: '', schedule: defaultSchedule });
             setLinkedProfile(null);
         }
         setActiveTab('INFO');
@@ -62,7 +63,7 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
   }, [isOpen, initialData, mode]);
 
   const handleMobileBlur = () => { if (form.mobile.length >= 10 && mode === 'ADD') { const existing = onCheckMasterDoctor(form.mobile); setLinkedProfile(existing || null); } };
-  const applyLinkedProfile = () => { if (linkedProfile) { setForm({ ...form, name: linkedProfile.name, specialty: linkedProfile.specialty, regNo: linkedProfile.registrationNumber || '', masterId: linkedProfile.masterId, avatarUrl: linkedProfile.avatarUrl || '' }); setLinkedProfile(null); addToast('Doctor profile linked!', 'success'); } };
+  const applyLinkedProfile = () => { if (linkedProfile) { setForm({ ...form, name: linkedProfile.name, specialty: linkedProfile.specialty, regNo: linkedProfile.registrationNumber || '', masterId: linkedProfile.masterId, avatarUrl: linkedProfile.avatarUrl || '', email: linkedProfile.email || '', password: linkedProfile.password || '' }); setLinkedProfile(null); addToast('Doctor profile linked!', 'success'); } };
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); onSave(form); onClose(); };
   
   // Schedule Helpers
@@ -185,6 +186,15 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
                         <Input label="Registration No." placeholder="REG12345" value={form.regNo} onChange={e => setForm({...form, regNo: e.target.value})} />
                     </div>
 
+                    {/* Auth Credentials */}
+                    <div className="grid grid-cols-2 gap-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <div className="col-span-2 text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2 mb-2">
+                            <Lock className="h-3 w-3" /> Login Credentials
+                        </div>
+                        <Input label="Email" placeholder="doctor@clinic.com" type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} required />
+                        <Input label="Password" type="password" placeholder="••••••" value={form.password} onChange={e => setForm({...form, password: e.target.value})} required />
+                    </div>
+
                     <div className="grid grid-cols-3 gap-6">
                         <Input label="Room No." placeholder="101" value={form.room} onChange={e => setForm({...form, room: e.target.value})} required />
                         <Input label="Consultation Fee (₹)" type="number" placeholder="500" value={form.fee} onChange={e => setForm({...form, fee: e.target.value})} />
@@ -193,6 +203,7 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
                 </div>
             )}
 
+            {/* Schedule Tab Content omitted for brevity as it remains mostly unchanged, keeping structure */}
             {activeTab === 'SCHEDULE' && (
                 <div className="space-y-8 animate-in fade-in">
                     

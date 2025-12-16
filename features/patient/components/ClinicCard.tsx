@@ -44,8 +44,9 @@ interface ClinicCardProps {
 export const ClinicCard: React.FC<ClinicCardProps> = ({
   clinic, waitInfo, feeRange, rating, distLabel, gmapsLink, relevantDoctors, isHighlighted, cardRef, onSelect, onBook, onQueue, onViewDoctor
 }) => {
-  const isWalkInOnly = clinic.operationMode === ClinicOperationMode.WALK_IN;
-  const isApptOnly = clinic.operationMode === ClinicOperationMode.APPOINTMENT;
+  const canBook = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
+  const canQueue = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
+  const isDirectWalkIn = clinic.operationMode === ClinicOperationMode.DIRECT_WALK_IN;
 
   return (
     <div 
@@ -118,23 +119,21 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
         
         {/* Action Footer */}
         <div className="bg-slate-50/50 border-t border-slate-100 p-2 flex items-center gap-2 mt-auto">
-            {!isWalkInOnly && (
+            {canBook && (
                 <Button onClick={(e) => { e.stopPropagation(); onBook(); }} variant="secondary" size="sm" className="flex-1 bg-white border-slate-200 text-slate-700 hover:text-primary-700 hover:border-primary-200 text-[10px] font-bold h-8 px-2">
                     <Calendar className="h-3 w-3 mr-1" /> Book
                 </Button>
             )}
             
-            {!isApptOnly && (
-                isWalkInOnly ? (
-                    <Button onClick={(e) => { e.stopPropagation(); onSelect(); }} size="sm" className="flex-1 text-[10px] font-bold bg-white text-green-700 border border-green-200 hover:bg-green-50 shadow-sm h-8 px-2">
-                        <Footprints className="h-3 w-3 mr-1" /> Walk-In
-                    </Button>
-                ) : (
-                    <Button onClick={(e) => { e.stopPropagation(); onQueue(); }} size="sm" className="flex-1 text-[10px] font-bold bg-slate-900 text-white shadow-sm hover:shadow hover:-translate-y-0.5 transition-all h-8 px-2">
-                        <Zap className="h-3 w-3 mr-1 fill-current" /> Queue
-                    </Button>
-                )
-            )}
+            {canQueue ? (
+                <Button onClick={(e) => { e.stopPropagation(); onQueue(); }} size="sm" className="flex-1 text-[10px] font-bold bg-slate-900 text-white shadow-sm hover:shadow hover:-translate-y-0.5 transition-all h-8 px-2">
+                    <Zap className="h-3 w-3 mr-1 fill-current" /> Queue
+                </Button>
+            ) : isDirectWalkIn ? (
+                <Button onClick={(e) => { e.stopPropagation(); onSelect(); }} size="sm" className="flex-1 text-[10px] font-bold bg-white text-green-700 border border-green-200 hover:bg-green-50 shadow-sm h-8 px-2">
+                    <Footprints className="h-3 w-3 mr-1" /> Walk-In
+                </Button>
+            ) : null}
 
             <a href={gmapsLink} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-colors h-8 w-8 flex items-center justify-center" title="Get Directions" onClick={(e) => e.stopPropagation()}>
                 <ExternalLink className="h-3.5 w-3.5" />

@@ -4,7 +4,7 @@ import { Staff } from '../../../types';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { Modal } from '../../../components/Modal';
-import { User, Phone, CheckCircle, XCircle, Trash2, Plus, ShieldAlert } from 'lucide-react';
+import { User, Phone, CheckCircle, XCircle, Trash2, Plus, ShieldAlert, Mail, Lock } from 'lucide-react';
 
 interface StaffManagementModalProps {
   isOpen: boolean;
@@ -21,15 +21,19 @@ export const StaffManagementModal: React.FC<StaffManagementModalProps> = ({
 }) => {
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffPhone, setNewStaffPhone] = useState('');
+  const [newStaffEmail, setNewStaffEmail] = useState('');
+  const [newStaffPassword, setNewStaffPassword] = useState('');
   const [newStaffRole, setNewStaffRole] = useState<'RECEPTIONIST' | 'NURSE' | 'MANAGER'>('RECEPTIONIST');
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newStaffName && newStaffPhone) {
+    if (newStaffName && newStaffEmail && newStaffPassword) {
       const newStaff: Staff = {
         id: `staff_${Date.now()}`,
         name: newStaffName,
         phone: newStaffPhone,
+        email: newStaffEmail,
+        password: newStaffPassword,
         role: newStaffRole,
         isActive: true,
         joinedDate: Date.now()
@@ -37,6 +41,8 @@ export const StaffManagementModal: React.FC<StaffManagementModalProps> = ({
       onAddStaff(newStaff);
       setNewStaffName('');
       setNewStaffPhone('');
+      setNewStaffEmail('');
+      setNewStaffPassword('');
       setNewStaffRole('RECEPTIONIST');
     }
   };
@@ -64,7 +70,7 @@ export const StaffManagementModal: React.FC<StaffManagementModalProps> = ({
                                         {s.name}
                                         <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 text-slate-500 font-bold">{s.role}</span>
                                     </div>
-                                    <div className="text-xs text-slate-500 font-mono">{s.phone}</div>
+                                    <div className="text-xs text-slate-500 font-mono">{s.email}</div>
                                 </div>
                             </div>
                             
@@ -100,45 +106,57 @@ export const StaffManagementModal: React.FC<StaffManagementModalProps> = ({
             <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
                 <Plus className="h-4 w-4" /> Add New Staff
             </h4>
-            <form onSubmit={handleAdd} className="flex flex-col sm:flex-row gap-3 items-end">
-                <div className="flex-1 w-full">
+            <form onSubmit={handleAdd} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
                     <Input 
-                        placeholder="Staff Name" 
+                        label="Full Name"
+                        placeholder="e.g. Sarah Jones" 
                         value={newStaffName} 
                         onChange={e => setNewStaffName(e.target.value)} 
-                        className="bg-slate-50 text-sm h-10"
                         required
                     />
-                </div>
-                <div className="flex-1 w-full">
                     <Input 
-                        placeholder="Phone Number" 
+                        label="Phone"
+                        placeholder="e.g. 9876543210" 
                         value={newStaffPhone} 
                         onChange={e => setNewStaffPhone(e.target.value)} 
-                        className="bg-slate-50 text-sm h-10"
-                        required
                     />
                 </div>
-                <div className="w-full sm:w-32">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase">Email</label>
+                        <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <input className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 text-sm" type="email" placeholder="staff@clinic.com" value={newStaffEmail} onChange={e => setNewStaffEmail(e.target.value)} required />
+                        </div>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase">Password</label>
+                        <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <input className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 text-sm" type="password" placeholder="••••••" value={newStaffPassword} onChange={e => setNewStaffPassword(e.target.value)} required />
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
                     <select 
-                        className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm bg-slate-50 focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                        className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none bg-white"
                         value={newStaffRole}
                         onChange={(e) => setNewStaffRole(e.target.value as any)}
                     >
-                        <option value="RECEPTIONIST">Reception</option>
+                        <option value="RECEPTIONIST">Receptionist</option>
                         <option value="NURSE">Nurse</option>
                         <option value="MANAGER">Manager</option>
                     </select>
                 </div>
-                <Button type="submit" className="h-10 w-full sm:w-auto shadow-none">Add</Button>
+                
+                <div className="flex justify-end pt-2">
+                    <Button type="submit">Add Staff</Button>
+                </div>
             </form>
         </div>
-
-        <div className="bg-blue-50 p-3 rounded-lg flex items-start gap-2 text-xs text-blue-700">
-            <ShieldAlert className="h-4 w-4 flex-shrink-0 mt-0.5" />
-            <p>Disabling a staff member will immediately revoke their access to the clinic dashboard. Ensure you have at least one active staff member.</p>
-        </div>
-
       </div>
     </Modal>
   );

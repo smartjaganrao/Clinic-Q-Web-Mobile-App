@@ -42,9 +42,11 @@ export enum ClinicType {
 }
 
 export enum ClinicOperationMode {
-    WALK_IN = 'WALK_IN',       // Reception adds tokens, Patients view only
-    APPOINTMENT = 'APPOINTMENT', // Pre-booked slots only
-    HYBRID = 'HYBRID'          // Both allowed
+    DIRECT_WALK_IN = 'DIRECT_WALK_IN',                 // 1. Direct Walkin only
+    ONLINE_WALK_IN = 'ONLINE_WALK_IN',                 // 2. Online Walkin only
+    BOTH_WALK_IN = 'BOTH_WALK_IN',                     // 3. Direct Walkin & Online Walkin (Token)
+    HYBRID_DIRECT_APPT = 'HYBRID_DIRECT_APPT',         // 4. Hybrid: Direct Walkin & Appointment only
+    HYBRID_FULL = 'HYBRID_FULL'                        // 5. Hybrid: Direct, Online Walkin & Appointment
 }
 
 export interface TimeSlot {
@@ -75,7 +77,8 @@ export interface Doctor {
   name: string;
   mobile: string; // NEW: Unique identifier for linking
   registrationNumber?: string; // NEW: Medical Reg No
-  email?: string; // NEW
+  email?: string; // NEW: Auth
+  password?: string; // NEW: Auth (In real app, this would be hashed)
   specialty: string;
   roomNumber: string;
   isAvailable: boolean;
@@ -126,6 +129,9 @@ export interface Patient {
   tokenNumber: number;
   name: string;
   phone: string;
+  email?: string; // NEW: Auth
+  password?: string; // NEW: Auth
+  isVerified?: boolean; // NEW: Email verification status
   status: PatientStatus;
   doctorId: string; // Assigned doctor
   timeAdded: number; // Timestamp
@@ -162,6 +168,8 @@ export interface Staff {
   name: string;
   role: 'RECEPTIONIST' | 'NURSE' | 'MANAGER';
   phone: string;
+  email?: string; // NEW: Auth
+  password?: string; // NEW: Auth
   isActive: boolean;
   joinedDate: number;
 }

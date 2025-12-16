@@ -3,7 +3,7 @@ import React from 'react';
 import { 
   Monitor, Stethoscope, Smartphone, LayoutGrid, Zap, 
   CheckCircle2, ArrowRight, ShieldCheck, TrendingUp, Users,
-  BarChart3, Clock, Lock, CreditCard, Activity, CalendarDays, Mic, Search, Video, FileText, Pill, AlertTriangle, Building2, UserCheck, Shield, Heart, XCircle, Info, Sparkles, Phone, AlertCircle, Star
+  BarChart3, Clock, Lock, CreditCard, Activity, CalendarDays, Mic, Search, Video, FileText, Pill, AlertTriangle, Building2, UserCheck, Shield, Heart, XCircle, Info, Sparkles, Phone, AlertCircle, Star, Languages, MessageCircle
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Logo } from '../components/Logo';
@@ -35,31 +35,42 @@ export const ClinicLandingPage: React.FC<ClinicLandingPageProps> = ({ onStartFre
                 <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Features</button>
                 <button onClick={() => document.getElementById('comparison')?.scrollIntoView({ behavior: 'smooth' })} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Comparison</button>
                 <button onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })} className="text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors">Pricing</button>
-                <button onClick={onBackToPatient} className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">For Patients</button>
             </div>
 
-            <div className="flex items-center gap-3">
-               <button onClick={onLogin} className="text-sm font-bold text-slate-600 hover:text-primary-600 px-4 py-2 hidden sm:block">Login</button>
-               <Button onClick={onStartFreeTrial} className="rounded-full px-6 bg-slate-900 hover:bg-slate-800 text-white shadow-lg">Start Free Trial</Button>
+            <div className="flex items-center gap-4">
+                {/* Mode Toggle */}
+               <div className="bg-slate-100 p-1 rounded-full flex items-center">
+                  <button onClick={onBackToPatient} className="px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold text-slate-500 hover:text-slate-900 transition-all">
+                      Patient
+                  </button>
+                  <button className="px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold bg-white text-slate-900 shadow-sm transition-all cursor-default">
+                      Clinic
+                  </button>
+               </div>
+
+               <div className="flex items-center gap-2 hidden sm:flex">
+                   <button onClick={onLogin} className="text-sm font-bold text-slate-600 hover:text-primary-600 px-3">Login</button>
+                   <Button onClick={onStartFreeTrial} className="rounded-full px-5 bg-slate-900 hover:bg-slate-800 text-white shadow-lg text-sm">Start Free Trial</Button>
+               </div>
             </div>
           </div>
         </div>
       </nav>
 
       {/* --- HERO SECTION --- */}
-      <section className="relative pt-20 pb-28 lg:pt-32 lg:pb-40 overflow-hidden bg-slate-50">
+      <section className="relative pt-20 pb-16 lg:pt-32 lg:pb-28 overflow-hidden bg-slate-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
               <span className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-full px-4 py-1.5 mb-8 shadow-sm">
-                  <span className="text-xs font-bold text-indigo-700 tracking-wide uppercase">Your Clinic, Supercharged</span>
+                  <span className="text-xs font-bold text-indigo-700 tracking-wide uppercase">Made for Indian Clinics 🇮🇳</span>
               </span>
               
               <h1 className="text-5xl lg:text-7xl font-black text-slate-900 tracking-tight mb-6 leading-[1.1] max-w-5xl mx-auto">
-                  Run a Smarter, Faster, <br/>
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-indigo-600">Organized Clinic.</span>
+                  The <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-indigo-600">Smart Queue System</span> <br/>
+                  Doctors Love.
               </h1>
               
               <p className="text-xl text-slate-600 mb-10 leading-relaxed max-w-2xl mx-auto">
-                  SmartQFlow is a complete Queue & Clinic Operating System that boosts doctor efficiency, reduces waiting room chaos, and gives patients a modern experience.
+                  Manage walk-ins and appointments seamlessly. Reduce crowd chaos with our <strong>Tamil-speaking TV Token System.</strong>
               </p>
 
               <div className="flex flex-col sm:flex-row justify-center gap-4">
@@ -71,8 +82,26 @@ export const ClinicLandingPage: React.FC<ClinicLandingPageProps> = ({ onStartFre
                   </Button>
               </div>
 
+              {/* LOCATIONS TICKER */}
+              <div className="mt-12 pt-8 border-t border-slate-200 max-w-4xl mx-auto">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Trusted by 500+ Clinics in</p>
+                  <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-slate-600 font-bold opacity-70">
+                      <span>Chennai</span>
+                      <span className="text-slate-300">•</span>
+                      <span>Coimbatore</span>
+                      <span className="text-slate-300">•</span>
+                      <span>Madurai</span>
+                      <span className="text-slate-300">•</span>
+                      <span>Salem</span>
+                      <span className="text-slate-300">•</span>
+                      <span>Trichy</span>
+                      <span className="text-slate-300">•</span>
+                      <span>Bangalore</span>
+                  </div>
+              </div>
+
               {/* Dashboard Preview Image */}
-              <div className="mt-20 relative mx-auto max-w-5xl">
+              <div className="mt-16 relative mx-auto max-w-5xl">
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-50 via-transparent to-transparent z-10"></div>
                   <div className="rounded-2xl border border-slate-200 shadow-2xl overflow-hidden bg-white">
                       <div className="bg-slate-100 h-8 border-b border-slate-200 flex items-center px-4 gap-2">
@@ -179,12 +208,12 @@ export const ClinicLandingPage: React.FC<ClinicLandingPageProps> = ({ onStartFre
                               ["Appointment scheduling", true, true, false, true, false],
                               ["Hybrid queue (walk-in + appt)", "STAR", false, false, false, false],
                               ["Live ETA for patients", true, true, true, false, false],
-                              ["Doctor delay/break auto-adjust", true, false, false, false, false],
+                              ["Regional Kiosk Voice (Tamil/Telugu)", "STAR", false, false, false, false],
                               ["Family booking", true, true, false, false, false],
                               ["Multi-clinic doctor identity", "STAR", false, false, false, false],
                               ["Smart late-arrival penalty", "STAR", false, false, false, false],
                               ["Emergency bump", true, false, false, true, false],
-                              ["Real-time TV display", true, true, false, true, false],
+                              ["WhatsApp Integration", true, true, false, true, false],
                               ["Digital notes", true, true, false, true, false],
                               ["Quick Rx", true, true, false, true, false],
                               ["AI summary", true, false, false, false, false],
@@ -227,7 +256,7 @@ export const ClinicLandingPage: React.FC<ClinicLandingPageProps> = ({ onStartFre
                           {[
                               "Shows true live ETA & position",
                               "Merges walk-ins + appointments intelligently",
-                              "Handles doctor delays automatically",
+                              "TV Voice Announcements in Tamil/Telugu",
                               "Supports late-arrival rules & penalties",
                               "Avoids duplicate doctor profiles across clinics",
                               "Lets doctors work across multiple clinics cleanly"
@@ -247,9 +276,9 @@ export const ClinicLandingPage: React.FC<ClinicLandingPageProps> = ({ onStartFre
                           {[
                               { label: "Low Cost", desc: "40–60% cheaper than Practo" },
                               { label: "Hybrid Queue", desc: "Unique feature; no competitor has this" },
-                              { label: "Multi-Clinic Identity", desc: "Unique support for visiting consultants" },
+                              { label: "Local Language", desc: "Tamil Voice Announcements for Kiosk" },
                               { label: "True Live ETA", desc: "Better accuracy than token apps" },
-                              { label: "Telemedicine", desc: "Included in standard plans" },
+                              { label: "WhatsApp Ready", desc: "Send tokens via WhatsApp API" },
                               { label: "AI Tools", desc: "No competitor offers AI summaries" }
                           ].map((item, i) => (
                               <div key={i} className="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
@@ -353,19 +382,19 @@ export const ClinicLandingPage: React.FC<ClinicLandingPageProps> = ({ onStartFre
           </div>
       </section>
 
-      {/* --- SECURITY --- */}
+      {/* --- LOCAL FEATURES HIGHLIGHT --- */}
       <section className="py-24 bg-white">
           <div className="max-w-4xl mx-auto px-4 text-center">
               <div className="inline-flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-full mb-8">
-                  <ShieldCheck className="h-5 w-5 text-slate-600" />
-                  <span className="font-bold text-slate-700 text-sm uppercase tracking-wide">Reliability & Security</span>
+                  <Languages className="h-5 w-5 text-slate-600" />
+                  <span className="font-bold text-slate-700 text-sm uppercase tracking-wide">Built for India</span>
               </div>
               <div className="flex flex-wrap justify-center gap-x-8 gap-y-4 text-slate-600 font-medium">
-                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> HIPAA-inspired data handling</span>
-                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> Secure OTP login</span>
-                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> Role-based access</span>
-                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> Encrypted patient records</span>
-                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> Hosted on cloud infrastructure</span>
+                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> Tamil & Telugu Kiosk Voice</span>
+                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> WhatsApp Token Alerts</span>
+                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> Works on Low Bandwidth</span>
+                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> SMS Integration (DLT Ready)</span>
+                  <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-500" /> UPI Payment Integration</span>
               </div>
           </div>
       </section>
@@ -375,7 +404,7 @@ export const ClinicLandingPage: React.FC<ClinicLandingPageProps> = ({ onStartFre
           <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-slate-950 opacity-50"></div>
           <div className="max-w-4xl mx-auto px-4 text-center relative z-10">
               <h2 className="text-4xl md:text-5xl font-black mb-6 tracking-tight">Modernize your clinic today.</h2>
-              <p className="text-slate-400 text-lg mb-10 leading-relaxed">Without expensive software.</p>
+              <p className="text-slate-400 text-lg mb-10 leading-relaxed">Join the best clinics in Tamil Nadu.</p>
               
               <div className="flex flex-col sm:flex-row justify-center gap-4 mt-8">
                    <Button size="lg" className="bg-primary-600 hover:bg-primary-700 text-white h-14 px-10 rounded-full text-lg font-bold shadow-xl" onClick={onStartFreeTrial}>

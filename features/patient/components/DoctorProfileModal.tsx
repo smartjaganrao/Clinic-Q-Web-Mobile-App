@@ -18,7 +18,7 @@ export const DoctorProfileModal: React.FC<DoctorProfileModalProps> = ({ isOpen, 
 
   if (!doctor) return null;
 
-  const isWalkIn = operationMode === ClinicOperationMode.WALK_IN;
+  const canQueue = operationMode && [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(operationMode);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Doctor Profile" maxWidth="max-w-2xl">
@@ -140,8 +140,8 @@ export const DoctorProfileModal: React.FC<DoctorProfileModalProps> = ({ isOpen, 
       <div className="mt-8 pt-4 border-t border-slate-100 flex justify-end gap-3 sticky bottom-0 bg-white pb-2">
         <Button variant="secondary" onClick={onClose}>Close</Button>
         <Button onClick={onBook} className="shadow-lg shadow-primary-200 px-8">
-          {isWalkIn ? <Zap className="h-4 w-4 mr-2 fill-current" /> : <Calendar className="h-4 w-4 mr-2" />}
-          {isWalkIn ? "Get Token / Join Queue" : "Book Appointment"}
+          {canQueue ? <Zap className="h-4 w-4 mr-2 fill-current" /> : <Calendar className="h-4 w-4 mr-2" />}
+          {canQueue ? "Get Token / Join Queue" : "Book Appointment"}
         </Button>
       </div>
     </Modal>

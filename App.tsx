@@ -132,13 +132,25 @@ export default function App() {
       navigate({ pathname: '/patient', search: params.toString() });
   };
 
-  const handleRoleSelect = (role: UserRole) => {
-    setUserRole(role);
-    if (role === UserRole.ADMIN) {
-        navigate('/admin');
-    } else {
-        navigate('/setup'); // Clinic Auth
-    }
+  // Unified System Login (Staff, Doctor, Admin)
+  const handleSystemLogin = (role: UserRole, clinicId: string, userId: string) => {
+      setUserRole(role);
+      setCurrentClinicId(clinicId);
+      setCurrentUserId(userId);
+      
+      // Navigate based on role
+      if (role === UserRole.ADMIN) {
+          navigate('/admin');
+      } else if (role === UserRole.RECEPTIONIST) {
+          navigate(`/clinic/${clinicId}/reception`);
+      } else if (role === UserRole.DOCTOR) {
+          navigate(`/clinic/${clinicId}/doctor`);
+      } else if (role === UserRole.KIOSK) {
+          navigate(`/clinic/${clinicId}/kiosk`);
+      } else {
+          // Fallback or specific kiosk logic if needed
+          navigate('/');
+      }
   };
 
   const handleClinicSelect = (clinicId: string) => {
@@ -149,6 +161,12 @@ export default function App() {
       navigate(`/clinic/${clinicId}/reception`);
     } else if (userRole === UserRole.KIOSK) {
       navigate(`/clinic/${clinicId}/kiosk`);
+    } else {
+        // Fix for Demo Mode: If no role is selected (e.g. browsing clinics in setup),
+        // default to Receptionist view to let them explore.
+        setUserRole(UserRole.RECEPTIONIST);
+        navigate(`/clinic/${clinicId}/reception`);
+        addToast("Entering Demo Mode", "info");
     }
   };
 
@@ -545,7 +563,7 @@ export default function App() {
         } />
 
         <Route path="/login/staff" element={
-            <StaffLogin onSelectRole={handleRoleSelect} onBack={() => navigate('/for-clinics')} />
+            <StaffLogin onLoginSuccess={handleSystemLogin} onBack={() => navigate('/for-clinics')} />
         } />
 
         <Route path="/login/patient" element={
@@ -557,37 +575,15 @@ export default function App() {
             />
         } />
 
-        {/* CLINIC SETUP & DOCTOR LOGIN */}
+        {/* CLINIC REGISTRATION / SETUP - PUBLIC ACCESS */}
         <Route path="/setup" element={
-            userRole ? (
-                <ClinicAuth 
-                  clinics={clinics}
-                  onSelectClinic={handleClinicSelect}
-                  onCreateClinic={async (name, plan, address, city, pincode, services, mode, type, phone, about) => {
-                    const newClinic: Clinic = {
-                      id: `clinic_${Date.now()}`,
-                      name,
-                      slug: name.toLowerCase().replace(/\s+/g, '-'),
-                      plan,
-                      type: type,
-                      operationMode: mode,
-                      doctors: [],
-                      patients: [],
-                      staff: [],
-                      city: city, 
-                      address: address, 
-                      pincode: pincode,
-                      contactPhone: phone,
-                      about: about,
-                      amenities: services
-                    };
-                    await storage.createClinic(newClinic);
-                    handleClinicSelect(newClinic.id);
-                  }}
-                  onBack={() => navigate('/login/staff')}
-                  role={userRole}
-                />
-            ) : <Navigate to="/login/staff" />
+            <ClinicAuth 
+              clinics={clinics}
+              onSelectClinic={handleClinicSelect}
+              onRegister={(clinicId, userId) => handleSystemLogin(UserRole.RECEPTIONIST, clinicId, userId)}
+              onBack={() => navigate('/login/staff')}
+              // role is optional now
+            />
         } />
 
         <Route path="/clinic/:clinicId/login" element={

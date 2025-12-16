@@ -1,6 +1,6 @@
 
-import { Clinic, Patient, Doctor, Staff, PatientStatus, DoctorStatus, PlanType, DaySchedule, ClinicType } from '../types';
-import { INITIAL_CLINICS } from '../constants';
+import { Clinic, Patient, Doctor, Staff, PatientStatus, DoctorStatus, PlanType, DaySchedule, ClinicType, UserRole } from '../types';
+import { INITIAL_CLINICS, SUPER_ADMIN_PROFILE } from '../constants';
 
 const STORAGE_KEY = 'clinicq_db_v2';
 
@@ -60,6 +60,56 @@ class StorageService {
   async getClinics(): Promise<Clinic[]> {
     await delay(50); // Simulate fetch
     return [...this.clinics];
+  }
+
+  // --- AUTHENTICATION OPERATIONS ---
+
+  async authenticatePartner(email: string, pass: string): Promise<{role: UserRole, clinicId: string, userId: string, name: string} | null> {
+      await delay(300);
+      
+      // 1. Check Super Admin
+      if (email === SUPER_ADMIN_PROFILE.email && pass === 'password') { // Demo password
+          return { role: UserRole.ADMIN, clinicId: 'admin', userId: 'admin', name: SUPER_ADMIN_PROFILE.name };
+      }
+
+      // 2. Check Kiosk Demo
+      if (email === 'kiosk@demo.com' && pass === 'password') {
+          // Default to first clinic for demo purposes
+          const defaultClinic = this.clinics[0];
+          return {
+              role: UserRole.KIOSK,
+              clinicId: defaultClinic.id,
+              userId: 'kiosk_display',
+              name: 'Kiosk Display'
+          };
+      }
+
+      // 3. Iterate Clinics to find match
+      for (const clinic of this.clinics) {
+          // Check Staff
+          const staffMember = clinic.staff.find(s => s.email === email && s.password === pass);
+          if (staffMember) {
+              return { 
+                  role: UserRole.RECEPTIONIST, 
+                  clinicId: clinic.id, 
+                  userId: staffMember.id,
+                  name: staffMember.name
+              };
+          }
+
+          // Check Doctors
+          const doctor = clinic.doctors.find(d => d.email === email && d.password === pass);
+          if (doctor) {
+              return {
+                  role: UserRole.DOCTOR,
+                  clinicId: clinic.id,
+                  userId: doctor.id,
+                  name: doctor.name
+              };
+          }
+      }
+
+      return null;
   }
 
   // --- PATIENT OPERATIONS ---
@@ -215,7 +265,7 @@ class StorageService {
 
   async createClinic(clinic: Clinic) {
       await delay(200);
-      this.clinics = [...this.clinics, { ...clinic, staff: [] }];
+      this.clinics = [...this.clinics, { ...clinic, staff: clinic.staff || [] }];
       this.save();
   }
 

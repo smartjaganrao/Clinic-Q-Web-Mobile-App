@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useMatch, useLocation, useSearchParams } from 'react-router-dom';
 import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode } from '../types';
+// ... rest of imports ...
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
@@ -26,25 +27,7 @@ import {
     CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, FileText, MoonStar, MessageSquare
 } from 'lucide-react';
 
-interface PatientTrackerProps {
-  clinics: Clinic[];
-  userPhone: string;
-  userName: string;
-  isGuest?: boolean;
-  onLoginClick?: (phone?: string, name?: string) => void;
-  onBack: () => void;
-  onGetToken: (name: string, phone: string, doctorId: string, clinicId: string, time?: string, date?: string, age?: string, gender?: any, symptoms?: string) => void;
-  addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
-  onUpdateDetails: (id: string, updates: Partial<Patient>) => void;
-  onCancelVisit: (clinicId: string, pId: string) => void;
-  onCheckIn: (clinicId: string, pId: string) => void;
-  preSelectedClinicId?: string;
-  onClearPendingAction: () => void;
-  initialSearchMode?: 'DOCTOR' | 'CLINIC';
-}
-
-// --- HELPER FUNCTIONS ---
-
+// ... (KEEP ALL HELPER FUNCTIONS LIKE toSlug, calculateDistance, isClinicOpen etc.) ...
 // SEO URL Helpers
 const toSlug = (text: string) => text.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
 
@@ -137,6 +120,7 @@ const getNextAvailability = (doctor: Doctor, daysToCheck: number = 14): { status
     return null;
 };
 
+// ... CONSTANTS (CATEGORIES, RELATIONSHIP_OPTIONS, SYMPTOM_MAP) ...
 const CATEGORIES = [
     { id: 'ALL', label: 'All', icon: LayoutGrid },
     { id: 'GENERAL', label: 'General', icon: Stethoscope },
@@ -175,6 +159,7 @@ const SYMPTOM_MAP: Record<string, string[]> = {
     'ear': ['ENT'],
 };
 
+// ... Interfaces UserProfile etc ...
 interface FamilyMember {
     name: string;
     age: string;
@@ -197,10 +182,28 @@ interface GroupedSlots {
     Night: {value: string, label: string}[];
 }
 
+interface PatientTrackerProps {
+  clinics: Clinic[];
+  userPhone: string;
+  userName: string;
+  isGuest: boolean;
+  onLoginClick?: (phone?: string, name?: string) => void;
+  onBack: () => void;
+  onGetToken: (name: string, phone: string, doctorId: string, clinicId: string, time?: string, date?: string, age?: string, gender?: any, symptoms?: string) => void;
+  addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
+  onUpdateDetails: (id: string, updates: Partial<Patient>) => void;
+  onCancelVisit: (clinicId: string, patientId: string) => void;
+  onCheckIn: (clinicId: string, patientId: string) => void;
+  preSelectedClinicId?: string;
+  onClearPendingAction: () => void;
+  initialSearchMode?: 'DOCTOR' | 'CLINIC';
+}
+
 function Ticket({ className }: { className?: string }) { 
     return ( <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}> <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /> <path d="M13 5v2" /> <path d="M13 17v2" /> <path d="M13 11v2" /> </svg> ); 
 }
 
+// ... PatientTracker Component ...
 export const PatientTracker: React.FC<PatientTrackerProps> = ({
   clinics, userPhone, userName, isGuest, onLoginClick, onBack, onGetToken, addToast, onUpdateDetails, onCancelVisit, onCheckIn, preSelectedClinicId, onClearPendingAction, initialSearchMode
 }) => {
@@ -208,7 +211,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  // --- ROUTER STATE MANAGEMENT ---
+  // ... (Keep existing routing and state logic) ...
   const activeTab = useMemo<'ACTIVE' | 'BOOK' | 'HISTORY' | 'PROFILE'>(() => {
     const path = location.pathname;
     if (path.includes('/patient/visits')) return 'ACTIVE';
@@ -245,6 +248,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const selectedClinicId = selectedClinic?.id || null;
   const selectedDoctorId = selectedDoctor?.id || null;
 
+  // ... (Keep lifecycle effects) ...
   // Handle Redirect on Mount
   useEffect(() => {
       if (location.pathname === '/patient' || location.pathname === '/patient/') {
@@ -275,7 +279,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'NEAR' | 'WAIT' | 'FEE'>('NEAR');
 
-  // --- INITIALIZE FROM URL PARAMS ---
+  // ... (Keep initialization effects) ...
   useEffect(() => {
       const q = searchParams.get('q');
       const city = searchParams.get('city');
@@ -285,8 +289,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       }
       
       if (city) {
-          // Check if city exists in uniqueCities (need to calculate first or check loosely)
-          // Simple heuristic: set it, the filter logic handles non-matches by showing empty
           const hasCity = clinics.some(c => c.city.toLowerCase() === city.toLowerCase());
           if (hasCity) {
               const matchedCity = clinics.find(c => c.city.toLowerCase() === city.toLowerCase())?.city;
@@ -351,14 +353,13 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       }
   };
 
-  // Get clinic associated with viewing doctor (needed for finding operation mode)
   const viewingDoctorClinic = useMemo(() => {
       if (!viewingDoctor) return undefined;
       if (selectedClinicId && selectedClinic) return selectedClinic;
       return clinics.find(c => c.doctors.some(d => d.id === viewingDoctor.id));
   }, [viewingDoctor, selectedClinicId, clinics, selectedClinic]);
 
-  // --- TRAVEL TIME ESTIMATE ---
+  // ... (Keep travel estimate and profile load) ...
   const travelEstimate = useMemo(() => {
       if (userLocation && selectedClinic?.geoLocation) {
           const dist = calculateDistance(userLocation.lat, userLocation.lng, selectedClinic.geoLocation.lat, selectedClinic.geoLocation.lng);
@@ -392,6 +393,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       } catch (e) { console.error("Profile load error", e); }
   }, [userPhone, userName, isGuest]);
 
+  // ... (Keep Member handlers) ...
   const handleAddMember = () => { 
       if (!newMember.name || !newMember.age || !newMember.relation) { addToast("Please fill all details", "error"); return; } 
       if (userProfile) { 
@@ -435,13 +437,12 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       } 
   };
   
-  // --- DERIVED DATA FOR FILTERS ---
+  // ... (Keep filters logic) ...
   const uniqueCities = useMemo(() => ['All Cities', ...Array.from(new Set(clinics.map(c => c.city))).sort()], [clinics]);
   
   const activeVisits = useMemo(() => { if(isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown', room: doc?.roomNumber || '-' }); } }); }); return visits.sort((a,b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
   const historyVisits = useMemo(() => { if(isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && (p.status === PatientStatus.COMPLETED || p.status === PatientStatus.CANCELLED)) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown', notes: p.notes }); } }); }); return visits.sort((a,b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
   
-  // --- FILTERING LOGIC ---
   const filteredClinics = useMemo(() => { 
       let filtered = clinics; 
       if (searchQuery) { 
@@ -498,7 +499,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       }); 
   }, [clinics, searchQuery, selectedCategory, sortBy, selectedCity, selectedSpecialty, userLocation, showOpenOnly]);
 
-  // --- DOCTOR SEARCH FILTERING (FLATTENED LIST) ---
   const filteredDoctors = useMemo(() => {
       const allDoctors = clinics.flatMap(clinic => clinic.doctors.map(doctor => ({ doctor, clinic })));
       return allDoctors.filter(({ doctor, clinic }) => {
@@ -535,7 +535,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   }, [clinics, searchQuery, selectedCity, selectedSpecialty, selectedCategory, sortBy, userLocation]);
 
 
-  // --- SMART DOCTOR-SPECIFIC WAIT LOGIC ---
   const getDoctorWaitDetails = (clinic: Clinic, doctorId: string) => {
       const doc = clinic.doctors.find(d => d.id === doctorId);
       if (!doc) return { count: 0, time: 0 };
@@ -698,7 +697,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       const clinic = clinics.find(c => c.doctors.some(d => d.id === viewingDoctor.id));
       
       if (clinic) {
-          if (clinic.operationMode === ClinicOperationMode.WALK_IN) {
+          const mode = clinic.operationMode;
+          // Set to available mode or fallback
+          if ([ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(mode)) {
               setVisitType('WALK_IN');
           } else {
               setVisitType('APPOINTMENT');
@@ -785,18 +786,25 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       }); 
   }, [selectedDoctor]);
   
+  // Logic helpers for refined modes
+  const isClinicDirectWalkInOnly = selectedClinic?.operationMode === ClinicOperationMode.DIRECT_WALK_IN;
+  const isClinicOnlineWalkInAllowed = selectedClinic && [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(selectedClinic.operationMode);
+  const isClinicApptAllowed = selectedClinic && [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(selectedClinic.operationMode);
+
   // Force visit type based on Clinic Mode
   useEffect(() => { 
       if (selectedClinic) {
-          if (selectedClinic.operationMode === ClinicOperationMode.WALK_IN) {
+          if (isClinicDirectWalkInOnly) {
+              setVisitType('WALK_IN'); // User sees "Walk In Only" banner
+          } else if (isClinicOnlineWalkInAllowed && !isClinicApptAllowed) {
               setVisitType('WALK_IN');
-          } else if (selectedClinic.operationMode === ClinicOperationMode.APPOINTMENT) {
+          } else if (!isClinicOnlineWalkInAllowed && isClinicApptAllowed) {
               setVisitType('APPOINTMENT');
-          } else if (selectedDoctorId && !isWalkInAllowed && visitType === 'WALK_IN') {
+          } else if (selectedDoctorId && !isWalkInAllowed && visitType === 'WALK_IN' && isClinicApptAllowed) {
               setVisitType('APPOINTMENT'); 
           }
       }
-  }, [selectedClinic, selectedDoctorId, isWalkInAllowed, visitType]);
+  }, [selectedClinic, selectedDoctorId, isWalkInAllowed, visitType, isClinicDirectWalkInOnly, isClinicOnlineWalkInAllowed, isClinicApptAllowed]);
 
   const confirmCancel = () => { if (cancelModal.visit) { onCancelVisit(cancelModal.visit.clinicId, cancelModal.visit.id); addToast("Appointment Cancelled", "info"); setCancelModal({ isOpen: false, visit: null }); } };
   
@@ -858,12 +866,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const navItems = [ { id: 'BOOK', label: 'Find Care', icon: Search }, { id: 'ACTIVE', label: 'Active Visits', icon: Ticket }, { id: 'HISTORY', label: 'History', icon: History }, { id: 'PROFILE', label: 'Profile', icon: User } ];
   const GuestLoginCard = () => ( <div className="flex flex-col items-center justify-center h-[60vh] p-8 text-center"> <div className="bg-slate-100 p-6 rounded-full mb-6"><Lock className="h-10 w-10 text-slate-400" /></div> <h3 className="text-xl font-bold text-slate-800 mb-2">Login Required</h3> <p className="text-slate-500 mb-8 max-w-xs">Please login to access your appointments and medical history.</p> <Button onClick={() => onLoginClick && onLoginClick()} size="lg" className="shadow-lg px-10">Login / Register</Button> </div> );
 
-  const isClinicWalkInOnly = selectedClinic?.operationMode === ClinicOperationMode.WALK_IN;
-  const isClinicApptOnly = selectedClinic?.operationMode === ClinicOperationMode.APPOINTMENT;
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row overflow-hidden font-sans">
-        {/* SIDEBAR NAVIGATION (Desktop) */}
+        {/* ... (Keep Sidebar & Headers structure exactly same) ... */}
         <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 h-screen sticky top-0 shrink-0 z-30"> 
             <div className="p-6 border-b border-slate-100"> 
                 <div className="flex items-center gap-2"> <Logo className="h-8 w-8" /> <span className="font-bold text-xl text-slate-900 tracking-tight">Smart<span className="text-primary-600">QFlow</span></span> </div> 
@@ -877,7 +882,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         </aside>
         
         <main className="flex-1 flex flex-col h-screen overflow-hidden relative bg-slate-50 w-full">
-            {/* MOBILE HEADER */}
+            {/* ... (Keep Mobile/Desktop Header) ... */}
             <header className="md:hidden bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-20 flex items-center justify-between shadow-sm shrink-0">
                 <div className="flex items-center gap-3">
                     {bookingView !== 'LIST' && activeTab === 'BOOK' ? (
@@ -893,170 +898,20 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 </div>
                 <div className="flex gap-2"><button onClick={() => setShowQRScanner(true)} className="bg-slate-900 text-white p-2 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center gap-2"><QrCode className="h-5 w-5" /> </button></div>
             </header>
-            
-            {/* DESKTOP HEADER */}
             <header className="hidden md:flex bg-white border-b border-slate-200 px-8 py-4 items-center justify-between shrink-0 z-10"> <div><h2 className="text-2xl font-bold text-slate-900">{activeTab === 'BOOK' && bookingView !== 'LIST' ? 'Appointment Details' : activeTab === 'ACTIVE' ? 'Your Active Visits' : activeTab === 'HISTORY' ? 'Visit History' : activeTab === 'PROFILE' ? 'My Profile' : 'Find Care'}</h2></div> <div className="flex items-center gap-4"><Button variant="outline" onClick={() => setShowQRScanner(true)} className="hidden md:flex"><QrCode className="h-4 w-4 mr-2" /> Scan QR Code</Button></div> </header>
 
             <div className={`flex-1 flex flex-col w-full relative ${activeTab === 'BOOK' && bookingView === 'LIST' ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden scroll-smooth pb-24 md:pb-0'}`}>
-                {/* Active Tab Content (Truncated for brevity, kept structure same) */}
+                {/* ... (Keep Active/History/Profile Tabs) ... */}
                 {activeTab === 'ACTIVE' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto"> {activeVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6"> {activeVisits.map(visit => { const queueStats = getSmartQueueDetails(visit); return ( <Card key={visit.id} className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"> <div className="p-5 pb-2 flex justify-between items-start"><div><h3 className="font-bold text-lg text-slate-900">{visit.clinicName}</h3><p className="text-sm text-slate-500">Dr. {visit.doctorName} • {visit.room ? `Room ${visit.room}` : ''}</p></div><Badge status={visit.status} /></div> <div className="px-5 mb-4"><span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit"><User className="h-3 w-3" /> {visit.name}</span></div> <div className="bg-slate-50 border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center"><div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Token</div><div className="text-3xl font-black text-slate-900">#{visit.tokenNumber}</div></div><div className="border-x border-slate-200"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Now Serving</div><div className={`text-3xl font-bold ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-blue-600 animate-pulse' : 'text-slate-400'}`}>{visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken}</div></div><div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">People Ahead</div><div className="text-3xl font-bold text-slate-900">{queueStats.peopleAhead}</div></div></div> <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold`}>{queueStats.doctorStatus === DoctorStatus.ON_BREAK ? <Coffee className="h-5 w-5" /> : queueStats.doctorStatus === DoctorStatus.AVAILABLE ? <Timer className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}<div className="flex-1"><p>{queueStats.message}</p>{visit.status === PatientStatus.WAITING && (<p className="text-[10px] opacity-80 font-normal">Est. Time: {queueStats.expectedTime}</p>)}</div></div> {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (<div className="bg-orange-50 px-4 py-2 text-xs font-bold text-orange-700 flex items-center gap-2 border-t border-orange-100"><Info className="h-4 w-4 flex-shrink-0" /><span>{queueStats.peopleAhead < 3 ? "Almost your turn! Please ask receptionist to Check-in now." : "Please ask receptionist to Check-in once you arrive."}</span></div>)} <div className="p-4 flex gap-2 mt-auto">{!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (<Button className="flex-1 bg-slate-900 hover:bg-slate-800" onClick={() => setShowQRScanner(true)}><QrCode className="h-4 w-4 mr-2" /> Scan to Check-In</Button>)}<Button variant="secondary" className="flex-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => setCancelModal({ isOpen: true, visit })} disabled={visit.status === PatientStatus.WITH_DOCTOR}>Cancel</Button></div> </Card> ); })} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><Calendar className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No active visits</h3><p className="text-slate-500 mb-6 text-center max-w-sm">Book an appointment or scan a QR code at a clinic to see your live status here.</p><Button onClick={() => handleTabSwitch('BOOK')} size="lg" className="shadow-lg">Find a Doctor</Button></div> )} </div> ) )}
-
-                {/* History Tab Content */}
-                {activeTab === 'HISTORY' && (
-                    isGuest ? <GuestLoginCard /> : (
-                        <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto">
-                            {historyVisits.length > 0 ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
-                                {historyVisits.map(visit => (
-                                    <div key={visit.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between gap-4 h-full hover:border-primary-200 transition-colors">
-                                        <div className="flex-1">
-                                            <div className="flex items-start gap-3 mb-3">
-                                                <div className={`p-3 rounded-lg flex-shrink-0 ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                                                    {visit.status === PatientStatus.COMPLETED ? <CheckCircle2 className="h-6 w-6" /> : <X className="h-6 w-6" />}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <h3 className="font-bold text-slate-900 truncate text-base">{visit.clinicName}</h3>
-                                                    <p className="text-sm text-slate-500 truncate">Dr. {visit.doctorName}</p>
-                                                    <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(visit.timeAdded).toLocaleDateString()} at {new Date(visit.timeAdded).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                                                </div>
-                                            </div>
-                                            
-                                            <div className="space-y-2">
-                                                {visit.diagnosis && (
-                                                    <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
-                                                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Diagnosis</p>
-                                                        <p className="text-sm text-slate-700 font-medium">{visit.diagnosis}</p>
-                                                    </div>
-                                                )}
-                                                {visit.notes && (
-                                                    <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
-                                                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5 flex items-center gap-1"><FileText className="h-3 w-3" /> Doctor Notes</p>
-                                                        <p className="text-sm text-slate-600 italic leading-relaxed">"{visit.notes}"</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-50">
-                                            <div className="flex-1">
-                                                {visit.status === PatientStatus.COMPLETED && (
-                                                    visit.rating ? (
-                                                        <div className="flex items-center gap-1 text-yellow-400">
-                                                            {Array.from({length: 5}).map((_, i) => (
-                                                                <Star key={i} className={`h-4 w-4 ${i < visit.rating ? 'fill-current' : 'text-slate-200'}`} />
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <button 
-                                                            onClick={() => setFeedbackModal({ isOpen: true, visit, rating: 0, text: '' })}
-                                                            className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline"
-                                                        >
-                                                            Rate Visit
-                                                        </button>
-                                                    )
-                                                )}
-                                            </div>
-
-                                            <Button size="sm" variant="outline" className="text-primary-700 border-primary-200 hover:bg-primary-50" onClick={() => {
-                                                const clinic = clinics.find(c => c.id === visit.clinicId);
-                                                if (clinic) {
-                                                    const doc = clinic.doctors.find(d => d.id === visit.doctorId);
-                                                    if (doc) {
-                                                        const mode = clinic.operationMode === ClinicOperationMode.WALK_IN ? 'WALK_IN' : 'APPOINTMENT';
-                                                        setVisitType(mode);
-                                                        navigateToView('FORM', clinic, doc);
-                                                    } else {
-                                                        addToast("Doctor is no longer available.", "error");
-                                                    }
-                                                } else {
-                                                    addToast("Clinic is no longer available.", "error");
-                                                }
-                                            }}>
-                                                Book Again
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-12 opacity-50">
-                                    <History className="h-12 w-12 mx-auto mb-3 text-slate-300" />
-                                    <p>No visit history found.</p>
-                                </div>
-                            )}
-                        </div>
-                    )
-                )}
-
-                {/* Profile Tab Content */}
-                {activeTab === 'PROFILE' && (
-                    isGuest ? <GuestLoginCard /> : (
-                        <div className="w-full px-4 md:px-8 py-6 max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                            <div className="lg:col-span-1 space-y-6">
-                                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center text-center">
-                                    <div className="w-24 h-24 rounded-full bg-slate-100 flex items-center justify-center text-4xl font-bold text-slate-400 mb-4 border-4 border-white shadow-md">
-                                        {userName.charAt(0)}
-                                    </div>
-                                    <h2 className="text-2xl font-bold text-slate-900">{userName}</h2>
-                                    <p className="text-slate-500 font-mono text-lg mb-4">{userPhone}</p>
-                                    <div className="flex gap-2 text-sm text-slate-600 bg-slate-50 px-4 py-2 rounded-xl">
-                                        <span className="font-bold">{userProfile?.age || '--'} Yrs</span>
-                                        <span>•</span>
-                                        <span className="font-bold">{userProfile?.gender || '--'}</span>
-                                    </div>
-                                    <div className="mt-8 w-full">
-                                        <button onClick={onBack} className="w-full flex items-center justify-center gap-2 text-red-600 font-bold hover:bg-red-50 px-4 py-3 rounded-xl transition-colors border border-red-100">
-                                            <LogOut className="h-5 w-5" /> Logout
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="lg:col-span-2 space-y-6">
-                                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                                    <div className="flex justify-between items-center mb-6">
-                                        <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2"><Users className="h-5 w-5 text-primary-600" /> Family Members</h3>
-                                        <Button size="sm" variant="outline" onClick={() => { setEditingMemberIndex(null); setNewMember({ name: '', age: '', gender: 'Male', relation: '' }); setShowAddMember(true); }}>
-                                            <Plus className="h-4 w-4 mr-2" /> Add New
-                                        </Button>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        {userProfile?.familyMembers && userProfile.familyMembers.length > 0 ? (
-                                            userProfile.familyMembers.map((member, idx) => (
-                                                <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-primary-200 transition-colors">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-500 shadow-sm">
-                                                            {member.name.charAt(0)}
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-bold text-slate-900">{member.name}</p>
-                                                            <p className="text-xs text-slate-500 font-medium">{member.relation} • {member.age} Yrs</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex gap-1">
-                                                        <button onClick={() => handleEditMember(idx)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-colors"><Edit2 className="h-4 w-4" /></button>
-                                                        <button onClick={() => handleDeleteMember(idx)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg transition-colors"><Trash2 className="h-4 w-4" /></button>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="col-span-full text-center py-8 text-slate-400 text-sm italic bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                                                No family members added yet.
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )
-                )}
+                {activeTab === 'HISTORY' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto"> {historyVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4"> {historyVisits.map(visit => ( <div key={visit.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between gap-4 h-full hover:border-primary-200 transition-colors"> <div className="flex-1"> <div className="flex items-start gap-3 mb-3"> <div className={`p-3 rounded-lg flex-shrink-0 ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}> {visit.status === PatientStatus.COMPLETED ? <CheckCircle2 className="h-6 w-6" /> : <X className="h-6 w-6" />} </div> <div className="min-w-0"> <h3 className="font-bold text-slate-900 truncate text-base">{visit.clinicName}</h3> <p className="text-sm text-slate-500 truncate">Dr. {visit.doctorName}</p> <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(visit.timeAdded).toLocaleDateString()} at {new Date(visit.timeAdded).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p> </div> </div> <div className="space-y-2"> {visit.diagnosis && ( <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100"> <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Diagnosis</p> <p className="text-sm text-slate-700 font-medium">{visit.diagnosis}</p> </div> )} {visit.notes && ( <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100"> <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5 flex items-center gap-1"><FileText className="h-3 w-3" /> Doctor Notes</p> <p className="text-sm text-slate-600 italic leading-relaxed">"{visit.notes}"</p> </div> )} </div> </div> <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-50"> <div className="flex-1"> {visit.status === PatientStatus.COMPLETED && ( visit.rating ? ( <div className="flex items-center gap-1 text-yellow-400"> {Array.from({length: 5}).map((_, i) => ( <Star key={i} className={`h-4 w-4 ${i < visit.rating ? 'fill-current' : 'text-slate-200'}`} /> ))} </div> ) : ( <button onClick={() => setFeedbackModal({ isOpen: true, visit, rating: 0, text: '' })} className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline"> Rate Visit </button> ) )} </div> <Button size="sm" variant="outline" className="text-primary-700 border-primary-200 hover:bg-primary-50" onClick={() => { const clinic = clinics.find(c => c.id === visit.clinicId); if (clinic) { const doc = clinic.doctors.find(d => d.id === visit.doctorId); if (doc) { const mode = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode) ? 'WALK_IN' : 'APPOINTMENT'; setVisitType(mode); navigateToView('FORM', clinic, doc); } else { addToast("Doctor is no longer available.", "error"); } } else { addToast("Clinic is no longer available.", "error"); } }}> Book Again </Button> </div> </div> ))} </div> ) : ( <div className="text-center py-12 opacity-50"> <History className="h-12 w-12 mx-auto mb-3 text-slate-300" /> <p>No visit history found.</p> </div> )} </div> ) )}
+                {activeTab === 'PROFILE' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full px-4 md:px-8 py-6 max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 items-start"> <div className="lg:col-span-1 space-y-6"> <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center text-center"> <div className="w-24 h-24 rounded-full bg-slate-100 flex items-center justify-center text-4xl font-bold text-slate-400 mb-4 border-4 border-white shadow-md"> {userName.charAt(0)} </div> <h2 className="text-2xl font-bold text-slate-900">{userName}</h2> <p className="text-slate-500 font-mono text-lg mb-4">{userPhone}</p> <div className="flex gap-2 text-sm text-slate-600 bg-slate-50 px-4 py-2 rounded-xl"> <span className="font-bold">{userProfile?.age || '--'} Yrs</span> <span>•</span> <span className="font-bold">{userProfile?.gender || '--'}</span> </div> <div className="mt-8 w-full"> <button onClick={onBack} className="w-full flex items-center justify-center gap-2 text-red-600 font-bold hover:bg-red-50 px-4 py-3 rounded-xl transition-colors border border-red-100"> <LogOut className="h-5 w-5" /> Logout </button> </div> </div> </div> <div className="lg:col-span-2 space-y-6"> <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"> <div className="flex justify-between items-center mb-6"> <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2"><Users className="h-5 w-5 text-primary-600" /> Family Members</h3> <Button size="sm" variant="outline" onClick={() => { setEditingMemberIndex(null); setNewMember({ name: '', age: '', gender: 'Male', relation: '' }); setShowAddMember(true); }}> <Plus className="h-4 w-4 mr-2" /> Add New </Button> </div> <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"> {userProfile?.familyMembers && userProfile.familyMembers.length > 0 ? ( userProfile.familyMembers.map((member, idx) => ( <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-primary-200 transition-colors"> <div className="flex items-center gap-4"> <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-500 shadow-sm"> {member.name.charAt(0)} </div> <div> <p className="font-bold text-slate-900">{member.name}</p> <p className="text-xs text-slate-500 font-medium">{member.relation} • {member.age} Yrs</p> </div> </div> <div className="flex gap-1"> <button onClick={() => handleEditMember(idx)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-colors"><Edit2 className="h-4 w-4" /></button> <button onClick={() => handleDeleteMember(idx)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg transition-colors"><Trash2 className="h-4 w-4" /></button> </div> </div> )) ) : ( <div className="col-span-full text-center py-8 text-slate-400 text-sm italic bg-slate-50 rounded-xl border border-dashed border-slate-200"> No family members added yet. </div> )} </div> </div> </div> </div> ) )}
 
                 {/* Booking Flow (Search, List, Details, Form) */}
                 {activeTab === 'BOOK' && (
                     <div className="h-full flex flex-col">
                         {bookingView === 'LIST' && (
                             <div className="h-full flex flex-col">
+                                {/* ... (Keep Search Header) ... */}
                                 <div className="px-4 py-2 bg-white border-b border-slate-200 shadow-sm z-10 shrink-0 w-full">
                                     <div className="w-full flex flex-col gap-2">
                                         <div className="flex flex-col md:flex-row gap-2 items-center w-full">
@@ -1131,6 +986,11 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                     } else if (clinic.geoLocation) {
                                                         gmapsLink = `https://www.google.com/maps/search/?api=1&query=${clinic.geoLocation.lat},${clinic.geoLocation.lng}`;
                                                     }
+                                                    
+                                                    // Updated Check for Buttons
+                                                    const canOnlineWalkIn = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
+                                                    const canBookAppt = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
+
                                                     return (
                                                         <ClinicCard
                                                             key={clinic.id}
@@ -1144,8 +1004,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             isHighlighted={isHighlighted}
                                                             cardRef={(el) => { clinicCardRefs.current[clinic.id] = el; }}
                                                             onSelect={() => navigateToView('CLINIC_DETAILS', clinic)}
-                                                            onBook={() => { if (clinic.operationMode === ClinicOperationMode.WALK_IN) return; navigateToView('CLINIC_DETAILS', clinic); setVisitType('APPOINTMENT'); }}
-                                                            onQueue={() => { if (clinic.operationMode === ClinicOperationMode.APPOINTMENT) return; navigateToView('CLINIC_DETAILS', clinic); setVisitType('WALK_IN'); }}
+                                                            onBook={() => { if (!canBookAppt) return; navigateToView('CLINIC_DETAILS', clinic); setVisitType('APPOINTMENT'); }}
+                                                            onQueue={() => { if (!canOnlineWalkIn) return; navigateToView('CLINIC_DETAILS', clinic); setVisitType('WALK_IN'); }}
                                                             onViewDoctor={(doc) => setViewingDoctor(doc)}
                                                         />
                                                     );
@@ -1160,6 +1020,10 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                     const formatShort = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
                                                     const nextSlotLabel = next ? (next.status === 'now' ? 'Available Now' : `Next: ${formatShort(next.start)}`) : 'No Slots';
                                                     const isWalkInAllowed = next?.status === 'now' || doctor.isAvailable;
+                                                    
+                                                    const canOnlineWalkIn = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
+                                                    const canBookAppt = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
+
                                                     return (
                                                         <DoctorSearchCard 
                                                             key={doctor.id}
@@ -1167,9 +1031,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             clinic={clinic}
                                                             distLabel={distLabel}
                                                             nextSlotLabel={nextSlotLabel}
-                                                            isWalkInAllowed={isWalkInAllowed}
+                                                            isWalkInAllowed={isWalkInAllowed && canOnlineWalkIn}
                                                             onBook={() => {
-                                                                if (clinic.operationMode === ClinicOperationMode.WALK_IN) { setVisitType('WALK_IN'); } else { setVisitType('APPOINTMENT'); }
+                                                                if (canOnlineWalkIn) { setVisitType('WALK_IN'); } else { setVisitType('APPOINTMENT'); }
                                                                 navigateToView('FORM', clinic, doctor);
                                                             }}
                                                             onViewProfile={() => setViewingDoctor(doctor)}
@@ -1206,6 +1070,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         
                         {bookingView === 'CLINIC_DETAILS' && selectedClinic && (
                             <div className="animate-in slide-in-from-right duration-300 bg-white min-h-full md:rounded-3xl md:shadow-2xl md:border md:border-slate-200 md:overflow-hidden md:max-w-5xl md:mx-auto pt-4 md:pt-0">
+                                {/* ... (Keep Clinic Details Header & Info) ... */}
                                 <div className="sticky top-0 bg-white/95 backdrop-blur-md z-10 px-4 md:px-6 py-3 border-b border-slate-100 flex items-center gap-3">
                                     <Button variant="ghost" size="sm" onClick={handleUIBack} className="p-0 rounded-full w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100">
                                         <ArrowLeft className="h-4 w-4" />
@@ -1213,6 +1078,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     <h2 className="font-bold text-slate-900 truncate text-lg">{selectedClinic.name}</h2>
                                 </div>
                                 <div className="p-4 md:p-8 pb-24 h-full overflow-y-auto custom-scrollbar">
+                                    {/* ... Image & Details ... */}
                                     <div className="w-full h-48 md:h-64 rounded-2xl overflow-hidden mb-6 relative shadow-sm group">
                                         {selectedClinic.imageUrl ? ( <img src={selectedClinic.imageUrl} alt={selectedClinic.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" /> ) : ( <div className="w-full h-full bg-slate-100 flex items-center justify-center"> <Building2 className="h-16 w-16 text-slate-300" /> </div> )}
                                         <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-2 py-1 rounded-lg text-xs font-bold flex items-center shadow-sm"> <Star className="h-3 w-3 text-yellow-500 mr-1 fill-current" /> 4.5 </div>
@@ -1248,11 +1114,13 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                     if (waitDetails.time > 20) waitColor = 'bg-yellow-100 text-yellow-700';
                                                     if (waitDetails.time > 45) waitColor = 'bg-red-100 text-red-700';
                                                     
-                                                    const isClinicWalkInOnly = selectedClinic.operationMode === ClinicOperationMode.WALK_IN;
-                                                    const isClinicApptOnly = selectedClinic.operationMode === ClinicOperationMode.APPOINTMENT;
+                                                    // Updated Check for Doctor Buttons
+                                                    const canOnlineWalkIn = isClinicOnlineWalkInAllowed;
+                                                    const canBookAppt = isClinicApptAllowed;
 
                                                     return (
                                                         <div key={doc.id} className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm hover:shadow-lg transition-all hover:border-primary-200 group relative">
+                                                            {/* ... (Keep Doctor Info Card) ... */}
                                                             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start cursor-pointer" onClick={() => setViewingDoctor(doc)}>
                                                                 <div className="relative flex-shrink-0"> <img src={doc.avatarUrl} alt={`Dr. ${doc.name}`} className="h-20 w-20 rounded-2xl object-cover bg-slate-100 border border-slate-100 shadow-inner" /> <span className={`absolute -bottom-1 -right-1 w-5 h-5 border-2 border-white rounded-full ${activeNow ? 'bg-emerald-500' : (canBook ? 'bg-yellow-400' : 'bg-slate-300')}`} title={availLabel}></span> </div>
                                                                 <div className="flex-1 min-w-0">
@@ -1268,13 +1136,16 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             <div className="mt-4 sm:mt-6 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
                                                                 <div className="flex flex-col text-xs text-slate-500"> <div className="uppercase font-bold text-[10px] tracking-wide text-slate-400">Availability & Fees</div> <div className="mt-1 flex items-center gap-2 text-sm text-slate-700">{getDoctorTodaySchedule(doc)}<span className="text-xs text-slate-400">·</span><span className="font-bold text-sm text-slate-900">₹{doc.consultationFee}</span></div> </div>
                                                                 <div className="flex items-center gap-3">
-                                                                    {!isClinicApptOnly && (
+                                                                    {canOnlineWalkIn && (
                                                                         <Button onClick={() => { navigateToView('FORM', selectedClinic, doc); setVisitType('WALK_IN'); }} disabled={!canBook || !activeNow} size="sm" variant="ghost" className={`h-9 px-3 text-xs ${!activeNow ? 'opacity-50' : 'text-slate-700'}`} title="Join Queue directly"> 
-                                                                            {isClinicWalkInOnly ? 'Details' : 'Queue'} 
+                                                                            Queue 
                                                                         </Button>
                                                                     )}
-                                                                    {!isClinicWalkInOnly && (
+                                                                    {canBookAppt && (
                                                                         <Button onClick={() => { navigateToView('FORM', selectedClinic, doc); setVisitType('APPOINTMENT'); }} disabled={!canBook} size="sm" className={`h-9 px-4 ${canBook ? 'shadow-md' : 'opacity-60 cursor-not-allowed'}`}> Book </Button>
+                                                                    )}
+                                                                    {!canOnlineWalkIn && !canBookAppt && (
+                                                                        <span className="text-xs text-slate-400 italic">Direct Walk-in Only</span>
                                                                     )}
                                                                 </div>
                                                             </div>
@@ -1290,6 +1161,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         {bookingView === 'FORM' && selectedClinic && selectedDoctor && (
                              <div className="animate-in slide-in-from-right duration-300 bg-slate-100 min-h-full flex justify-center">
                                  <div className="w-full max-w-2xl bg-white shadow-2xl h-full flex flex-col relative">
+                                    {/* ... (Keep Form Header) ... */}
                                     <div className="flex items-center gap-3 p-4 border-b border-slate-100 bg-white/80 backdrop-blur-md sticky top-0 z-30">
                                         <Button variant="ghost" size="sm" onClick={handleUIBack} className="rounded-full w-10 h-10 p-0 border border-slate-200 hover:bg-slate-100">
                                             <ArrowLeft className="h-5 w-5" />
@@ -1300,6 +1172,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                         </div>
                                     </div>
                                     <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 pb-24">
+                                        {/* ... (Keep Doctor Summary Card) ... */}
                                         <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex gap-4 items-start">
                                             <img src={selectedDoctor.avatarUrl} className="w-16 h-16 rounded-xl object-cover bg-white shadow-sm border border-slate-100" />
                                             <div className="flex-1 min-w-0">
@@ -1314,27 +1187,32 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                 <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Fee</div>
                                             </div>
                                         </div>
-                                        {!isClinicWalkInOnly && !isClinicApptOnly && (
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl flex flex-col items-center justify-center text-center">
-                                                    <span className="text-blue-800 text-[10px] font-bold uppercase tracking-wide mb-1">Patients Waiting</span>
-                                                    <span className="text-2xl font-black text-slate-900">{waitStats.count}</span>
-                                                </div>
-                                                <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl flex flex-col items-center justify-center text-center">
-                                                    <span className="text-amber-800 text-[10px] font-bold uppercase tracking-wide mb-1">Est. Wait Time</span>
-                                                    <span className="text-2xl font-black text-slate-900">~{waitStats.time}<span className="text-sm font-bold text-slate-500 ml-1">m</span></span>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {isClinicWalkInOnly ? (
+                                        
+                                        {!isClinicOnlineWalkInAllowed && !isClinicApptAllowed && (
                                             <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
                                                 <Footprints className="h-12 w-12 text-slate-300 mx-auto mb-3" />
                                                 <h3 className="font-bold text-slate-900 mb-1">Walk-In Only</h3>
                                                 <p className="text-sm text-slate-500">This clinic does not accept online tokens. Please visit the reception.</p>
                                             </div>
-                                        ) : (
+                                        )}
+
+                                        {(isClinicOnlineWalkInAllowed || isClinicApptAllowed) && (
                                             <>
+                                                {/* Stats */}
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl flex flex-col items-center justify-center text-center">
+                                                        <span className="text-blue-800 text-[10px] font-bold uppercase tracking-wide mb-1">Patients Waiting</span>
+                                                        <span className="text-2xl font-black text-slate-900">{waitStats.count}</span>
+                                                    </div>
+                                                    <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl flex flex-col items-center justify-center text-center">
+                                                        <span className="text-amber-800 text-[10px] font-bold uppercase tracking-wide mb-1">Est. Wait Time</span>
+                                                        <span className="text-2xl font-black text-slate-900">~{waitStats.time}<span className="text-sm font-bold text-slate-500 ml-1">m</span></span>
+                                                    </div>
+                                                </div>
+
                                                 <hr className="border-slate-100" />
+                                                
+                                                {/* Step 1: Who */}
                                                 <div className="space-y-3">
                                                     <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                                                         <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold">1</span>
@@ -1369,24 +1247,36 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                         </div>
                                                     )}
                                                 </div>
+
+                                                {/* Step 2: Type */}
                                                 <div className="space-y-3">
                                                     <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                                                         <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold">2</span>
                                                         Visit Type
                                                     </h3>
                                                     <div className="grid grid-cols-2 gap-3">
-                                                        <button disabled={!isWalkInAllowed || isClinicApptOnly} onClick={() => setVisitType('WALK_IN')} className={`p-3 rounded-xl border text-left transition-all ${visitType === 'WALK_IN' ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'} ${(!isWalkInAllowed || isClinicApptOnly) && 'opacity-50 cursor-not-allowed'}`}>
+                                                        <button 
+                                                            disabled={!isWalkInAllowed || !isClinicOnlineWalkInAllowed} 
+                                                            onClick={() => setVisitType('WALK_IN')} 
+                                                            className={`p-3 rounded-xl border text-left transition-all ${visitType === 'WALK_IN' ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'} ${(!isWalkInAllowed || !isClinicOnlineWalkInAllowed) && 'opacity-50 cursor-not-allowed'}`}
+                                                        >
                                                             <Zap className="h-5 w-5 mb-2" />
                                                             <div className="font-bold text-sm">Join Queue</div>
                                                             <div className="text-[10px] opacity-70">Get token now</div>
                                                         </button>
-                                                        <button disabled={isClinicWalkInOnly} onClick={() => setVisitType('APPOINTMENT')} className={`p-3 rounded-xl border text-left transition-all ${visitType === 'APPOINTMENT' ? 'bg-purple-600 text-white border-purple-600 shadow-lg' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'} ${isClinicWalkInOnly && 'opacity-50 cursor-not-allowed'}`}>
+                                                        <button 
+                                                            disabled={!isClinicApptAllowed} 
+                                                            onClick={() => setVisitType('APPOINTMENT')} 
+                                                            className={`p-3 rounded-xl border text-left transition-all ${visitType === 'APPOINTMENT' ? 'bg-purple-600 text-white border-purple-600 shadow-lg' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'} ${!isClinicApptAllowed && 'opacity-50 cursor-not-allowed'}`}
+                                                        >
                                                             <Calendar className="h-5 w-5 mb-2" />
                                                             <div className="font-bold text-sm">Book Slot</div>
                                                             <div className="text-[10px] opacity-70">Schedule for later</div>
                                                         </button>
                                                     </div>
                                                 </div>
+
+                                                {/* Travel Time or Schedule */}
                                                 {visitType === 'WALK_IN' ? (
                                                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">Travel Time</label>
@@ -1429,6 +1319,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                         )}
                                                     </div>
                                                 )}
+                                                
                                                 <div className="space-y-2">
                                                     <h3 className="text-sm font-bold text-slate-900">Reason for visit</h3>
                                                     <textarea className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-primary-500 outline-none resize-none" rows={2} placeholder="e.g. Fever, Headache..." value={symptoms} onChange={e => setSymptoms(e.target.value)} />
@@ -1436,7 +1327,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                             </>
                                         )}
                                     </div>
-                                    {!isClinicWalkInOnly && (
+                                    {(isClinicOnlineWalkInAllowed || isClinicApptAllowed) && (
                                         <div className="p-4 border-t border-slate-200 bg-white sticky bottom-0 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                                             <Button 
                                                 className="w-full h-14 text-lg font-bold rounded-xl shadow-xl shadow-primary-200"
@@ -1454,6 +1345,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 )}
 
                 {/* MODALS */}
+                {/* ... (Keep All Modals) ... */}
                 <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onSuccess={handleAuthSuccess} initialName={guestName} initialAge={guestAge} initialGender={guestGender} addToast={addToast} />
                 <DoctorProfileModal isOpen={!!viewingDoctor} onClose={() => setViewingDoctor(null)} doctor={viewingDoctor} operationMode={viewingDoctorClinic?.operationMode} onBook={handleBookFromProfile} />
                 
