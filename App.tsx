@@ -61,6 +61,7 @@ export default function App() {
   // Global State
   const [userRole, setUserRole] = useState<UserRole | null>(session?.userRole || null);
   const [clinics, setClinics] = useState<Clinic[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false); // Track if storage has loaded
   const [currentClinicId, setCurrentClinicId] = useState<string | null>(session?.selectedClinicId || null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(session?.currentUser?.id || null);
   
@@ -80,6 +81,7 @@ export default function App() {
   useEffect(() => {
       const unsubscribe = storage.subscribe((data) => {
           setClinics(data);
+          setIsInitialized(true);
       });
       return () => unsubscribe();
   }, []);
@@ -531,8 +533,8 @@ export default function App() {
 
   // --- COMPONENT RENDER ---
 
-  // Safety loading state if accessing deep link without data loaded yet
-  if (clinics.length === 0 && !location.pathname.includes('/login') && location.pathname !== '/' && location.pathname !== '/admin') {
+  // Ensure app is loaded before checking for empty data
+  if (!isInitialized) {
       return (
           <div className="flex h-screen items-center justify-center bg-slate-50">
               <div className="flex flex-col items-center gap-2">

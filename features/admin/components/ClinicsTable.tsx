@@ -7,6 +7,7 @@ import { Input } from '../../../components/Input';
 import { Modal } from '../../../components/Modal';
 import { StaffManagementModal } from './StaffManagementModal';
 import { AdminDoctorsModal } from './AdminDoctorsModal';
+import { ConfirmationModal } from '../../../components/ConfirmationModal';
 
 interface ClinicsTableProps {
   clinics: Clinic[];
@@ -36,6 +37,9 @@ export const ClinicsTable: React.FC<ClinicsTableProps> = ({
     const [planModal, setPlanModal] = useState<{ isOpen: boolean; clinic: Clinic | null }>({ isOpen: false, clinic: null });
     const [staffModal, setStaffModal] = useState<{ isOpen: boolean; clinic: Clinic | null }>({ isOpen: false, clinic: null });
     const [doctorModal, setDoctorModal] = useState<{ isOpen: boolean; clinic: Clinic | null }>({ isOpen: false, clinic: null });
+    
+    // Delete Confirmation
+    const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; clinicId: string | null }>({ isOpen: false, clinicId: null });
 
     const filteredClinics = clinics.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.city.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -45,6 +49,17 @@ export const ClinicsTable: React.FC<ClinicsTableProps> = ({
             const { id, name, city, address } = editModal.clinic;
             onEditClinic(id, { name, city, address });
             setEditModal({ isOpen: false, clinic: null });
+        }
+    };
+
+    const handleDeleteClick = (id: string) => {
+        setDeleteConfirm({ isOpen: true, clinicId: id });
+    };
+
+    const confirmDelete = () => {
+        if (deleteConfirm.clinicId) {
+            onDeleteClinic(deleteConfirm.clinicId);
+            setDeleteConfirm({ isOpen: false, clinicId: null });
         }
     };
 
@@ -77,7 +92,7 @@ export const ClinicsTable: React.FC<ClinicsTableProps> = ({
                                     <button onClick={() => setEditModal({isOpen: true, clinic})} className="p-2 hover:bg-slate-100 rounded text-slate-500" title="Edit Details"><Edit2 className="h-4 w-4" /></button>
                                     <button onClick={() => setPlanModal({isOpen: true, clinic})} className="p-2 hover:bg-blue-50 rounded text-blue-600" title="Manage Plan"><CreditCard className="h-4 w-4" /></button>
                                     <button onClick={() => onToggleStatus(clinic.id)} className={`p-2 hover:bg-slate-100 rounded ${clinic.subscriptionStatus === 'SUSPENDED' ? 'text-green-600' : 'text-orange-600'}`} title={clinic.subscriptionStatus === 'SUSPENDED' ? 'Activate' : 'Suspend'}><Power className="h-4 w-4" /></button>
-                                    <button onClick={() => { if(window.confirm('Delete Clinic permanently?')) onDeleteClinic(clinic.id) }} className="p-2 hover:bg-red-50 rounded text-red-600" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                                    <button onClick={() => handleDeleteClick(clinic.id)} className="p-2 hover:bg-red-50 rounded text-red-600" title="Delete"><Trash2 className="h-4 w-4" /></button>
                                 </div>
                             </td>
                         </tr>
@@ -131,6 +146,16 @@ export const ClinicsTable: React.FC<ClinicsTableProps> = ({
                     addToast={addToast}
                 />
             )}
+
+            <ConfirmationModal 
+                isOpen={deleteConfirm.isOpen}
+                onClose={() => setDeleteConfirm({ isOpen: false, clinicId: null })}
+                onConfirm={confirmDelete}
+                title="Delete Clinic?"
+                message="Are you sure you want to delete this clinic? All associated data (doctors, patients, staff) will be permanently removed."
+                variant="danger"
+                confirmLabel="Delete Clinic"
+            />
         </div>
     );
 };

@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { RotateCcw, Settings, Bell, ShieldCheck, Trash2, Loader2 } from 'lucide-react';
 import { StatsCards } from '../features/admin/components/StatsCards';
 import { ClinicsTable } from '../features/admin/components/ClinicsTable';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 import { SUPER_ADMIN_PROFILE } from '../constants';
 
 interface AdminDashboardProps {
@@ -46,27 +47,63 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
     const [isResetting, setIsResetting] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    
+    // Confirmation Modal State
+    const [confirmAction, setConfirmAction] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        action: () => Promise<void>;
+        variant: 'danger' | 'primary';
+        confirmLabel: string;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        action: async () => {},
+        variant: 'primary',
+        confirmLabel: 'Confirm'
+    });
 
-    const handleResetClick = async () => {
-        if (window.confirm('Reset to default Mock Data? Current changes will be lost.')) {
-            setIsResetting(true);
-            try {
-                await onResetSystem();
-            } finally {
-                setIsResetting(false);
-            }
-        }
+    const handleResetClick = () => {
+        setConfirmAction({
+            isOpen: true,
+            title: 'Reset to Mock Data?',
+            message: 'This will replace all current data with the default demo data. Any changes you made will be lost. Are you sure?',
+            action: async () => {
+                setIsResetting(true);
+                try {
+                    await onResetSystem();
+                } finally {
+                    setIsResetting(false);
+                }
+            },
+            variant: 'primary', // Orange-ish in button logic, but primary here is teal. Let's stick to danger for data loss or primary.
+            confirmLabel: 'Reset Data'
+        });
     };
 
-    const handleDeleteClick = async () => {
-        if (window.confirm('CRITICAL WARNING: This will DELETE ALL DATA. The system will be empty. Continue?')) {
-            setIsDeleting(true);
-            try {
-                await onDeleteAllData();
-            } finally {
-                setIsDeleting(false);
-            }
-        }
+    const handleDeleteClick = () => {
+        setConfirmAction({
+            isOpen: true,
+            title: 'Delete All Data?',
+            message: 'CRITICAL WARNING: This will permanently delete ALL clinics, doctors, patients, and staff. The system will be completely empty. This cannot be undone.',
+            action: async () => {
+                setIsDeleting(true);
+                try {
+                    await onDeleteAllData();
+                } finally {
+                    setIsDeleting(false);
+                }
+            },
+            variant: 'danger',
+            confirmLabel: 'Delete Everything'
+        });
+    };
+
+    const executeConfirm = async () => {
+        await confirmAction.action();
+        setConfirmAction(prev => ({ ...prev, isOpen: false }));
     };
 
     return (
@@ -140,6 +177,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 onDeleteDoctor={onDeleteDoctor}
                 onCheckMasterDoctor={onCheckMasterDoctor}
                 addToast={addToast}
+            />
+
+            <ConfirmationModal
+                isOpen={confirmAction.isOpen}
+                onClose={() => setConfirmAction({ ...confirmAction, isOpen: false })}
+                onConfirm={executeConfirm}
+                title={confirmAction.title}
+                message={confirmAction.message}
+                variant={confirmAction.variant}
+                confirmLabel={confirmAction.confirmLabel}
+                isLoading={isResetting || isDeleting}
             />
         </div>
     );
