@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Doctor, Patient, PatientStatus, DoctorStatus } from '../types';
-import { Coffee, Clock, Zap, AlertTriangle, PlayCircle, LogOut, Maximize, Minimize, User, Calendar, Languages, Volume2, VolumeX } from 'lucide-react';
+import { Coffee, Clock, Zap, AlertTriangle, PlayCircle, LogOut, Maximize, Minimize, User, Calendar, Languages, Volume2, VolumeX, Settings, X, Check } from 'lucide-react';
 
 interface KioskProps {
   doctors: Doctor[];
@@ -64,6 +64,10 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
   const [currentLang, setCurrentLang] = useState<'en' | 'ta' | 'te' | 'hi'>('en');
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [missingVoiceWarning, setMissingVoiceWarning] = useState<string>('');
+  
+  // Voice Preferences (Persisted)
+  const [voicePreferences, setVoicePreferences] = useState<Record<string, string>>({}); // langCode -> voiceURI
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
 
   // Track previous serving tokens AND language to trigger TTS only on change
   const lastServingRef = useRef<Record<string, { token: number, lang: string }>>({});
@@ -79,7 +83,7 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
   const displayDoctors = doctors;
   const totalPages = Math.ceil(displayDoctors.length / doctorsPerPage);
 
-  // --- LOAD VOICES ---
+  // --- LOAD VOICES & PREFS ---
   useEffect(() => {
       const loadVoices = () => {
           const voices = window.speechSynthesis.getVoices();
@@ -95,29 +99,28 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
       
       // Fallback polling for Safari/Chrome sometimes failing to trigger event
       const interval = setInterval(loadVoices, 1000);
+
+      // Load Saved Prefs
+      try {
+          const saved = localStorage.getItem('kiosk_voice_prefs');
+          if (saved) setVoicePreferences(JSON.parse(saved));
+      } catch (e) { console.error("Error loading voice prefs", e); }
+
       return () => {
           window.speechSynthesis.onvoiceschanged = null;
           clearInterval(interval);
       };
   }, []);
 
-  // --- CHECK VOICE AVAILABILITY ---
-  useEffect(() => {
-      if (availableVoices.length === 0) return;
-      const targetLangConfig = LANGUAGES.find(l => l.code === currentLang);
-      if (targetLangConfig) {
-          const baseLang = targetLangConfig.langCode.split('-')[0];
-          const hasVoice = availableVoices.some(v => v.lang.toLowerCase().includes(baseLang));
-          if (!hasVoice && currentLang !== 'en') {
-              setMissingVoiceWarning(`${targetLangConfig.label} voice not found on device. Using English fallback.`);
-          } else {
-              setMissingVoiceWarning('');
-          }
-      }
-  }, [currentLang, availableVoices]);
-
-  // --- HELPER: GET BEST VOICE (PRIORITIZE FEMALE & REGIONAL) ---
+  // --- HELPER: GET BEST VOICE ---
   const getBestVoice = (langCode: string) => {
+      // 1. Check User Preference First
+      if (voicePreferences[langCode]) {
+          const prefVoice = availableVoices.find(v => v.voiceURI === voicePreferences[langCode]);
+          if (prefVoice) return { voice: prefVoice, isExplicitFemale: false };
+      }
+
+      // 2. Heuristic Search
       const normalizedLang = langCode.toLowerCase().replace('_', '-');
       const baseLang = normalizedLang.split('-')[0];
       
@@ -129,11 +132,10 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
       
       if (langVoices.length === 0) return null;
 
-      // Priority 1: Explicit "Google" voices (usually high quality on Android/Chrome)
+      // Priority: Google > Female > First
       const googleVoice = langVoices.find(v => v.name.toLowerCase().includes('google'));
       if (googleVoice) return { voice: googleVoice, isExplicitFemale: false }; 
 
-      // Priority 2: Female
       const femaleVoice = langVoices.find(v => 
           v.name.toLowerCase().includes('female') || 
           v.name.toLowerCase().includes('woman') ||
@@ -141,30 +143,63 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
       );
       if (femaleVoice) return { voice: femaleVoice, isExplicitFemale: true };
 
-      // Fallback: First available
       return { voice: langVoices[0], isExplicitFemale: false };
   };
 
-  const speak = (text: string) => {
+  const speak = (text: string, forceLang?: string) => {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      const targetLangConfig = LANGUAGES.find(l => l.code === currentLang);
+      const targetLang = forceLang || currentLang;
+      const targetLangConfig = LANGUAGES.find(l => l.code === targetLang);
       
       if (targetLangConfig) {
           const result = getBestVoice(targetLangConfig.langCode);
           if (result) {
               utterance.voice = result.voice;
               utterance.pitch = result.isExplicitFemale ? 1.05 : 1.1; 
-              utterance.lang = result.voice.lang; // Ensure lang matches voice
+              utterance.lang = result.voice.lang; 
           } else {
-              // Fallback if no specific voice found
-              console.warn(`No voice found for ${targetLangConfig.langCode}, using default.`);
+              // Fallback
+              console.warn(`No voice found for ${targetLangConfig.langCode}`);
               utterance.lang = targetLangConfig.langCode;
           }
       }
       
-      utterance.rate = 0.9; // Slightly slower for clarity
+      utterance.rate = 0.9; 
       window.speechSynthesis.speak(utterance);
+  };
+
+  // --- CHECK VOICE WARNING ---
+  useEffect(() => {
+      const targetLangConfig = LANGUAGES.find(l => l.code === currentLang);
+      if (targetLangConfig && availableVoices.length > 0) {
+          const result = getBestVoice(targetLangConfig.langCode);
+          if (!result && currentLang !== 'en') {
+              setMissingVoiceWarning(`${targetLangConfig.label} voice not found. Check settings.`);
+          } else {
+              setMissingVoiceWarning('');
+          }
+      }
+  }, [currentLang, availableVoices, voicePreferences]);
+
+  const saveVoicePreference = (langCode: string, voiceURI: string) => {
+      const newPrefs = { ...voicePreferences, [langCode]: voiceURI };
+      setVoicePreferences(newPrefs);
+      localStorage.setItem('kiosk_voice_prefs', JSON.stringify(newPrefs));
+      
+      // Test Speak
+      const targetLangConfig = LANGUAGES.find(l => l.langCode === langCode);
+      if (targetLangConfig) {
+          const testText = targetLangConfig.code === 'ta' ? 'வணக்கம்' : 
+                           targetLangConfig.code === 'te' ? 'నమస్కారం' : 
+                           targetLangConfig.code === 'hi' ? 'नमस्ते' : 'Hello Test';
+          // Use a temporary utterance to test the specific voice immediately
+          window.speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance(testText);
+          const v = availableVoices.find(v => v.voiceURI === voiceURI);
+          if (v) u.voice = v;
+          window.speechSynthesis.speak(u);
+      }
   };
 
   // --- RESPONSIVE LAYOUT HANDLER (UPDATED FOR HEIGHT CHECK) ---
@@ -246,7 +281,7 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
                 .replace('{room}', doc.roomNumber);
               
               // Small delay to ensure language switch state has settled if triggered by lang change
-              setTimeout(() => speak(text), 100);
+              setTimeout(() => speak(text), 200);
           }
           // Update ref with current token AND language
           lastServingRef.current[doc.id] = { 
@@ -338,8 +373,52 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
   }
 
   return (
-    <div className="h-[100dvh] w-screen bg-slate-950 text-white flex flex-col overflow-hidden font-sans select-none cursor-none hover:cursor-default transition-all p-2 sm:p-4 lg:p-6">
+    <div className="h-[100dvh] w-screen bg-slate-950 text-white flex flex-col overflow-hidden font-sans select-none cursor-none hover:cursor-default transition-all p-2 sm:p-4 lg:p-6 relative">
       
+      {/* VOICE SETTINGS MODAL */}
+      {showVoiceSettings && (
+          <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+                  <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800">
+                      <h3 className="font-bold text-white flex items-center gap-2"><Settings className="h-5 w-5" /> Audio Settings</h3>
+                      <button onClick={() => setShowVoiceSettings(false)} className="p-2 hover:bg-slate-700 rounded-full"><X className="h-5 w-5" /></button>
+                  </div>
+                  <div className="p-6 overflow-y-auto">
+                      <p className="text-slate-400 text-sm mb-6">Select specific voices for each language. This ensures correct pronunciation even if the browser default is incorrect.</p>
+                      <div className="space-y-6">
+                          {LANGUAGES.map(lang => (
+                              <div key={lang.code} className="space-y-2">
+                                  <label className="text-xs font-bold text-primary-400 uppercase tracking-wider">{lang.label} Voice</label>
+                                  <select 
+                                      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white text-sm focus:border-primary-500 outline-none"
+                                      value={voicePreferences[lang.langCode] || ''}
+                                      onChange={(e) => saveVoicePreference(lang.langCode, e.target.value)}
+                                  >
+                                      <option value="">-- Auto Detect (Default) --</option>
+                                      {availableVoices
+                                          .filter(v => v.lang.includes(lang.langCode.split('-')[0]) || v.lang.includes(lang.code)) // Loose match for listing
+                                          .map(v => (
+                                              <option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>
+                                          ))
+                                      }
+                                      {/* Show all voices option for debugging */}
+                                      <optgroup label="All Installed Voices">
+                                          {availableVoices.map(v => (
+                                              <option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>
+                                          ))}
+                                      </optgroup>
+                                  </select>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+                  <div className="p-4 bg-slate-800 text-right">
+                      <button onClick={() => setShowVoiceSettings(false)} className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-2 rounded-lg font-bold">Done</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {emergencyAlert && (
           <div className="fixed inset-0 z-[100] bg-red-600 flex flex-col items-center justify-center animate-[pulse_1s_ease-in-out_infinite] p-4 text-center">
                <AlertTriangle className="h-32 w-32 sm:h-64 sm:w-64 text-white mb-4 sm:mb-8" />
@@ -361,10 +440,10 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
         </div>
         <div className="flex items-center gap-4 sm:gap-8 flex-shrink-0">
             {missingVoiceWarning && (
-                <div className="hidden lg:flex items-center text-orange-400 bg-orange-900/20 px-3 py-1 rounded-full border border-orange-500/30 animate-pulse">
+                <button onClick={() => setShowVoiceSettings(true)} className="hidden lg:flex items-center text-orange-400 bg-orange-900/20 px-3 py-1 rounded-full border border-orange-500/30 animate-pulse hover:bg-orange-900/40 transition-colors">
                     <VolumeX className="h-4 w-4 mr-2" />
                     <span className="text-xs font-bold">{missingVoiceWarning}</span>
-                </div>
+                </button>
             )}
             
             <div className="hidden sm:flex items-center bg-slate-900 border border-slate-800 rounded-lg p-1">
@@ -376,6 +455,10 @@ export const KioskView: React.FC<KioskProps> = ({ doctors, patients, clinicName,
                 >
                     {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
                 </select>
+                <div className="w-px h-4 bg-slate-700 mx-2"></div>
+                <button onClick={() => setShowVoiceSettings(true)} className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white" title="Voice Settings">
+                    <Settings className="h-4 w-4" />
+                </button>
             </div>
 
             <div className="text-right">
