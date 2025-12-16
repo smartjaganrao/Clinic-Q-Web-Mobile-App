@@ -1,8 +1,8 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Clinic, Doctor, PlanType, Staff } from '../types';
 import { Button } from '../components/Button';
-import { RotateCcw, Settings, Bell, ShieldCheck } from 'lucide-react';
+import { RotateCcw, Settings, Bell, ShieldCheck, Trash2, Loader2 } from 'lucide-react';
 import { StatsCards } from '../features/admin/components/StatsCards';
 import { ClinicsTable } from '../features/admin/components/ClinicsTable';
 import { SUPER_ADMIN_PROFILE } from '../constants';
@@ -13,7 +13,8 @@ interface AdminDashboardProps {
     onToggleStatus: (clinicId: string) => void;
     onDeleteClinic: (clinicId: string) => void;
     onEditClinic: (clinicId: string, updates: Partial<Clinic>) => void;
-    onResetSystem: () => void;
+    onResetSystem: () => Promise<void>;
+    onDeleteAllData: () => Promise<void>;
     // Staff Props
     onAddStaff?: (clinicId: string, staff: Staff) => void;
     onUpdateStaff?: (clinicId: string, staffId: string, updates: Partial<Staff>) => void;
@@ -33,6 +34,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onDeleteClinic,
     onEditClinic,
     onResetSystem,
+    onDeleteAllData,
     onAddStaff,
     onUpdateStaff,
     onDeleteStaff,
@@ -42,6 +44,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onCheckMasterDoctor,
     addToast
 }) => {
+    const [isResetting, setIsResetting] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleResetClick = async () => {
+        if (window.confirm('Reset to default Mock Data? Current changes will be lost.')) {
+            setIsResetting(true);
+            try {
+                await onResetSystem();
+            } finally {
+                setIsResetting(false);
+            }
+        }
+    };
+
+    const handleDeleteClick = async () => {
+        if (window.confirm('CRITICAL WARNING: This will DELETE ALL DATA. The system will be empty. Continue?')) {
+            setIsDeleting(true);
+            try {
+                await onDeleteAllData();
+            } finally {
+                setIsDeleting(false);
+            }
+        }
+    };
+
     return (
         <div className="p-6 h-full overflow-y-auto bg-slate-50">
             {/* Header Section */}
@@ -74,11 +101,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {/* Quick Actions Row */}
             <div className="flex gap-3 mb-8">
                 <Button 
-                    variant="danger" 
-                    onClick={() => { if(window.confirm('WARNING: This will wipe all data and reset the system to default state. This action cannot be undone. Continue?')) onResetSystem() }} 
-                    className="bg-red-50 text-red-600 border-red-200 hover:bg-red-100 shadow-none text-xs"
+                    variant="secondary" 
+                    onClick={handleResetClick} 
+                    disabled={isResetting || isDeleting}
+                    className="bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 shadow-none text-xs w-40 justify-center"
                 >
-                    <RotateCcw className="h-3 w-3 mr-2" /> Reset Demo Data
+                    {isResetting ? <Loader2 className="h-3 w-3 mr-2 animate-spin" /> : <RotateCcw className="h-3 w-3 mr-2" />}
+                    {isResetting ? 'Resetting...' : 'Reset to Mock Data'}
+                </Button>
+                <Button 
+                    variant="danger" 
+                    onClick={handleDeleteClick} 
+                    disabled={isResetting || isDeleting}
+                    className="bg-red-50 text-red-600 border-red-200 hover:bg-red-100 shadow-none text-xs w-40 justify-center"
+                >
+                    {isDeleting ? <Loader2 className="h-3 w-3 mr-2 animate-spin" /> : <Trash2 className="h-3 w-3 mr-2" />}
+                    {isDeleting ? 'Deleting...' : 'Delete All Data'}
                 </Button>
                 <div className="flex-1"></div>
                 <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">

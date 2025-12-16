@@ -506,8 +506,13 @@ export default function App() {
   };
   const handleResetSystem = async () => {
       await storage.resetSystem();
-      handleLogout();
-      addToast("System reset complete", "warning");
+      // handleLogout(); // Removed logout to keep testing flow
+      addToast("System reset to Mock Data", "warning");
+  };
+  const handleDeleteAllData = async () => {
+      await storage.deleteAllData();
+      // handleLogout(); // Removed logout to keep testing flow
+      addToast("All data deleted. System is empty.", "error");
   };
 
   // ADMIN STAFF HANDLERS (SUPER ADMIN)
@@ -527,7 +532,7 @@ export default function App() {
   // --- COMPONENT RENDER ---
 
   // Safety loading state if accessing deep link without data loaded yet
-  if (clinics.length === 0 && !location.pathname.includes('/login') && location.pathname !== '/') {
+  if (clinics.length === 0 && !location.pathname.includes('/login') && location.pathname !== '/' && location.pathname !== '/admin') {
       return (
           <div className="flex h-screen items-center justify-center bg-slate-50">
               <div className="flex flex-col items-center gap-2">
@@ -744,6 +749,7 @@ export default function App() {
                         onDeleteClinic={handleDeleteClinic}
                         onEditClinic={handleEditClinic}
                         onResetSystem={handleResetSystem}
+                        onDeleteAllData={handleDeleteAllData}
                         onAddStaff={handleAddStaff}
                         onUpdateStaff={handleUpdateStaff}
                         onDeleteStaff={handleDeleteStaff}

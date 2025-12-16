@@ -22,13 +22,14 @@ class StorageService {
         if (stored) {
           this.clinics = JSON.parse(stored);
         } else {
-          this.clinics = INITIAL_CLINICS;
+          // Deep copy to prevent mutation of the constant
+          this.clinics = JSON.parse(JSON.stringify(INITIAL_CLINICS));
           this.save();
         }
       }
     } catch (e) {
       console.error("Storage Load Error", e);
-      this.clinics = INITIAL_CLINICS;
+      this.clinics = JSON.parse(JSON.stringify(INITIAL_CLINICS));
     }
   }
 
@@ -78,7 +79,7 @@ class StorageService {
           const defaultClinic = this.clinics[0];
           return {
               role: UserRole.KIOSK,
-              clinicId: defaultClinic.id,
+              clinicId: defaultClinic ? defaultClinic.id : 'clinic_chn_1',
               userId: 'kiosk_display',
               name: 'Kiosk Display'
           };
@@ -283,9 +284,21 @@ class StorageService {
 
   async resetSystem() {
       await delay(500);
+      // Explicitly clear local storage to remove any persistent data
+      localStorage.removeItem('clinicq_db_v2'); 
+      // Re-initialize with a fresh deep copy of INITIAL_CLINICS
+      this.clinics = JSON.parse(JSON.stringify(INITIAL_CLINICS)); 
+      // Save immediately to persist this new state and trigger notify
+      this.save();
+  }
+
+  async deleteAllData() {
+      await delay(500);
+      // Clear local storage
       localStorage.removeItem('clinicq_db_v2');
-      localStorage.removeItem('clinicq_session_v2');
-      this.clinics = INITIAL_CLINICS;
+      // Set to empty array
+      this.clinics = [];
+      // Save and notify
       this.save();
   }
 }
