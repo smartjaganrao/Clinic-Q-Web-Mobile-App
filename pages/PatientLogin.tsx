@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { ArrowLeft, Mail, Lock, User, ArrowRight, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Mail, Lock, User, ArrowRight, CheckCircle2, ShieldCheck, Sparkles } from 'lucide-react';
 import { Logo } from '../components/Logo';
 
 interface PatientLoginProps {
@@ -29,6 +28,25 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
 
   const handleLogin = (e: React.FormEvent) => {
       e.preventDefault();
+      
+      // Handle Hardcoded Demo Account
+      if (email === 'aarav@demo.com' && password === 'password') {
+          const demoUser = {
+              name: 'Aarav Sharma',
+              email: 'aarav@demo.com',
+              phone: '9876543210',
+              password: 'password',
+              isVerified: true
+          };
+          // Persist if not present
+          if (!localStorage.getItem(`clinicq_patient_${email}`)) {
+              localStorage.setItem(`clinicq_patient_${email}`, JSON.stringify(demoUser));
+          }
+          addToast(`Logged in as Demo Patient: Aarav`, "success");
+          onLogin(demoUser.phone, demoUser.name);
+          return;
+      }
+
       // Check local storage for user
       const storedUser = localStorage.getItem(`clinicq_patient_${email}`);
       
@@ -95,6 +113,12 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
       }
   };
 
+  const fillDemoPatient = () => {
+      setEmail('aarav@demo.com');
+      setPassword('password');
+      addToast("Demo credentials filled", "info");
+  };
+
   return (
     <div className="min-h-screen flex bg-slate-50">
       
@@ -142,45 +166,60 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
             )}
 
             {view === 'LOGIN' && (
-                <form onSubmit={handleLogin} className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
-                    <div className="space-y-1">
-                        <label className="text-sm font-bold text-slate-700">Email Address</label>
-                        <div className="relative">
-                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                            <input 
-                                type="email" 
-                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
-                                placeholder="name@example.com"
-                                value={email}
-                                onChange={e => setEmail(e.target.value)}
-                                required
-                            />
+                <div className="space-y-6">
+                    <form onSubmit={handleLogin} className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <div className="space-y-1">
+                            <label className="text-sm font-bold text-slate-700">Email Address</label>
+                            <div className="relative">
+                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                <input 
+                                    type="email" 
+                                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+                                    placeholder="name@example.com"
+                                    value={email}
+                                    onChange={e => setEmail(e.target.value)}
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <div className="flex justify-between">
+                                <label className="text-sm font-bold text-slate-700">Password</label>
+                                <a href="#" className="text-xs font-bold text-primary-600 hover:underline">Forgot?</a>
+                            </div>
+                            <div className="relative">
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                <input 
+                                    type="password" 
+                                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+                                    placeholder="••••••••"
+                                    value={password}
+                                    onChange={e => setPassword(e.target.value)}
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <Button type="submit" className="w-full h-12 text-lg font-bold rounded-xl shadow-lg shadow-primary-200">
+                            Sign In <ArrowRight className="ml-2 h-5 w-5" />
+                        </Button>
+                        <div className="text-center text-sm text-slate-500 mt-4">
+                            Don't have an account? <button type="button" onClick={() => setView('REGISTER')} className="text-primary-600 font-bold hover:underline">Sign Up</button>
+                        </div>
+                    </form>
+
+                    <div className="pt-6 border-t border-slate-100">
+                        <p className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Quick Testing Access</p>
+                        <div className="flex justify-center">
+                            <button 
+                                onClick={fillDemoPatient}
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-primary-50 hover:text-primary-700 hover:border-primary-200 transition-all group"
+                            >
+                                <Sparkles className="h-3.5 w-3.5 text-primary-500 group-hover:animate-pulse" />
+                                Demo Patient: Aarav
+                            </button>
                         </div>
                     </div>
-                    <div className="space-y-1">
-                        <div className="flex justify-between">
-                            <label className="text-sm font-bold text-slate-700">Password</label>
-                            <a href="#" className="text-xs font-bold text-primary-600 hover:underline">Forgot?</a>
-                        </div>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                            <input 
-                                type="password" 
-                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
-                                placeholder="••••••••"
-                                value={password}
-                                onChange={e => setPassword(e.target.value)}
-                                required
-                            />
-                        </div>
-                    </div>
-                    <Button type="submit" className="w-full h-12 text-lg font-bold rounded-xl shadow-lg shadow-primary-200">
-                        Sign In <ArrowRight className="ml-2 h-5 w-5" />
-                    </Button>
-                    <div className="text-center text-sm text-slate-500 mt-4">
-                        Don't have an account? <button type="button" onClick={() => setView('REGISTER')} className="text-primary-600 font-bold hover:underline">Sign Up</button>
-                    </div>
-                </form>
+                </div>
             )}
 
             {view === 'REGISTER' && (
