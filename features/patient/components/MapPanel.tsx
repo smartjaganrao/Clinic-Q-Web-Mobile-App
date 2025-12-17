@@ -8,11 +8,25 @@ import { Crosshair, MapPin, X } from 'lucide-react';
 const MapInvalidator = ({ showMap }: { showMap: boolean }) => {
   const map = useMap();
   useEffect(() => {
-    if (showMap) {
+    // Aggressive invalidation for mobile
+    const invalidate = () => {
         map.invalidateSize();
-        const timer = setTimeout(() => { map.invalidateSize(); }, 300); 
-        return () => clearTimeout(timer);
-    }
+    };
+    
+    invalidate();
+    const timers = [
+        setTimeout(invalidate, 100),
+        setTimeout(invalidate, 300),
+        setTimeout(invalidate, 600),
+        setTimeout(invalidate, 1000)
+    ];
+    
+    window.addEventListener('resize', invalidate);
+    
+    return () => {
+        timers.forEach(t => clearTimeout(t));
+        window.removeEventListener('resize', invalidate);
+    };
   }, [showMap, map]);
   return null;
 };
@@ -79,42 +93,54 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     getClinicWaitStats, onLocationSelect, onMarkerDragEnd, onLocateMe, onMarkerClick, onBookClick, onClosePickingLocation
 }) => {
     return (
-        <div className={`w-full md:w-[35%] h-full bg-slate-100 border-l border-slate-200 relative hidden md:block`}>
-            <MapContainer center={mapCenter} zoom={13} scrollWheelZoom={true} className={isPickingLocation ? 'cursor-crosshair' : ''} style={{ height: '100%', width: '100%' }}>
-                <MapInvalidator showMap={showMap} />
-                <TileLayer attribution='&copy; CARTO' url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
-                <MapUpdater center={mapCenter} zoom={13} />
-                <MapClickHandler isActive={isPickingLocation} onLocationSelect={onLocationSelect} />
-                {userLocation && <DraggableUserMarker position={[userLocation.lat, userLocation.lng]} icon={userIcon} onDragEnd={onMarkerDragEnd} />}
-                {clinics.map(clinic => {
-                    if (!clinic.geoLocation) return null;
-                    const waitInfo = getClinicWaitStats(clinic);
-                    const icon = createCustomIcon(waitInfo.mapColor, waitInfo.raw, clinic.name);
-                    return (
-                        <Marker key={clinic.id} position={[clinic.geoLocation.lat, clinic.geoLocation.lng]} icon={icon} eventHandlers={{ click: () => onMarkerClick(clinic.id), }}>
-                            <Popup className="custom-popup">
-                                <div className="p-1 min-w-[180px]">
-                                    <h3 className="font-bold text-sm mb-1">{clinic.name}</h3>
-                                    <p className="text-xs text-slate-500 mb-2">{clinic.address}</p>
-                                    <div className="flex justify-between items-center">
-                                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded text-white ${waitInfo.mapColor}`}>{waitInfo.raw}m Wait</span>
-                                        <button onClick={() => onBookClick(clinic.id)} className="text-xs bg-slate-900 text-white px-2 py-1 rounded font-bold hover:bg-slate-700">Book</button>
+        <div className={`w-full md:w-[35%] flex-1 md:flex-none h-full min-h-[400px] md:min-h-0 bg-slate-200 border-l border-slate-200 relative z-0 md:static`}>
+            <div className="absolute inset-0 md:relative md:h-full md:w-full">
+                <MapContainer 
+                    center={mapCenter} 
+                    zoom={13} 
+                    scrollWheelZoom={true} 
+                    className={isPickingLocation ? 'cursor-crosshair h-full w-full' : 'h-full w-full'}
+                    style={{ height: '100%', width: '100%' }}
+                >
+                    <MapInvalidator showMap={showMap} />
+                    <TileLayer attribution='&copy; CARTO' url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+                    <MapUpdater center={mapCenter} zoom={13} />
+                    <MapClickHandler isActive={isPickingLocation} onLocationSelect={onLocationSelect} />
+                    {userLocation && <DraggableUserMarker position={[userLocation.lat, userLocation.lng]} icon={userIcon} onDragEnd={onMarkerDragEnd} />}
+                    {clinics.map(clinic => {
+                        if (!clinic.geoLocation) return null;
+                        const waitInfo = getClinicWaitStats(clinic);
+                        const icon = createCustomIcon(waitInfo.mapColor, waitInfo.raw, clinic.name);
+                        return (
+                            <Marker key={clinic.id} position={[clinic.geoLocation.lat, clinic.geoLocation.lng]} icon={icon} eventHandlers={{ click: () => onMarkerClick(clinic.id), }}>
+                                <Popup className="custom-popup">
+                                    <div className="p-1 min-w-[180px]">
+                                        <h3 className="font-bold text-sm mb-1">{clinic.name}</h3>
+                                        <p className="text-xs text-slate-500 mb-2">{clinic.address}</p>
+                                        <div className="flex justify-between items-center">
+                                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded text-white ${waitInfo.mapColor}`}>{waitInfo.raw}m Wait</span>
+                                            <button onClick={() => onBookClick(clinic.id)} className="text-xs bg-slate-900 text-white px-2 py-1 rounded font-bold hover:bg-slate-700">Book</button>
+                                        </div>
                                     </div>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    );
-                })}
-            </MapContainer>
+                                </Popup>
+                            </Marker>
+                        );
+                    })}
+                </MapContainer>
+            </div>
+            
+            {/* UI Overlays */}
             <button onClick={onLocateMe} className="absolute top-4 right-4 z-[400] bg-white p-3 rounded-full shadow-lg border border-slate-200 hover:bg-slate-50 text-slate-700 active:scale-95 transition-transform" title="My Location">
                 {isLocating ? <span className="animate-spin block h-5 w-5 border-2 border-slate-400 border-t-transparent rounded-full"></span> : <Crosshair className="h-5 w-5" />}
             </button>
+            
             <div className="absolute bottom-24 md:bottom-4 left-4 bg-white/90 backdrop-blur p-2 rounded-lg shadow-md text-[10px] space-y-1 z-[400]">
                 <div className="font-bold mb-1">Live Wait Time</div>
                 <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500"></span> Fast (0-20m)</div>
                 <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500"></span> Moderate (20-45m)</div>
                 <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500"></span> Busy (45m+)</div>
             </div>
+            
             {isPickingLocation && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] bg-indigo-600 text-white px-4 py-2 rounded-full shadow-xl animate-in fade-in slide-in-from-top-4 flex items-center gap-2 cursor-pointer" onClick={onClosePickingLocation}>
                     <MapPin className="h-4 w-4 animate-bounce" /><span className="font-bold text-sm">Tap map to place pin</span><X className="h-4 w-4 ml-2 opacity-80" />

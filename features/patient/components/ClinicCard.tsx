@@ -2,7 +2,7 @@
 import React from 'react';
 import { Clinic, Doctor, ClinicOperationMode } from '../../../types';
 import { Button } from '../../../components/Button';
-import { Building2, Star, MapPin, Clock, Calendar, Zap, ExternalLink, Footprints } from 'lucide-react';
+import { Building2, MapPin, Clock, Calendar, Zap, ExternalLink, Footprints, ShieldCheck } from 'lucide-react';
 
 function IndianRupeeIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -29,7 +29,6 @@ interface ClinicCardProps {
       dotColor: string;
   };
   feeRange: string;
-  rating: string;
   distLabel: string;
   gmapsLink: string;
   relevantDoctors: Doctor[];
@@ -42,7 +41,7 @@ interface ClinicCardProps {
 }
 
 export const ClinicCard: React.FC<ClinicCardProps> = ({
-  clinic, waitInfo, feeRange, rating, distLabel, gmapsLink, relevantDoctors, isHighlighted, cardRef, onSelect, onBook, onQueue, onViewDoctor
+  clinic, waitInfo, feeRange, distLabel, gmapsLink, relevantDoctors, isHighlighted, cardRef, onSelect, onBook, onQueue, onViewDoctor
 }) => {
   const canBook = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
   const canQueue = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
@@ -69,7 +68,7 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
             <div className="flex-1 min-w-0 flex flex-col">
                 <div className="flex justify-between items-start mb-0.5">
                     <h3 className="font-bold text-slate-900 text-sm md:text-base truncate leading-tight group-hover:text-primary-600 transition-colors">{clinic.name}</h3>
-                    <span className="flex items-center text-[10px] font-bold bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded border border-yellow-100 flex-shrink-0 ml-2"><Star className="h-2.5 w-2.5 mr-0.5 fill-current" /> {rating}</span>
+                    <span className="flex items-center text-[9px] font-bold bg-primary-50 text-primary-700 px-1.5 py-0.5 rounded border border-primary-100 flex-shrink-0 ml-2 uppercase tracking-tight"><ShieldCheck className="h-2.5 w-2.5 mr-0.5" /> Verified</span>
                 </div>
                 
                 <div className="mb-2 min-h-[20px]">
@@ -97,7 +96,6 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                     <span className="flex items-center gap-0.5"><Clock className="h-2.5 w-2.5" /> {clinic.operatingHours || '9-9'}</span>
                 </div>
 
-                {/* NEW: ENCOURAGING SENTIMENT BAR - Headcount removed to reduce friction */}
                 <div className={`flex items-center gap-2 px-2 py-1.5 rounded-md border ${waitInfo.bgColor} ${waitInfo.borderColor}`}>
                     <div className={`w-2 h-2 rounded-full ${waitInfo.dotColor} animate-pulse shadow-sm flex-shrink-0`} />
                     <div className="flex items-center justify-between w-full leading-none">

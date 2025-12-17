@@ -23,7 +23,7 @@ import {
     Navigation, Timer, Building2, 
     Info, Lock, History, X, AlertCircle, Sun, Moon,
     User, Users, Plus, LogOut, Coffee, LogIn, CloudSun, List as ListIcon, Crosshair, Zap, ExternalLink, ShieldCheck,
-    CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, ChevronLeft, FileText, MoonStar, MessageSquare, Phone
+    CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, ChevronLeft, FileText, MoonStar, MessageSquare, Phone, RefreshCw
 } from 'lucide-react';
 
 // SEO URL Helpers
@@ -298,7 +298,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [travelTime, setTravelTime] = useState('15'); 
   const [bookingFor, setBookingFor] = useState<'MYSELF' | string>('MYSELF'); 
   
-  const [showMap, setShowMap] = useState(true); 
+  const [showMap, setShowMap] = useState(false); 
   const clinicCardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const [highlightedClinicId, setHighlightedClinicId] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -482,14 +482,18 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       }); 
   }, [clinics, searchQuery, selectedCategory, sortBy, selectedCity, selectedSpecialty, userLocation, showOpenOnly]);
 
-  const filteredDoctors = useMemo(() => {
-      const allDoctors = clinics.flatMap(clinic => clinic.doctors.map(doctor => ({ doctor, clinic })));
-      return allDoctors.filter(({ doctor, clinic }) => {
+  // Grouped Doctor Logic to handle multi-clinic display
+  const groupedDoctors = useMemo(() => {
+      const allOccurrences = clinics.flatMap(clinic => 
+          clinic.doctors.map(doc => ({ doc, clinic }))
+      );
+
+      const filteredOccurrences = allOccurrences.filter(({ doc, clinic }) => {
           const q = searchQuery.toLowerCase();
           
           if (q) {
-              const matchesName = doctor.name.toLowerCase().includes(q);
-              const matchesSpecialty = doctor.specialty.toLowerCase().includes(q);
+              const matchesName = doc.name.toLowerCase().includes(q);
+              const matchesSpecialty = doc.specialty.toLowerCase().includes(q);
               const matchesClinic = clinic.name.toLowerCase().includes(q);
               const matchesCity = clinic.city.toLowerCase().includes(q);
               
@@ -497,23 +501,46 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           }
 
           if (selectedCity !== 'All Cities' && clinic.city !== selectedCity) return false;
-          if (selectedSpecialty !== 'All Specialties' && doctor.specialty !== selectedSpecialty) return false;
+          if (selectedSpecialty !== 'All Specialties' && doc.specialty !== selectedSpecialty) return false;
 
           if (selectedCategory !== 'ALL') {
               const cat = selectedCategory.toLowerCase();
-              if (cat === 'dental' && !doctor.specialty.toLowerCase().includes('dent')) return false;
-              else if (cat === 'pediatric' && !doctor.specialty.toLowerCase().includes('pedia')) return false;
+              if (cat === 'dental' && !doc.specialty.toLowerCase().includes('dent')) return false;
+              else if (cat === 'pediatric' && !doc.specialty.toLowerCase().includes('pedia')) return false;
           }
 
           return true;
-      }).sort((a, b) => {
-          if (sortBy === 'NEAR' && userLocation && a.clinic.geoLocation && b.clinic.geoLocation) {
-              const distA = calculateDistance(userLocation.lat, userLocation.lng, a.clinic.geoLocation.lat, a.clinic.geoLocation.lng);
-              const distB = calculateDistance(userLocation.lat, userLocation.lng, b.clinic.geoLocation.lat, b.clinic.geoLocation.lng);
-              return distA - distB;
+      });
+
+      // Grouping by masterId
+      const groups: Record<string, { masterDoc: Doctor, locations: { clinic: Clinic, docInstance: Doctor, distance: number | null }[] }> = {};
+      
+      filteredOccurrences.forEach(({ doc, clinic }) => {
+          const mId = doc.masterId;
+          if (!groups[mId]) {
+              groups[mId] = { masterDoc: doc, locations: [] };
           }
-          if (sortBy === 'FEE') return a.doctor.consultationFee - b.doctor.consultationFee;
-          return b.doctor.rating - a.doctor.rating;
+          
+          let dist = null;
+          if (userLocation && clinic.geoLocation) {
+              dist = calculateDistance(userLocation.lat, userLocation.lng, clinic.geoLocation.lat, clinic.geoLocation.lng);
+          }
+          
+          groups[mId].locations.push({ clinic, docInstance: doc, distance: dist });
+      });
+
+      return Object.values(groups).sort((a, b) => {
+          if (sortBy === 'NEAR' && userLocation) {
+              const minA = Math.min(...a.locations.map(l => l.distance ?? 99999));
+              const minB = Math.min(...b.locations.map(l => l.distance ?? 99999));
+              return minA - minB;
+          }
+          if (sortBy === 'FEE') {
+              const minFeeA = Math.min(...a.locations.map(l => l.docInstance.consultationFee));
+              const minFeeB = Math.min(...b.locations.map(l => l.docInstance.consultationFee));
+              return minFeeA - minFeeB;
+          }
+          return b.masterDoc.experience - a.masterDoc.experience;
       });
   }, [clinics, searchQuery, selectedCity, selectedSpecialty, selectedCategory, sortBy, userLocation]);
 
@@ -576,7 +603,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       
       let color = 'bg-emerald-100 text-emerald-700 border-emerald-200';
       let mapColor = 'bg-emerald-500';
-      let label = 'Swift Movement'; // NEW Actionable Sentiment
+      let label = 'Swift Movement'; 
       let dotColor = 'bg-emerald-500';
       
       if (avg <= 10) label = 'Immediate Entry';
@@ -654,7 +681,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       e?.preventDefault();
       if (!selectedClinicId || !selectedDoctorId) return;
       if (isGuest) {
-          if (!guestName.trim() || !guestAge) { addToast("Please enter your Name and Age", "error"); return; }
           setShowAuthModal(true); return;
       }
       const clinic = clinics.find(c => c.id === selectedClinicId);
@@ -717,6 +743,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             setIsLocating(false);
             setSortBy('NEAR'); 
             setIsPickingLocation(false);
+            addToast("Current location pinned!", "success");
         },
         (error) => {
             console.error("Geolocation error details:", error);
@@ -946,7 +973,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
             <div className={`flex-1 flex flex-col w-full relative ${activeTab === 'BOOK' && bookingView === 'LIST' ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden scroll-smooth pb-32 md:pb-8'}`}>
                 {activeTab === 'ACTIVE' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto"> {activeVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6"> {activeVisits.map(visit => { const queueStats = getSmartQueueDetails(visit); return ( <Card key={visit.id} className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"> <div className="p-5 pb-2 flex justify-between items-start"><div><h3 className="font-bold text-lg text-slate-900">{visit.clinicName}</h3><p className="text-sm text-slate-500">Dr. {visit.doctorName} • {visit.room ? `Room ${visit.room}` : ''}</p></div><Badge status={visit.status} /></div> <div className="px-5 mb-4"><span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit"><User className="h-3 w-3" /> {visit.name}</span></div> <div className="bg-slate-50 border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center"><div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Token</div><div className="text-3xl font-black text-slate-900">#{visit.tokenNumber}</div></div><div className="border-x border-slate-200"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Now Serving</div><div className={`text-3xl font-bold ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-blue-600 animate-pulse' : 'text-slate-400'}`}>{visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken}</div></div><div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">People Ahead</div><div className="text-3xl font-bold text-slate-900">{queueStats.peopleAhead}</div></div></div> <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold`}>{queueStats.doctorStatus === DoctorStatus.ON_BREAK ? <Coffee className="h-5 w-5" /> : queueStats.doctorStatus === DoctorStatus.AVAILABLE ? <Timer className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}<div className="flex-1"><p>{queueStats.message}</p>{visit.status === PatientStatus.WAITING && (<p className="text-[10px] opacity-80 font-normal">Est. Time: {queueStats.expectedTime}</p>)}</div></div> {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (<div className="bg-orange-50 px-4 py-2 text-xs font-bold text-orange-700 flex items-center gap-2 border-t border-orange-100"><Info className="h-4 w-4 flex-shrink-0" /><span>{queueStats.peopleAhead < 3 ? "Almost your turn! Please ask receptionist to Check-in now." : "Please ask receptionist to Check-in once you arrive."}</span></div>)} <div className="p-4 flex gap-2 mt-auto">{!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (<Button className="flex-1 bg-slate-900 hover:bg-slate-800" onClick={() => setShowQRScanner(true)}><QrCode className="h-4 w-4 mr-2" /> Scan to Check-In</Button>)}<Button variant="secondary" className="flex-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => setCancelModal({ isOpen: true, visit })} disabled={visit.status === PatientStatus.WITH_DOCTOR}>Cancel</Button></div> </Card> ); })} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><Calendar className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No active visits</h3><p className="text-slate-500 mb-6 text-center max-w-sm">Book an appointment or scan a QR code at a clinic to see your live status here.</p><Button onClick={() => handleTabSwitch('BOOK')} size="lg" className="shadow-lg">Find a Doctor</Button></div> )} </div> ) )}
-                {activeTab === 'HISTORY' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto"> {historyVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4"> {historyVisits.map(visit => ( <div key={visit.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between gap-4 h-full hover:border-primary-200 transition-colors"> <div className="flex-1"> <div className="flex items-start gap-3 mb-3"> <div className={`p-3 rounded-lg flex-shrink-0 ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}> {visit.status === PatientStatus.COMPLETED ? <CheckCircle2 className="h-6 w-6" /> : <X className="h-6 w-6" />} </div> <div className="min-w-0"> <h3 className="font-bold text-slate-900 truncate text-base">{visit.clinicName}</h3> <p className="text-sm text-slate-500 truncate">Dr. {visit.doctorName}</p> <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(visit.timeAdded).toLocaleDateString()} at {new Date(visit.timeAdded).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p> </div> </div> <div className="space-y-2"> {visit.diagnosis && ( <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100"> <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Diagnosis</p> <p className="text-sm text-slate-700">{visit.diagnosis}</p> </div> )} {visit.notes && ( <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100"> <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Notes</p> <p className="text-sm text-slate-700 text-ellipsis overflow-hidden line-clamp-3">{visit.notes}</p> </div> )} </div> </div> <div className="pt-3 border-t border-slate-100 flex justify-between items-center"> <div className="flex text-yellow-400 text-xs"> {visit.rating ? ( <> <Star className="h-3 w-3 fill-current" /> <span className="text-slate-600 ml-1 font-bold">{visit.rating}/5</span> </> ) : ( <span className="text-slate-400 italic">No rating</span> )} </div> <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setFeedbackModal({ isOpen: true, visit, rating: visit.rating || 0, text: visit.feedback || '' })}> {visit.rating ? 'Edit Feedback' : 'Rate Visit'} </Button> </div> </div> ))} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><History className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No past visits</h3><p className="text-slate-500 mb-6 text-center max-w-sm">Your completed appointment history will appear here.</p></div> )} </div> ) )}
+                {activeTab === 'HISTORY' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto"> {historyVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4"> {historyVisits.map(visit => ( <div key={visit.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between gap-4 h-full hover:border-primary-200 transition-colors"> <div className="flex-1"> <div className="flex items-start gap-3 mb-3"> <div className={`p-3 rounded-lg flex-shrink-0 ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}> {visit.status === PatientStatus.COMPLETED ? <CheckCircle2 className="h-6 w-6" /> : <X className="h-6 w-6" />} </div> <div className="min-w-0"> <h3 className="font-bold text-slate-900 truncate text-base">{visit.clinicName}</h3> <p className="text-sm text-slate-500 truncate">Dr. {visit.doctorName}</p> <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(visit.timeAdded).toLocaleDateString()} at {new Date(visit.timeAdded).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p> </div> </div> <div className="space-y-2"> {visit.diagnosis && ( <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100"> <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Diagnosis</p> <p className="text-sm text-slate-700">{visit.diagnosis}</p> </div> )} {visit.notes && ( <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100"> <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Notes</p> <p className="text-sm text-slate-700 text-ellipsis overflow-hidden line-clamp-3">{visit.notes}</p> </div> )} </div> </div> <div className="pt-3 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400 italic">
+                     Visit records are private and secure.
+                </div> </div> ))} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><History className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No past visits</h3><p className="text-slate-500 mb-6 text-center max-w-sm">Your completed appointment history will appear here.</p></div> )} </div> ) )}
                 {activeTab === 'PROFILE' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full max-w-3xl mx-auto px-4 py-8"> <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6"> <div className="bg-slate-900 p-6 text-white flex justify-between items-center"> <div className="flex items-center gap-4"> <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold backdrop-blur-sm border-2 border-white/30"> {userName.charAt(0)} </div> <div> <h2 className="text-2xl font-bold">{userName}</h2> <p className="opacity-80 font-mono">{userPhone}</p> </div> </div> <button onClick={onBack} className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-colors"> <LogOut className="h-5 w-5" /> </button> </div> <div className="p-6"> <div className="grid md:grid-cols-2 gap-6"> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Full Name</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.name}</div> </div> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Mobile Number</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.phone}</div> </div> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Age</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.age || '-'}</div> </div> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Gender</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.gender || '-'}</div> </div> </div> </div> </div> <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"> <div className="p-6 border-b border-slate-100 flex justify-between items-center"> <div> <h3 className="font-bold text-lg text-slate-900">Family Members</h3> <p className="text-sm text-slate-500">Manage profiles for your family</p> </div> <Button size="sm" onClick={() => { setNewMember({ name: '', age: '', gender: 'Male', relation: '' }); setEditingMemberIndex(null); setIsCustomRelation(false); setShowAddMember(true); }}> <Plus className="h-4 w-4 mr-2" /> Add Member </Button> </div> <div className="divide-y divide-slate-100"> {userProfile?.familyMembers && userProfile.familyMembers.length > 0 ? ( userProfile.familyMembers.map((member, idx) => ( <div key={idx} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"> <div className="flex items-center gap-4"> <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold"> {member.name.charAt(0)} </div> <div> <div className="font-bold text-slate-900">{member.name}</div> <div className="text-xs text-slate-500">{member.relation} • {member.age} Yrs • {member.gender}</div> </div> </div> <div className="flex gap-2"> <button onClick={() => handleEditMember(idx)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="h-4 w-4" /></button> <button onClick={() => handleDeleteMember(idx)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="h-4 w-4" /></button> </div> </div> )) ) : ( <div className="p-8 text-center text-slate-400 italic">No family members added.</div> )} </div> </div> </div> ) )}
 
                 {/* BOOK TAB (SEARCH & CLINIC VIEW) */}
@@ -991,6 +1020,13 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     </div>
 
                                     <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                                        <button 
+                                            onClick={handleLocateMe}
+                                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group whitespace-nowrap"
+                                        >
+                                            {isLocating ? <RefreshCw className="h-4 w-4 animate-spin text-primary-600" /> : <MapPin className="h-4 w-4 text-primary-600 group-hover:scale-110 transition-transform" />}
+                                            <span className="hidden sm:inline">Pin My Location</span>
+                                        </button>
                                         <select 
                                             className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
                                             value={selectedCity}
@@ -999,7 +1035,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                             {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
                                         </select>
                                         <Button variant="secondary" className="whitespace-nowrap px-4" onClick={() => setShowMap(!showMap)}>
-                                            {showMap ? 'Hide Map' : 'Show Map'}
+                                            {showMap ? 'Show List' : 'Show Map'}
                                         </Button>
                                     </div>
                                 </div>
@@ -1020,12 +1056,12 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         )}
 
                         {/* Content Area */}
-                        <div className="flex-1 flex overflow-hidden">
-                            {/* List Section */}
-                            <div className={`flex-1 overflow-y-auto p-4 custom-scrollbar ${showMap && bookingView !== 'FORM' ? '' : 'w-full'}`}>
+                        <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+                            {/* List Section - Column Layout for Masonry Effect */}
+                            <div className={`flex-1 overflow-y-auto p-4 custom-scrollbar ${showMap && bookingView === 'LIST' ? 'hidden md:block' : 'block'}`}>
                                 {bookingView === 'LIST' ? (
                                     searchMode === 'CLINIC' ? (
-                                        <div className={`grid gap-4 mx-auto ${showMap ? 'grid-cols-1 xl:grid-cols-2 max-w-5xl' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
+                                        <div className={`mx-auto gap-4 ${showMap ? 'columns-1 xl:columns-2 max-w-5xl' : 'columns-1 sm:columns-2 lg:columns-3 xl:columns-4'}`}>
                                             {filteredClinics.length > 0 ? (
                                                 filteredClinics.map(clinic => {
                                                     const waitInfo = getClinicWaitStats(clinic);
@@ -1039,22 +1075,22 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                     }
 
                                                     return (
-                                                        <ClinicCard
-                                                            key={clinic.id}
-                                                            clinic={clinic}
-                                                            waitInfo={waitInfo}
-                                                            feeRange={feeRange}
-                                                            rating={(Math.random() * 1 + 4).toFixed(1)} 
-                                                            distLabel={distLabel}
-                                                            gmapsLink={`https://www.google.com/maps/search/?api=1&query=${clinic.geoLocation?.lat},${clinic.geoLocation?.lng}`}
-                                                            relevantDoctors={relevantDoctors}
-                                                            isHighlighted={highlightedClinicId === clinic.id}
-                                                            cardRef={el => { clinicCardRefs.current[clinic.id] = el; }}
-                                                            onSelect={() => navigateToView('CLINIC_DETAILS', clinic)}
-                                                            onBook={() => navigateToView('CLINIC_DETAILS', clinic)}
-                                                            onQueue={() => navigateToView('CLINIC_DETAILS', clinic)}
-                                                            onViewDoctor={(doc) => setViewingDoctor(doc)}
-                                                        />
+                                                        <div key={clinic.id} className="break-inside-avoid mb-4">
+                                                            <ClinicCard
+                                                                clinic={clinic}
+                                                                waitInfo={waitInfo}
+                                                                feeRange={feeRange}
+                                                                distLabel={distLabel}
+                                                                gmapsLink={`https://www.google.com/maps/search/?api=1&query=${clinic.geoLocation?.lat},${clinic.geoLocation?.lng}`}
+                                                                relevantDoctors={relevantDoctors}
+                                                                isHighlighted={highlightedClinicId === clinic.id}
+                                                                cardRef={el => { clinicCardRefs.current[clinic.id] = el; }}
+                                                                onSelect={() => navigateToView('CLINIC_DETAILS', clinic)}
+                                                                onBook={() => navigateToView('CLINIC_DETAILS', clinic)}
+                                                                onQueue={() => navigateToView('CLINIC_DETAILS', clinic)}
+                                                                onViewDoctor={(doc) => setViewingDoctor(doc)}
+                                                            />
+                                                        </div>
                                                     );
                                                 })
                                             ) : (
@@ -1065,40 +1101,19 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                             )}
                                         </div>
                                     ) : (
-                                        /* DOCTOR SEARCH RESULTS */
-                                        <div className={`grid gap-4 mx-auto ${showMap ? 'grid-cols-1 xl:grid-cols-2 max-w-5xl' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
-                                            {filteredDoctors.length > 0 ? (
-                                                filteredDoctors.map(({ doctor, clinic }) => {
-                                                    let distLabel = '';
-                                                    if (userLocation && clinic.geoLocation) {
-                                                        distLabel = `${calculateDistance(userLocation.lat, userLocation.lng, clinic.geoLocation.lat, clinic.geoLocation.lng).toFixed(1)} km`;
-                                                    }
-                                                    
-                                                    // Determine availability label
-                                                    const availability = getNextAvailability(doctor);
-                                                    let nextSlotLabel = 'No Slots';
-                                                    let isWalkIn = false;
-                                                    
-                                                    if (availability) {
-                                                        if (availability.status === 'now') {
-                                                            nextSlotLabel = 'Available Now';
-                                                            isWalkIn = true;
-                                                        } else {
-                                                            nextSlotLabel = `Next: ${availability.start.toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'})} ${availability.start.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
-                                                        }
-                                                    }
-
+                                        /* DOCTOR SEARCH RESULTS - Switched to multi-column layout for masonry effect */
+                                        <div className={`mx-auto gap-4 ${showMap ? 'columns-1 xl:columns-2 max-w-5xl' : 'columns-1 sm:columns-2 lg:columns-3 xl:columns-4'}`}>
+                                            {groupedDoctors.length > 0 ? (
+                                                groupedDoctors.map(({ masterDoc, locations }) => {
                                                     return (
-                                                        <DoctorSearchCard
-                                                            key={doctor.id}
-                                                            doctor={doctor}
-                                                            clinic={clinic}
-                                                            distLabel={distLabel}
-                                                            nextSlotLabel={nextSlotLabel}
-                                                            isWalkInAllowed={isWalkIn}
-                                                            onBook={() => navigateToView('FORM', clinic, doctor)}
-                                                            onViewProfile={() => setViewingDoctor(doctor)}
-                                                        />
+                                                        <div key={masterDoc.masterId} className="break-inside-avoid mb-4">
+                                                            <DoctorSearchCard
+                                                                doctor={masterDoc}
+                                                                locations={locations}
+                                                                onBook={(clinic, doc) => navigateToView('FORM', clinic, doc)}
+                                                                onViewProfile={() => setViewingDoctor(masterDoc)}
+                                                            />
+                                                        </div>
                                                     );
                                                 })
                                             ) : (
@@ -1132,7 +1147,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                 <div className="flex flex-wrap gap-4 mb-6 text-sm text-slate-600">
                                                     {selectedClinic.operatingHours && <div className="flex items-center gap-1 bg-slate-50 px-3 py-1 rounded-full"><Clock className="h-4 w-4" /> {selectedClinic.operatingHours}</div>}
                                                     {selectedClinic.contactPhone && <div className="flex items-center gap-1 bg-slate-50 px-3 py-1 rounded-full"><Phone className="h-4 w-4" /> {selectedClinic.contactPhone}</div>}
-                                                    <div className="flex items-center gap-1 bg-slate-50 px-3 py-1 rounded-full"><Star className="h-4 w-4 text-yellow-500 fill-current" /> 4.5 Rating</div>
+                                                    <div className="flex items-center gap-1 bg-primary-50 text-primary-700 px-3 py-1 rounded-full font-bold border border-primary-100 uppercase tracking-tight"><ShieldCheck className="h-4 w-4" /> Verified Clinic</div>
                                                 </div>
 
                                                 <div className="mb-8">
@@ -1170,7 +1185,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                         </div>
                                                                         <p className="text-sm text-primary-600 font-medium">{doc.specialty}</p>
                                                                         
-                                                                        {/* NEW: LIVE QUEUE DETAILS IN CLINIC PROFILE */}
                                                                         {canQueue ? (
                                                                             <div className="flex items-center gap-2 mt-2">
                                                                                 <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 ${docWait.time < 30 ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-orange-50 text-orange-700 border border-orange-100'}`}>
@@ -1183,7 +1197,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                             <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
                                                                                 <span>{doc.experience} Yrs Exp</span>
                                                                                 <span>•</span>
-                                                                                <span>{doc.rating} ★</span>
+                                                                                <span>Verified Profile</span>
                                                                             </div>
                                                                         )}
 
@@ -1245,22 +1259,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                 </div>
                                             </div>
 
-                                            {/* Guest Details if applicable */}
-                                            {isGuest && (
-                                                <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                                    <Input label="Your Name" value={guestName} onChange={e => setGuestName(e.target.value)} required placeholder="Full Name" />
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <Input label="Age" value={guestAge} onChange={e => setGuestAge(e.target.value)} required type="number" placeholder="Yrs" />
-                                                        <div>
-                                                            <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
-                                                            <select className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm h-10" value={guestGender} onChange={e => setGuestGender(e.target.value)}>
-                                                                <option>Male</option><option>Female</option><option>Other</option>
-                                                            </select>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-
                                             {/* Visit Type (Walk-in vs Appointment) */}
                                             <div>
                                                 <label className="block text-sm font-bold text-slate-700 mb-3">Visit Type</label>
@@ -1269,7 +1267,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                     <div 
                                                         onClick={() => {
                                                             if (isClinicDirectWalkInOnly) return; 
-                                                            if (!isClinicOnlineWalkInAllowed) return; // Disable if online walkin not allowed
+                                                            if (!isClinicOnlineWalkInAllowed) return; 
                                                             setVisitType('WALK_IN');
                                                         }}
                                                         className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all ${visitType === 'WALK_IN' ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-100' : isClinicOnlineWalkInAllowed ? 'border-slate-200 hover:border-slate-300' : 'border-slate-100 opacity-50 cursor-not-allowed'}`}
@@ -1406,9 +1404,10 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 ) : null}
                             </div>
 
-                            {/* Map Panel (Desktop Right) - REMOVED from Appointment Form for focus */}
+                            {/* Map Panel (Desktop Right & Mobile Toggle) */}
                             {showMap && bookingView !== 'FORM' && (
                                 <MapPanel
+                                    key={`map-${showMap}`}
                                     clinics={filteredClinics}
                                     userLocation={userLocation}
                                     mapCenter={mapCenter}
@@ -1432,7 +1431,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 )}
             </div>
 
-            {/* MOBILE BOTTOM NAVIGATION (PERSISTENT) */}
+            {/* MOBILE BOTTOM NAVIGATION */}
             <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 pb-safe shadow-[0_-4px_12px_rgba(0,0,0,0.1)]">
                 <div className="flex justify-around items-center h-20">
                     {navItems.map(item => {
@@ -1487,25 +1486,18 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             </div>
         </Modal>
 
-        {/* FEEDBACK MODAL */}
-        <Modal isOpen={feedbackModal.isOpen} onClose={() => setFeedbackModal({...feedbackModal, isOpen: false})} title="Rate Your Visit" maxWidth="max-w-md">
+        {/* FEEDBACK MODAL (Scrubbed Ratings) */}
+        <Modal isOpen={feedbackModal.isOpen} onClose={() => setFeedbackModal({...feedbackModal, isOpen: false})} title="Submit Visit Feedback" maxWidth="max-w-md">
             <div className="text-center py-4">
                 <p className="text-slate-500 mb-4">How was your experience with <strong>Dr. {feedbackModal.visit?.doctorName}</strong>?</p>
-                <div className="flex justify-center gap-2 mb-6">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                        <button key={star} onClick={() => setFeedbackModal({ ...feedbackModal, rating: star })} className="transition-transform hover:scale-110 focus:outline-none">
-                            <Star className={`h-10 w-10 ${star <= feedbackModal.rating ? 'text-yellow-400 fill-current' : 'text-slate-200'}`} />
-                        </button>
-                    ))}
-                </div>
                 <textarea 
                     className="w-full p-3 border border-slate-200 rounded-xl mb-4 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none"
-                    rows={3}
-                    placeholder="Write a review (optional)..."
+                    rows={4}
+                    placeholder="Describe your visit experience (optional)..."
                     value={feedbackModal.text}
                     onChange={(e) => setFeedbackModal({...feedbackModal, text: e.target.value})}
                 />
-                <Button onClick={handleSubmitFeedback} disabled={feedbackModal.rating === 0} className="w-full">Submit Feedback</Button>
+                <Button onClick={handleSubmitFeedback} className="w-full">Submit Feedback</Button>
             </div>
         </Modal>
 
