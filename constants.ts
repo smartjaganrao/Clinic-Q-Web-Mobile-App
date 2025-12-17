@@ -1,4 +1,3 @@
-
 import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient, TimeSlot, Review, AdminProfile, Staff, ClinicOperationMode } from './types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -265,10 +264,6 @@ const raviKumarCityGeneral: Doctor = {
 
 const chennaiDocs10 = [raviKumarCityGeneral, ...createRealDoctors(1501, 3, 'General Physician', [400, 600])];
 
-const blrDocs1 = [...createRealDoctors(1000, 2, 'Cardiologist', [1000, 1500]), ...createRealDoctors(1002, 2, 'Orthopedic', [900, 1400])];
-const blrDocs2 = [...createRealDoctors(1100, 2, 'Pediatrician', [600, 900]), ...createRealDoctors(1102, 2, 'Gynecologist', [700, 1000])];
-const blrDocs3 = createRealDoctors(1200, 1, 'Dentist', [400, 800]);
-
 export const INITIAL_CLINICS: Clinic[] = [
   {
     id: 'clinic_chn_1',
@@ -416,7 +411,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     operatingHours: '24 Hours',
     imageUrl: 'https://images.unsplash.com/photo-1581594693702-fbdc51b2763b?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0780, lng: 80.2400 },
-    about: 'Specialized ENT care hospital known for Micro Ear Surgery, Endoscopic Sinus Surgery, and Cochlear Implants.',
+    about: 'Specialized ENT care hospital known for Micro Ear Surgery, Endoscopic Sinus Surgery, and Cochlear Intrants.',
     amenities: ['Audiology Lab', 'Speech Therapy', 'Pharmacy', 'In-patient Rooms'],
     doctors: chennaiDocs8,
     patients: createRealisticPatients(chennaiDocs8, 'ENT', 'Chennai'),
@@ -458,65 +453,6 @@ export const INITIAL_CLINICS: Clinic[] = [
     amenities: ['Emergency', 'Pharmacy', 'General Ward', 'Basic Lab'],
     doctors: chennaiDocs10,
     patients: createRealisticPatients(chennaiDocs10, ClinicType.GENERAL, 'Chennai'),
-    staff: []
-  },
-
-  // --- BANGALORE CLINICS (Legacy + Enhanced) ---
-  {
-    id: 'clinic_blr_1',
-    name: 'Manipal Hospital',
-    slug: 'manipal-old-airport',
-    plan: PlanType.PREMIUM,
-    type: ClinicType.GENERAL,
-    operationMode: ClinicOperationMode.HYBRID_FULL,
-    city: 'Bangalore',
-    address: '98, HAL Old Airport Rd, Kodihalli',
-    pincode: '560017',
-    operatingHours: '24 Hours',
-    imageUrl: 'https://images.unsplash.com/photo-1596541223130-5d31a73fb6c6?auto=format&fit=crop&q=80&w=300',
-    geoLocation: { lat: 12.9592, lng: 77.6475 },
-    about: 'One of India’s foremost multi-specialty healthcare providers offering comprehensive care.',
-    amenities: ['Advanced ICU', 'Robotic Surgery', 'Cafeteria', 'Valet Parking', 'Pharmacy'],
-    doctors: blrDocs1,
-    patients: createRealisticPatients(blrDocs1, ClinicType.GENERAL, 'Bangalore'),
-    staff: []
-  },
-  {
-    id: 'clinic_blr_2',
-    name: 'Ovum Woman & Child',
-    slug: 'ovum-hrbr',
-    plan: PlanType.SMALL,
-    type: ClinicType.PEDIATRIC,
-    operationMode: ClinicOperationMode.HYBRID_DIRECT_APPT,
-    city: 'Bangalore',
-    address: '4th Block, HRBR Layout, Kalyan Nagar',
-    pincode: '560043',
-    operatingHours: '24 Hours',
-    imageUrl: 'https://images.unsplash.com/photo-1504813184591-01572f98c85f?auto=format&fit=crop&q=80&w=300',
-    geoLocation: { lat: 13.0285, lng: 77.6400 },
-    about: 'Specialized hospital for women and children, providing maternity, gynecology, and pediatric services.',
-    amenities: ['NICU', 'Labor Rooms', 'Lactation Consulting', 'Ultrasound'],
-    doctors: blrDocs2,
-    patients: createRealisticPatients(blrDocs2, ClinicType.PEDIATRIC, 'Bangalore'),
-    staff: []
-  },
-  {
-    id: 'clinic_blr_3',
-    name: 'Clove Dental',
-    slug: 'clove-indiranagar',
-    plan: PlanType.SOLO,
-    type: ClinicType.DENTAL,
-    operationMode: ClinicOperationMode.BOTH_WALK_IN,
-    city: 'Bangalore',
-    address: '12th Main Rd, Indiranagar',
-    pincode: '560038',
-    operatingHours: '24 Hours',
-    imageUrl: 'https://images.unsplash.com/photo-1609840114035-1c290b777f3f?auto=format&fit=crop&q=80&w=300',
-    geoLocation: { lat: 12.9716, lng: 77.6412 },
-    about: 'India’s largest dental chain offering quality dental care with modern technology and hygiene standards.',
-    amenities: ['X-Ray', 'Sterilization Zone', 'Wifi', 'Card Payment'],
-    doctors: blrDocs3,
-    patients: createRealisticPatients(blrDocs3, ClinicType.DENTAL, 'Bangalore'),
     staff: []
   }
 ];

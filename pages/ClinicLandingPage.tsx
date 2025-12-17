@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { 
   Monitor, Stethoscope, Smartphone, LayoutGrid, Zap, 
@@ -95,8 +94,6 @@ export const ClinicLandingPage: React.FC<ClinicLandingPageProps> = ({ onStartFre
                       <span>Salem</span>
                       <span className="text-slate-300">•</span>
                       <span>Trichy</span>
-                      <span className="text-slate-300">•</span>
-                      <span>Bangalore</span>
                   </div>
               </div>
 

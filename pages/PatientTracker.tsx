@@ -22,7 +22,7 @@ import {
     Navigation, Timer, Building2, 
     Info, Lock, History, X, AlertCircle, Sun, Moon,
     User, Users, Plus, LogOut, Coffee, LogIn, CloudSun, List as ListIcon, Crosshair, Zap, ExternalLink, ShieldCheck,
-    CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, ChevronLeft, FileText, MoonStar, MessageSquare, Phone, RefreshCw
+    CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, ChevronLeft, FileText, MoonStar, MessageSquare, Phone, RefreshCw, Map as MapIcon
 } from 'lucide-react';
 
 // SEO URL Helpers
@@ -301,6 +301,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const clinicCardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const [highlightedClinicId, setHighlightedClinicId] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [pinnedAddress, setPinnedAddress] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [isPickingLocation, setIsPickingLocation] = useState(false); 
   
@@ -731,18 +732,39 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       }
   };
 
+  // Address Helper
+  const reverseGeocode = async (lat: number, lng: number) => {
+      try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+          const data = await res.json();
+          if (data && data.address) {
+              const addr = data.address;
+              const street = addr.road || addr.suburb || addr.neighbourhood || '';
+              const city = addr.city || addr.town || addr.village || '';
+              return street ? `${street}, ${city}` : city;
+          }
+          return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      } catch (e) {
+          return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      }
+  };
+
   // Map Handlers
   const handleLocateMe = () => {
     setIsLocating(true);
     if (!navigator.geolocation) { addToast("Geolocation is not supported by your browser", "error"); setIsLocating(false); return; }
     navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
             const { latitude, longitude } = position.coords;
             setUserLocation({ lat: latitude, lng: longitude });
             setIsLocating(false);
             setSortBy('NEAR'); 
             setIsPickingLocation(false);
             addToast("Current location pinned!", "success");
+            
+            // Reverse Geocode to show address "Uber-style"
+            const address = await reverseGeocode(latitude, longitude);
+            setPinnedAddress(address);
         },
         (error) => {
             console.error("Geolocation error details:", error);
@@ -758,8 +780,22 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     );
   };
 
-  const handleMarkerDragEnd = (latlng: L.LatLng) => { setUserLocation({ lat: latlng.lat, lng: latlng.lng }); setSortBy('NEAR'); addToast("Location updated!", "success"); };
-  const handleMapSelection = (latlng: L.LatLng) => { setUserLocation({ lat: latlng.lat, lng: latlng.lng }); setIsPickingLocation(false); setSortBy('NEAR'); addToast("Location pinned!", "success"); };
+  const handleMarkerDragEnd = async (latlng: L.LatLng) => { 
+      setUserLocation({ lat: latlng.lat, lng: latlng.lng }); 
+      setSortBy('NEAR'); 
+      addToast("Location updated!", "success");
+      const address = await reverseGeocode(latlng.lat, latlng.lng);
+      setPinnedAddress(address);
+  };
+  
+  const handleMapSelection = async (latlng: L.LatLng) => { 
+      setUserLocation({ lat: latlng.lat, lng: latlng.lng }); 
+      setIsPickingLocation(false); 
+      setSortBy('NEAR'); 
+      addToast("Location pinned!", "success");
+      const address = await reverseGeocode(latlng.lat, latlng.lng);
+      setPinnedAddress(address);
+  };
 
   const mapCenter: [number, number] = useMemo(() => {
     if (userLocation && !selectedClinicId) return [userLocation.lat, userLocation.lng];
@@ -1019,13 +1055,24 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     </div>
 
                                     <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                                        <button 
-                                            onClick={handleLocateMe}
-                                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group whitespace-nowrap"
-                                        >
-                                            {isLocating ? <RefreshCw className="h-4 w-4 animate-spin text-primary-600" /> : <MapPin className="h-4 w-4 text-primary-600 group-hover:scale-110 transition-transform" />}
-                                            <span className="hidden sm:inline">Pin My Location</span>
-                                        </button>
+                                        {/* Uber-like Location Display */}
+                                        {pinnedAddress ? (
+                                            <button 
+                                                onClick={handleLocateMe}
+                                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-primary-200 bg-primary-50 text-sm font-bold text-primary-900 hover:bg-primary-100 transition-all shadow-sm group whitespace-nowrap min-w-[140px] max-w-[220px]"
+                                            >
+                                                {isLocating ? <RefreshCw className="h-4 w-4 animate-spin text-primary-600" /> : <Crosshair className="h-4 w-4 text-primary-600 group-hover:scale-110 transition-transform" />}
+                                                <span className="truncate text-left">{pinnedAddress}</span>
+                                            </button>
+                                        ) : (
+                                            <button 
+                                                onClick={handleLocateMe}
+                                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm group whitespace-nowrap"
+                                            >
+                                                {isLocating ? <RefreshCw className="h-4 w-4 animate-spin text-primary-600" /> : <MapPin className="h-4 w-4 text-primary-600 group-hover:scale-110 transition-transform" />}
+                                                <span className="hidden sm:inline">Pin My Location</span>
+                                            </button>
+                                        )}
                                         <select 
                                             className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
                                             value={selectedCity}
@@ -1509,7 +1556,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                     You might arrive late and lose your spot.
                 </p>
                 <div className="flex flex-col gap-3">
-                    <Button onClick={submitBooking} className="bg-orange-600 hover:bg-orange-700 text-white w-full">
+                    {/* Fix: Wrapped submitBooking in an arrow function to prevent type mismatch with MouseEventHandler */}
+                    <Button onClick={() => submitBooking()} className="bg-orange-600 hover:bg-orange-700 text-white w-full">
                         Book Anyway (I'll Rush)
                     </Button>
                     <Button variant="secondary" onClick={() => setShowLateWarningModal(false)} className="w-full">
