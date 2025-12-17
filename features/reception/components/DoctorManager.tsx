@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Doctor, DoctorStatus } from '../../../types';
 import { Button } from '../../../components/Button';
-import { Grid, CalendarDays, Plus, Edit2, Trash2, ChevronDown } from 'lucide-react';
+import { Grid, CalendarDays, Plus, Edit2, Trash2, ChevronDown, Clock } from 'lucide-react';
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -37,6 +37,27 @@ export const DoctorManager: React.FC<DoctorManagerProps> = ({
       }
   };
 
+  const formatTime = (time: string) => {
+      if (!time) return '';
+      const [h, m] = time.split(':').map(Number);
+      const period = h >= 12 ? 'PM' : 'AM';
+      const h12 = h % 12 || 12;
+      return `${h12}:${m.toString().padStart(2, '0')} ${period}`;
+  };
+
+  const getTodaySchedule = (doc: Doctor) => {
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const today = days[new Date().getDay()];
+      const schedule = doc.weeklySchedule.find(s => s.day === today);
+      
+      if (!schedule || schedule.isOff || !schedule.slots || schedule.slots.length === 0) return null;
+      
+      return schedule.slots
+          .filter(s => s.active !== false)
+          .map(s => `${formatTime(s.startTime)} - ${formatTime(s.endTime)}`)
+          .join(', ');
+  };
+
   return (
     <div className="p-4 sm:p-6 overflow-hidden flex flex-col h-full">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
@@ -52,36 +73,52 @@ export const DoctorManager: React.FC<DoctorManagerProps> = ({
 
       {viewMode === 'GRID' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 overflow-y-auto pb-4">
-          {doctors.map(doc => (
-            <div key={doc.id} className="bg-white rounded-xl border border-slate-200 p-4 flex gap-4 hover:shadow-md transition-shadow group">
-              <img src={doc.avatarUrl} className="h-14 w-14 sm:h-16 sm:w-16 rounded-full object-cover bg-slate-100 border border-slate-100" />
-              <div className="flex-1 min-w-0">
-                <h4 className="font-bold text-slate-900 truncate">{doc.name}</h4>
-                <p className="text-sm text-slate-500 mb-3 truncate">{doc.specialty}</p>
-                
-                {/* Status Toggle */}
-                <div className="relative inline-block">
-                    <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${getStatusColor(doc.status)}`}>
-                        <span className={`h-2 w-2 rounded-full flex-shrink-0 ${getStatusDot(doc.status)}`}></span>
-                        <select 
-                            value={doc.status}
-                            onChange={(e) => onStatusChange(doc.id, e.target.value as DoctorStatus)}
-                            className="appearance-none bg-transparent border-none outline-none text-xs font-bold uppercase cursor-pointer w-full pr-4 focus:ring-0"
-                        >
-                            <option value={DoctorStatus.AVAILABLE}>Available</option>
-                            <option value={DoctorStatus.ON_BREAK}>On Break</option>
-                            <option value={DoctorStatus.OFF_DUTY}>Off Duty</option>
-                        </select>
-                        <ChevronDown className="h-3 w-3 absolute right-2 pointer-events-none opacity-50" />
+          {doctors.map(doc => {
+            const todayShift = getTodaySchedule(doc);
+            return (
+                <div key={doc.id} className="bg-white rounded-xl border border-slate-200 p-4 flex gap-4 hover:shadow-md transition-shadow group">
+                <img src={doc.avatarUrl} className="h-14 w-14 sm:h-16 sm:w-16 rounded-full object-cover bg-slate-100 border border-slate-100" />
+                <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-slate-900 truncate">{doc.name}</h4>
+                    <p className="text-sm text-slate-500 mb-2 truncate">{doc.specialty}</p>
+                    
+                    {/* Shift Display */}
+                    {todayShift ? (
+                        <div className="mb-3 flex items-start gap-1.5 text-xs text-slate-600 bg-slate-50 px-2 py-1.5 rounded border border-slate-100">
+                            <Clock className="h-3.5 w-3.5 mt-0.5 text-slate-400 flex-shrink-0" />
+                            <span className="font-medium leading-tight">{todayShift}</span>
+                        </div>
+                    ) : (
+                        <div className="mb-3 flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 px-2 py-1.5 rounded border border-slate-100">
+                            <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+                            <span>Off Today</span>
+                        </div>
+                    )}
+
+                    {/* Status Toggle */}
+                    <div className="relative inline-block">
+                        <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${getStatusColor(doc.status)}`}>
+                            <span className={`h-2 w-2 rounded-full flex-shrink-0 ${getStatusDot(doc.status)}`}></span>
+                            <select 
+                                value={doc.status}
+                                onChange={(e) => onStatusChange(doc.id, e.target.value as DoctorStatus)}
+                                className="appearance-none bg-transparent border-none outline-none text-xs font-bold uppercase cursor-pointer w-full pr-4 focus:ring-0"
+                            >
+                                <option value={DoctorStatus.AVAILABLE}>Available</option>
+                                <option value={DoctorStatus.ON_BREAK}>On Break</option>
+                                <option value={DoctorStatus.OFF_DUTY}>Off Duty</option>
+                            </select>
+                            <ChevronDown className="h-3 w-3 absolute right-2 pointer-events-none opacity-50" />
+                        </div>
                     </div>
                 </div>
-              </div>
-              <div className="flex flex-col gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                <button onClick={() => onEditDoctor(doc)} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-primary-600 transition-colors" title="Edit Profile"><Edit2 className="h-4 w-4" /></button>
-                <button onClick={() => onDeleteDoctor(doc.id)} className="p-2 hover:bg-red-50 rounded text-slate-400 hover:text-red-500 transition-colors" title="Delete Doctor"><Trash2 className="h-4 w-4" /></button>
-              </div>
-            </div>
-          ))}
+                <div className="flex flex-col gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => onEditDoctor(doc)} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-primary-600 transition-colors" title="Edit Profile"><Edit2 className="h-4 w-4" /></button>
+                    <button onClick={() => onDeleteDoctor(doc.id)} className="p-2 hover:bg-red-50 rounded text-slate-400 hover:text-red-500 transition-colors" title="Delete Doctor"><Trash2 className="h-4 w-4" /></button>
+                </div>
+                </div>
+            );
+          })}
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl flex-1 overflow-hidden flex flex-col">

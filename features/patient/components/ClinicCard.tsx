@@ -62,7 +62,6 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                 ) : (
                     <Building2 className="h-6 w-6 text-slate-300" />
                 )}
-                {/* Simplified Badge for Image Overlay */}
                 <div className={`absolute bottom-0 inset-x-0 text-[9px] font-bold text-center py-0.5 text-white uppercase tracking-wider ${waitInfo.mapColor}`}>
                     {waitInfo.raw}m
                 </div>
@@ -73,7 +72,6 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                     <span className="flex items-center text-[10px] font-bold bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded border border-yellow-100 flex-shrink-0 ml-2"><Star className="h-2.5 w-2.5 mr-0.5 fill-current" /> {rating}</span>
                 </div>
                 
-                {/* Doctor Avatars Row - Compact */}
                 <div className="mb-2 min-h-[20px]">
                     {relevantDoctors.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
@@ -93,31 +91,27 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                     )}
                 </div>
 
-                {/* Info Row: Distance & Fee */}
                 <div className="flex flex-wrap gap-2 text-[10px] font-medium text-slate-500 mb-2 mt-auto">
                     <span className="flex items-center gap-0.5"><MapPin className="h-2.5 w-2.5" /> {distLabel}</span>
                     <span className="flex items-center gap-0.5"><IndianRupeeIcon className="h-2.5 w-2.5" /> {feeRange}</span>
                     <span className="flex items-center gap-0.5"><Clock className="h-2.5 w-2.5" /> {clinic.operatingHours || '9-9'}</span>
                 </div>
 
-                {/* NEW: LIVE QUEUE STATUS BAR - Compact */}
+                {/* NEW: ENCOURAGING SENTIMENT BAR - Headcount removed to reduce friction */}
                 <div className={`flex items-center gap-2 px-2 py-1.5 rounded-md border ${waitInfo.bgColor} ${waitInfo.borderColor}`}>
                     <div className={`w-2 h-2 rounded-full ${waitInfo.dotColor} animate-pulse shadow-sm flex-shrink-0`} />
                     <div className="flex items-center justify-between w-full leading-none">
                         <span className={`text-[9px] font-black uppercase tracking-wide ${waitInfo.textColor}`}>
                             {waitInfo.label}
                         </span>
-                        <div className="flex items-center gap-1 text-[10px] font-semibold text-slate-700">
-                            <span>~{waitInfo.raw}m</span>
-                            <span className="w-0.5 h-2 bg-slate-300 rounded-full mx-0.5" />
-                            <span className="opacity-80">{waitInfo.peopleCount} ppl</span>
+                        <div className="flex items-center gap-1 text-[10px] font-bold text-slate-800">
+                            <span>Seen in ~{waitInfo.raw}m</span>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        {/* Action Footer */}
         <div className="bg-slate-50/50 border-t border-slate-100 p-2 flex items-center gap-2 mt-auto">
             {canBook && (
                 <Button onClick={(e) => { e.stopPropagation(); onBook(); }} variant="secondary" size="sm" className="flex-1 bg-white border-slate-200 text-slate-700 hover:text-primary-700 hover:border-primary-200 text-[10px] font-bold h-8 px-2">
@@ -126,8 +120,8 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
             )}
             
             {canQueue ? (
-                <Button onClick={(e) => { e.stopPropagation(); onQueue(); }} size="sm" className="flex-1 text-[10px] font-bold bg-slate-900 text-white shadow-sm hover:shadow hover:-translate-y-0.5 transition-all h-8 px-2">
-                    <Zap className="h-3 w-3 mr-1 fill-current" /> Queue
+                <Button onClick={(e) => { e.stopPropagation(); onQueue(); }} size="sm" className="flex-1 text-[10px] font-bold bg-slate-900 text-white shadow-lg hover:shadow-primary-100 hover:-translate-y-0.5 transition-all h-8 px-2">
+                    <Zap className="h-3 w-3 mr-1 fill-current" /> Join Queue
                 </Button>
             ) : isDirectWalkIn ? (
                 <Button onClick={(e) => { e.stopPropagation(); onSelect(); }} size="sm" className="flex-1 text-[10px] font-bold bg-white text-green-700 border border-green-200 hover:bg-green-50 shadow-sm h-8 px-2">

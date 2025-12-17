@@ -18,7 +18,6 @@ import { ReceptionStats } from '../features/reception/components/ReceptionStats'
 import { AddPatientModal } from '../features/reception/components/AddPatientModal';
 import { DoctorFormModal } from '../features/reception/components/DoctorFormModal';
 
-// ... (KEEP ALL MAP COMPONENTS & INTERFACES) ...
 // --- MAP COMPONENTS ---
 const DefaultIcon = L.divIcon({
     className: 'custom-pin',
@@ -118,6 +117,14 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     // Deck State
     const [isDeckExpanded, setIsDeckExpanded] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+
+    // Time State
+    const [currentTime, setCurrentTime] = useState(new Date());
+
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 640);
@@ -455,6 +462,12 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             <button onClick={() => setIsSettingsModalOpen(true)} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1 rounded-full"><Settings className="h-4 w-4" /></button>
                         </div>
                         <div className="hidden sm:flex flex-wrap gap-3 mt-0.5 text-xs text-slate-500 items-center">
+                            <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                                {currentTime.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                                <span className="mx-1">•</span>
+                                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            <span className="text-slate-300">|</span>
                             <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {clinicData?.operatingHours || '9am - 9pm'}</span>
                             <span>•</span>
                             <span className="px-1.5 py-0.5 rounded font-bold uppercase text-[9px] bg-indigo-100 text-indigo-700">

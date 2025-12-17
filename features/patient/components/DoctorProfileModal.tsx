@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Doctor, ClinicOperationMode } from '../../../types';
+import { Doctor, ClinicOperationMode, Review } from '../../../types';
 import { Button } from '../../../components/Button';
 import { Modal } from '../../../components/Modal';
 import { Star, Clock, GraduationCap, Languages, Calendar, User, MessageSquare, Zap } from 'lucide-react';
@@ -18,6 +18,11 @@ export const DoctorProfileModal: React.FC<DoctorProfileModalProps> = ({ isOpen, 
   if (!doctor) return null;
 
   const canQueue = operationMode && [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(operationMode);
+
+  // Safely access arrays with fallbacks
+  const education = doctor.education || [];
+  const languages = doctor.languages || [];
+  const reviews: Review[] = doctor.reviews || [];
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Doctor Profile" maxWidth="max-w-2xl">
@@ -71,13 +76,13 @@ export const DoctorProfileModal: React.FC<DoctorProfileModalProps> = ({ isOpen, 
               </div>
             )}
 
-            {doctor.education && (doctor.education as string[]).length > 0 && (
+            {education.length > 0 && (
               <div>
                 <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
                   <GraduationCap className="h-4 w-4 text-primary-600" /> Education
                 </h4>
                 <ul className="space-y-2">
-                  {(doctor.education as string[]).map((edu, idx) => (
+                  {education.map((edu, idx) => (
                     <li key={idx} className="text-sm text-slate-700 flex items-start gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mt-1.5 flex-shrink-0"></span>
                       {edu}
@@ -87,13 +92,13 @@ export const DoctorProfileModal: React.FC<DoctorProfileModalProps> = ({ isOpen, 
               </div>
             )}
 
-            {doctor.languages && (doctor.languages as string[]).length > 0 && (
+            {languages.length > 0 && (
               <div>
                 <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
                   <Languages className="h-4 w-4 text-primary-600" /> Languages Spoken
                 </h4>
                 <div className="flex flex-wrap gap-2">
-                  {(doctor.languages as string[]).map((lang, idx) => (
+                  {languages.map((lang, idx) => (
                     <span key={idx} className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-xs font-bold border border-slate-200">
                       {lang}
                     </span>
@@ -106,13 +111,13 @@ export const DoctorProfileModal: React.FC<DoctorProfileModalProps> = ({ isOpen, 
 
         {activeTab === 'REVIEWS' && (
           <div className="space-y-4 animate-in fade-in">
-            {doctor.reviews && doctor.reviews.length > 0 ? (
-              doctor.reviews.map((review) => (
+            {reviews.length > 0 ? (
+              reviews.map((review) => (
                 <div key={review.id} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs">
-                        {review.patientName.charAt(0)}
+                        {review.patientName?.charAt(0)}
                       </div>
                       <span className="font-bold text-sm text-slate-900">{review.patientName}</span>
                     </div>
