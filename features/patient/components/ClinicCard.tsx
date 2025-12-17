@@ -51,7 +51,7 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
     <div 
         id={`clinic-card-${clinic.id}`}
         ref={cardRef}
-        className={`bg-white rounded-2xl border p-0 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col group relative overflow-hidden
+        className={`bg-white rounded-2xl border p-0 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col group relative overflow-hidden break-inside-avoid-column mb-4
             ${isHighlighted ? 'border-primary-500 ring-2 ring-primary-100 bg-primary-50 scale-[1.01] z-10' : 'border-slate-200'}`}
     >
         <div className="p-3 md:p-3.5 flex gap-3 cursor-pointer" onClick={onSelect}>

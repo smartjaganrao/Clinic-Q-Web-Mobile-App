@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Doctor, Clinic, ClinicOperationMode, DoctorStatus } from '../../../types';
 import { Button } from '../../../components/Button';
@@ -30,7 +29,7 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group flex flex-col h-auto">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group flex flex-col h-auto break-inside-avoid-column mb-4">
       {/* DOCTOR HEADER */}
       <div className="p-3 flex gap-3 border-b border-slate-50 bg-white">
         <div className="flex-shrink-0 relative">

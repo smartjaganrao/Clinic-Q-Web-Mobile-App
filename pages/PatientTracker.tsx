@@ -1117,11 +1117,11 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
                         {/* Content Area */}
                         <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-                            {/* Dense Grid Section - Improved Responsive Columns */}
+                            {/* Improved Responsive Columns with Masonry packing when map is hidden */}
                             <div className={`flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar ${showMap && bookingView === 'LIST' ? 'hidden md:block' : 'block'}`}>
                                 {bookingView === 'LIST' ? (
                                     searchMode === 'CLINIC' ? (
-                                        <div className={`gap-4 grid w-full ${showMap ? 'grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3' : 'mx-auto grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'}`}>
+                                        <div className={`w-full ${showMap ? 'grid gap-4 grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3' : 'columns-1 md:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5 gap-4'}`}>
                                             {filteredClinics.length > 0 ? (
                                                 filteredClinics.map(clinic => {
                                                     const waitInfo = getClinicWaitStats(clinic);
@@ -1160,8 +1160,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                             )}
                                         </div>
                                     ) : (
-                                        /* DOCTOR SEARCH RESULTS - Improved Responsive Columns */
-                                        <div className={`gap-4 grid w-full ${showMap ? 'grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3' : 'mx-auto grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'}`}>
+                                        /* DOCTOR SEARCH RESULTS - Masonry packing when map is hidden */
+                                        <div className={`w-full ${showMap ? 'grid gap-4 grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3' : 'columns-1 md:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5 gap-4'}`}>
                                             {groupedDoctors.length > 0 ? (
                                                 groupedDoctors.map(({ masterDoc, locations }) => {
                                                     return (
