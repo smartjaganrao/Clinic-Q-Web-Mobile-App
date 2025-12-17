@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Doctor, ClinicOperationMode } from '../../../types';
 import { Button } from '../../../components/Button';
@@ -72,13 +71,13 @@ export const DoctorProfileModal: React.FC<DoctorProfileModalProps> = ({ isOpen, 
               </div>
             )}
 
-            {doctor.education && doctor.education.length > 0 && (
+            {doctor.education && (doctor.education as string[]).length > 0 && (
               <div>
                 <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
                   <GraduationCap className="h-4 w-4 text-primary-600" /> Education
                 </h4>
                 <ul className="space-y-2">
-                  {doctor.education.map((edu, idx) => (
+                  {(doctor.education as string[]).map((edu, idx) => (
                     <li key={idx} className="text-sm text-slate-700 flex items-start gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mt-1.5 flex-shrink-0"></span>
                       {edu}
@@ -88,13 +87,13 @@ export const DoctorProfileModal: React.FC<DoctorProfileModalProps> = ({ isOpen, 
               </div>
             )}
 
-            {doctor.languages && doctor.languages.length > 0 && (
+            {doctor.languages && (doctor.languages as string[]).length > 0 && (
               <div>
                 <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
                   <Languages className="h-4 w-4 text-primary-600" /> Languages Spoken
                 </h4>
                 <div className="flex flex-wrap gap-2">
-                  {doctor.languages.map((lang, idx) => (
+                  {(doctor.languages as string[]).map((lang, idx) => (
                     <span key={idx} className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-xs font-bold border border-slate-200">
                       {lang}
                     </span>
