@@ -1144,6 +1144,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             gmapsLink={`https://www.google.com/maps/search/?api=1&query=${clinic.geoLocation?.lat},${clinic.geoLocation?.lng}`}
                                                             relevantDoctors={relevantDoctors}
                                                             isHighlighted={highlightedClinicId === clinic.id}
+                                                            isOpen={isClinicOpen(clinic.operatingHours)}
                                                             cardRef={el => { clinicCardRefs.current[clinic.id] = el; }}
                                                             onSelect={() => navigateToView('CLINIC_DETAILS', clinic)}
                                                             onBook={() => navigateToView('CLINIC_DETAILS', clinic)}
