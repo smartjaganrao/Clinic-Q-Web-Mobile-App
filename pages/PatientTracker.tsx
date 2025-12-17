@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useMatch, useLocation, useSearchParams } from 'react-router-dom';
 import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode, Review } from '../types';
@@ -1057,11 +1056,11 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
                         {/* Content Area */}
                         <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-                            {/* List Section - Column Layout for Masonry Effect */}
-                            <div className={`flex-1 overflow-y-auto p-4 custom-scrollbar ${showMap && bookingView === 'LIST' ? 'hidden md:block' : 'block'}`}>
+                            {/* Dense Grid Section */}
+                            <div className={`flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar ${showMap && bookingView === 'LIST' ? 'hidden md:block' : 'block'}`}>
                                 {bookingView === 'LIST' ? (
                                     searchMode === 'CLINIC' ? (
-                                        <div className={`mx-auto gap-4 ${showMap ? 'columns-1 xl:columns-2 max-w-5xl' : 'columns-1 sm:columns-2 lg:columns-3 xl:columns-4'}`}>
+                                        <div className={`mx-auto gap-4 grid ${showMap ? 'grid-cols-1 xl:grid-cols-2 max-w-5xl' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'}`}>
                                             {filteredClinics.length > 0 ? (
                                                 filteredClinics.map(clinic => {
                                                     const waitInfo = getClinicWaitStats(clinic);
@@ -1075,22 +1074,21 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                     }
 
                                                     return (
-                                                        <div key={clinic.id} className="break-inside-avoid mb-4">
-                                                            <ClinicCard
-                                                                clinic={clinic}
-                                                                waitInfo={waitInfo}
-                                                                feeRange={feeRange}
-                                                                distLabel={distLabel}
-                                                                gmapsLink={`https://www.google.com/maps/search/?api=1&query=${clinic.geoLocation?.lat},${clinic.geoLocation?.lng}`}
-                                                                relevantDoctors={relevantDoctors}
-                                                                isHighlighted={highlightedClinicId === clinic.id}
-                                                                cardRef={el => { clinicCardRefs.current[clinic.id] = el; }}
-                                                                onSelect={() => navigateToView('CLINIC_DETAILS', clinic)}
-                                                                onBook={() => navigateToView('CLINIC_DETAILS', clinic)}
-                                                                onQueue={() => navigateToView('CLINIC_DETAILS', clinic)}
-                                                                onViewDoctor={(doc) => setViewingDoctor(doc)}
-                                                            />
-                                                        </div>
+                                                        <ClinicCard
+                                                            key={clinic.id}
+                                                            clinic={clinic}
+                                                            waitInfo={waitInfo}
+                                                            feeRange={feeRange}
+                                                            distLabel={distLabel}
+                                                            gmapsLink={`https://www.google.com/maps/search/?api=1&query=${clinic.geoLocation?.lat},${clinic.geoLocation?.lng}`}
+                                                            relevantDoctors={relevantDoctors}
+                                                            isHighlighted={highlightedClinicId === clinic.id}
+                                                            cardRef={el => { clinicCardRefs.current[clinic.id] = el; }}
+                                                            onSelect={() => navigateToView('CLINIC_DETAILS', clinic)}
+                                                            onBook={() => navigateToView('CLINIC_DETAILS', clinic)}
+                                                            onQueue={() => navigateToView('CLINIC_DETAILS', clinic)}
+                                                            onViewDoctor={(doc) => setViewingDoctor(doc)}
+                                                        />
                                                     );
                                                 })
                                             ) : (
@@ -1101,19 +1099,18 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                             )}
                                         </div>
                                     ) : (
-                                        /* DOCTOR SEARCH RESULTS - Switched to multi-column layout for masonry effect */
-                                        <div className={`mx-auto gap-4 ${showMap ? 'columns-1 xl:columns-2 max-w-5xl' : 'columns-1 sm:columns-2 lg:columns-3 xl:columns-4'}`}>
+                                        /* DOCTOR SEARCH RESULTS - Tighter Grid */
+                                        <div className={`mx-auto gap-4 grid ${showMap ? 'grid-cols-1 xl:grid-cols-2 max-w-5xl' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'}`}>
                                             {groupedDoctors.length > 0 ? (
                                                 groupedDoctors.map(({ masterDoc, locations }) => {
                                                     return (
-                                                        <div key={masterDoc.masterId} className="break-inside-avoid mb-4">
-                                                            <DoctorSearchCard
-                                                                doctor={masterDoc}
-                                                                locations={locations}
-                                                                onBook={(clinic, doc) => navigateToView('FORM', clinic, doc)}
-                                                                onViewProfile={() => setViewingDoctor(masterDoc)}
-                                                            />
-                                                        </div>
+                                                        <DoctorSearchCard
+                                                            key={masterDoc.masterId}
+                                                            doctor={masterDoc}
+                                                            locations={locations}
+                                                            onBook={(clinic, doc) => navigateToView('FORM', clinic, doc)}
+                                                            onViewProfile={() => setViewingDoctor(masterDoc)}
+                                                        />
                                                     );
                                                 })
                                             ) : (
@@ -1125,7 +1122,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                         </div>
                                     )
                                 ) : bookingView === 'CLINIC_DETAILS' && selectedClinic ? (
-                                    // CLINIC DETAIL VIEW
+                                    // CLINIC DETAIL VIEW (Remains standard detail view)
                                     <div className="max-w-4xl mx-auto space-y-6">
                                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                                             <div className="h-48 bg-slate-200 relative">

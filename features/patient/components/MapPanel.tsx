@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -134,7 +133,8 @@ export const MapPanel: React.FC<MapPanelProps> = ({
                 {isLocating ? <span className="animate-spin block h-5 w-5 border-2 border-slate-400 border-t-transparent rounded-full"></span> : <Crosshair className="h-5 w-5" />}
             </button>
             
-            <div className="absolute bottom-24 md:bottom-4 left-4 bg-white/90 backdrop-blur p-2 rounded-lg shadow-md text-[10px] space-y-1 z-[400]">
+            {/* Legend - Moved from left-4 to right-4 */}
+            <div className="absolute bottom-24 md:bottom-4 right-4 bg-white/90 backdrop-blur p-2 rounded-lg shadow-md text-[10px] space-y-1 z-[400]">
                 <div className="font-bold mb-1">Live Wait Time</div>
                 <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500"></span> Fast (0-20m)</div>
                 <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500"></span> Moderate (20-45m)</div>
