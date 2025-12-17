@@ -333,7 +333,7 @@ export const INITIAL_CLINICS: Clinic[] = [
     address: '4/112, Mount Poonamallee Rd, Manapakkam',
     pincode: '600089',
     operatingHours: '24 Hours',
-    imageUrl: 'https://images.unsplash.com/photo-1576091160550-2187d80a18f7?auto=format&fit=crop&q=80&w=300',
+    imageUrl: 'https://images.unsplash.com/photo-1531983412531-1f49a365ffed?auto=format&fit=crop&q=80&w=300',
     geoLocation: { lat: 13.0280, lng: 80.1850 },
     about: 'A 1000-bed quaternary care hospital offering best-in-class treatment for Orthopedics, Trauma, and Joint Replacement.',
     amenities: ['Ambulance', 'Blood Bank', 'Cafeteria', 'Rehab Center', 'International Patient Care'],
