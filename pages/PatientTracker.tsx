@@ -22,7 +22,7 @@ import {
     Navigation, Timer, Building2, 
     Info, Lock, History, X, AlertCircle, Sun, Moon,
     User, Users, Plus, LogOut, Coffee, LogIn, CloudSun, List as ListIcon, Crosshair, Zap, ExternalLink, ShieldCheck,
-    CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, ChevronLeft, FileText, MoonStar, MessageSquare, Phone, RefreshCw, Map as MapIcon
+    CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, ChevronLeft, FileText, MoonStar, MessageSquare, Phone, RefreshCw, Map as MapIcon, Languages
 } from 'lucide-react';
 
 // SEO URL Helpers
@@ -330,10 +330,10 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [viewingDoctor, setViewingDoctor] = useState<Doctor | null>(null);
   const [feedbackModal, setFeedbackModal] = useState<{ isOpen: boolean; visit: any | null; rating: number; text: string }>({ isOpen: false, visit: null, rating: 0, text: '' });
 
-  const navigateToView = (view: 'LIST' | 'CLINIC_DETAILS' | 'FORM', clinic: Clinic | null, doctor?: Doctor) => {
+  const navigateToView = (view: 'LIST' | 'CLINIC_DETAILS' | null, clinic?: Clinic | null, doctor?: Doctor) => {
       if (view === 'LIST') navigate('/patient/find');
       else if (view === 'CLINIC_DETAILS' && clinic) navigate(`/patient/clinic/${clinic.slug}`);
-      else if (view === 'FORM' && clinic && doctor) navigate(`/patient/clinic/${clinic.slug}/book/${createDoctorSlug(doctor)}`);
+      else if (clinic && doctor) navigate(`/patient/clinic/${clinic.slug}/book/${createDoctorSlug(doctor)}`);
   };
 
   const handleTabSwitch = (newTab: 'ACTIVE' | 'BOOK' | 'HISTORY' | 'PROFILE') => {
@@ -729,7 +729,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           } else {
               setVisitType('APPOINTMENT');
           }
-          navigateToView('FORM', clinic, viewingDoctor);
+          navigateToView(null, clinic, viewingDoctor);
       } else {
           addToast("Could not find clinic details", "error");
       }
@@ -920,6 +920,14 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
   const navItems = [ { id: 'BOOK', label: 'Find Care', icon: Search }, { id: 'ACTIVE', label: 'Active Visits', icon: Ticket }, { id: 'HISTORY', label: 'History', icon: History }, { id: 'PROFILE', label: 'Profile', icon: User } ];
   const GuestLoginCard = () => ( <div className="flex flex-col items-center justify-center h-[60vh] p-8 text-center"> <div className="bg-slate-100 p-6 rounded-full mb-6"><Lock className="h-10 w-10 text-slate-400" /></div> <h3 className="text-xl font-bold text-slate-800 mb-2">Login Required</h3> <p className="text-slate-500 mb-8 max-w-xs">Please login to access your appointments and medical history.</p> <Button onClick={() => onLoginClick && onLoginClick()} size="lg" className="shadow-lg px-10">Login / Register</Button> </div> );
+
+  const getDoctorTodayShift = (doc: Doctor) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const today = days[new Date().getDay()];
+    const schedule = doc.weeklySchedule.find(s => s.day === today);
+    if (!schedule || schedule.isOff || !schedule.slots?.length) return 'Off Today';
+    return schedule.slots.filter(s => s.active !== false).map(s => `${s.startTime}-${s.endTime}`).join(', ');
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row overflow-hidden font-sans">
@@ -1170,7 +1178,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             key={masterDoc.masterId}
                                                             doctor={masterDoc}
                                                             locations={locations}
-                                                            onBook={(clinic, doc) => navigateToView('FORM', clinic, doc)}
+                                                            onBook={(clinic, doc) => navigateToView(null, clinic, doc)}
                                                             onViewProfile={() => setViewingDoctor(masterDoc)}
                                                         />
                                                     );
@@ -1184,8 +1192,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                         </div>
                                     )
                                 ) : bookingView === 'CLINIC_DETAILS' && selectedClinic ? (
-                                    // CLINIC DETAIL VIEW (Remains standard detail view)
-                                    <div className="max-w-4xl mx-auto space-y-6">
+                                    // CLINIC DETAIL VIEW
+                                    <div className="max-w-5xl mx-auto space-y-6">
                                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                                             <div className="h-48 bg-slate-200 relative">
                                                 {selectedClinic.imageUrl ? (
@@ -1229,42 +1237,90 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
                                                 <div className="border-t border-slate-100 pt-8">
                                                     <h3 className="font-bold text-slate-900 mb-4 text-xl">Available Doctors</h3>
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                         {selectedClinic.doctors.map(doc => {
                                                             const docWait = getDoctorWaitDetails(selectedClinic, doc.id);
                                                             const canQueue = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(selectedClinic.operationMode);
+                                                            const todayShift = getDoctorTodayShift(doc);
+                                                            const isAvailable = doc.status === DoctorStatus.AVAILABLE;
                                                             
                                                             return (
-                                                                <div key={doc.id} className="p-4 rounded-xl border border-slate-200 flex gap-4 hover:border-primary-300 hover:shadow-md transition-all cursor-pointer bg-white group" onClick={() => navigateToView('FORM', selectedClinic, doc)}>
-                                                                    <img src={doc.avatarUrl} className="w-16 h-16 rounded-lg object-cover bg-slate-100 border border-slate-100" />
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <div className="flex justify-between items-start">
-                                                                            <h4 className="font-bold text-slate-900 truncate">{doc.name}</h4>
-                                                                            <span className="text-xs font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-600">₹{doc.consultationFee}</span>
+                                                                <div 
+                                                                    key={doc.id} 
+                                                                    className="p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row gap-5 hover:border-primary-300 hover:shadow-lg transition-all cursor-pointer bg-white group relative"
+                                                                    onClick={() => navigateToView(null, selectedClinic, doc)}
+                                                                >
+                                                                    {/* Left: Avatar & Status */}
+                                                                    <div className="flex-shrink-0 flex flex-col items-center gap-2">
+                                                                        <div className="relative">
+                                                                            <img src={doc.avatarUrl} className="w-20 h-20 rounded-2xl object-cover bg-slate-100 border border-slate-100 shadow-sm" />
+                                                                            <div className={`absolute -bottom-1 -right-1 w-5 h-5 border-4 border-white rounded-full ${isAvailable ? 'bg-green-500' : doc.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-400'}`}></div>
                                                                         </div>
-                                                                        <p className="text-sm text-primary-600 font-medium">{doc.specialty}</p>
-                                                                        
-                                                                        {canQueue ? (
-                                                                            <div className="flex items-center gap-2 mt-2">
-                                                                                <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 ${docWait.time < 30 ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-orange-50 text-orange-700 border border-orange-100'}`}>
-                                                                                    <div className={`w-1.5 h-1.5 rounded-full ${docWait.time < 30 ? 'bg-green-500' : 'bg-orange-500'} animate-pulse`} />
-                                                                                    ~{docWait.time}m wait
-                                                                                </div>
-                                                                                <span className="text-[10px] text-slate-400 font-medium">{docWait.count} ahead</span>
-                                                                            </div>
-                                                                        ) : (
-                                                                            <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
-                                                                                <span>{doc.experience} Yrs Exp</span>
-                                                                                <span>•</span>
-                                                                                <span>Verified Profile</span>
-                                                                            </div>
-                                                                        )}
+                                                                        <div className="flex items-center gap-1 text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
+                                                                            <Star className="h-3 w-3 fill-current" />
+                                                                            <span className="text-xs font-black">{doc.rating}</span>
+                                                                        </div>
+                                                                    </div>
 
-                                                                        <div className="mt-3">
-                                                                            <span className="text-xs font-bold text-white bg-slate-900 px-4 py-2 rounded-lg group-hover:bg-primary-600 transition-all shadow-md group-hover:shadow-primary-200">
-                                                                                {canQueue ? 'Join Queue' : 'Book Visit'}
-                                                                            </span>
+                                                                    {/* Center: Details */}
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="flex justify-between items-start mb-1">
+                                                                            <div>
+                                                                                <h4 className="font-bold text-slate-900 text-lg group-hover:text-primary-600 transition-colors truncate">{doc.name}</h4>
+                                                                                <p className="text-sm text-primary-600 font-bold uppercase tracking-tight">{doc.specialty}</p>
+                                                                            </div>
+                                                                            <div className="text-right">
+                                                                                <span className="text-lg font-black text-slate-900">₹{doc.consultationFee}</span>
+                                                                                <p className="text-[10px] text-slate-400 font-bold uppercase">Fee</p>
+                                                                            </div>
                                                                         </div>
+                                                                        
+                                                                        {/* Shift & Languages */}
+                                                                        <div className="space-y-2 mt-3">
+                                                                            <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                                                                                <Clock className="h-3.5 w-3.5 text-slate-400" />
+                                                                                <span>Today: <span className="font-bold text-slate-900">{todayShift}</span></span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                                                                                <Languages className="h-3.5 w-3.5 text-slate-400" />
+                                                                                <div className="flex flex-wrap gap-1">
+                                                                                    {doc.languages?.slice(0, 3).map(lang => (
+                                                                                        <span key={lang} className="bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-bold text-slate-500">{lang}</span>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Wait Info */}
+                                                                        <div className="mt-4 flex items-center justify-between">
+                                                                            {canQueue ? (
+                                                                                <div className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-2 ${docWait.time < 30 ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-orange-50 text-orange-700 border border-orange-100'}`}>
+                                                                                    <div className={`w-2 h-2 rounded-full ${docWait.time < 30 ? 'bg-green-500' : 'bg-orange-500'} animate-pulse`} />
+                                                                                    ~{docWait.time}m wait ({docWait.count} ahead)
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-bold bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                                                                                    <ShieldCheck className="h-3.5 w-3.5 text-primary-500" />
+                                                                                    {doc.experience} Yrs Exp
+                                                                                </div>
+                                                                            )}
+
+                                                                            <button 
+                                                                                onClick={(e) => { e.stopPropagation(); setViewingDoctor(doc); }}
+                                                                                className="text-primary-600 hover:text-primary-700 text-xs font-bold flex items-center gap-0.5"
+                                                                            >
+                                                                                Bio <ChevronRight className="h-3 w-3" />
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Action Button */}
+                                                                    <div className="sm:absolute sm:bottom-5 sm:right-5 mt-2 sm:mt-0">
+                                                                        <Button 
+                                                                            className={`w-full sm:w-auto h-11 px-6 rounded-xl font-bold shadow-lg transform group-hover:scale-105 transition-all ${canQueue ? 'bg-slate-900' : 'bg-primary-600'}`}
+                                                                        >
+                                                                            {canQueue ? 'Join Queue' : 'Book Visit'}
+                                                                        </Button>
                                                                     </div>
                                                                 </div>
                                                             );
