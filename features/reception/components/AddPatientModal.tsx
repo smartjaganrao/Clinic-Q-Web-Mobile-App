@@ -4,7 +4,7 @@ import { Doctor, Patient, PatientStatus } from '../../../types';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { Modal } from '../../../components/Modal';
-import { User, Calendar, Check, Phone, MapPin } from 'lucide-react';
+import { User, Calendar, Check, Phone, MapPin, Clock, Timer, Users, Sun, CloudSun, Moon, MoonStar, CalendarClock } from 'lucide-react';
 
 interface AddPatientModalProps {
   isOpen: boolean;
@@ -23,7 +23,17 @@ const getLocalToday = () => {
     return `${year}-${month}-${day}`;
 };
 
-// Helper to generate next 14 days
+const format12h = (time24: string) => {
+    if (!time24 || !time24.includes(':')) return time24;
+    const [hStr, mStr] = time24.split(':');
+    let h = parseInt(hStr);
+    const m = mStr.padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12; // the hour '0' should be '12'
+    return `${h}:${m} ${ampm}`;
+};
+
 const getNextDays = (count: number) => {
     const days = [];
     const today = new Date();
@@ -52,23 +62,45 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
   const [symptoms, setSymptoms] = useState('');
   const [existingProfiles, setExistingProfiles] = useState<Patient[]>([]);
   
-  // Address Fields
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [country, setCountry] = useState('India');
   
-  // Next of Kin
   const [nokName, setNokName] = useState('');
   const [nokPhone, setNokPhone] = useState('');
 
-  // Appointment Logic
   const [selectedDate, setSelectedDate] = useState(getLocalToday());
   const [selectedSlot, setSelectedSlot] = useState('');
-  const [availableSlots, setAvailableSlots] = useState<{ time: string, isBooked: boolean, isPast: boolean }[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<{ time: string, isBooked: boolean, isPast: boolean, shiftName: string, shiftRange: string }[]>([]);
 
   const bookingDays = useMemo(() => getNextDays(14), []);
 
-  // Generate Slots Effect
+  // Walk-in turn estimation logic
+  const walkInEstimation = useMemo(() => {
+    if (!doctorId) return null;
+    const doc = doctors.find(d => d.id === doctorId);
+    if (!doc) return null;
+
+    const waitingQueue = patients.filter(p => 
+        p.doctorId === doctorId && 
+        p.status === PatientStatus.WAITING
+    );
+    
+    const count = waitingQueue.length;
+    const mins = count * (doc.consultationTime || 15);
+    
+    const now = new Date();
+    const estDate = new Date(now.getTime() + mins * 60000);
+    const estClockTime = estDate.getHours().toString().padStart(2, '0') + ':' + estDate.getMinutes().toString().padStart(2, '0');
+
+    return {
+        count,
+        mins,
+        label: mins === 0 ? 'Immediate' : `~${mins} mins`,
+        estClockTime: format12h(estClockTime)
+    };
+  }, [doctorId, doctors, patients]);
+
   useEffect(() => {
       if (type === 'WALK_IN' || !doctorId || !selectedDate) {
           setAvailableSlots([]);
@@ -94,12 +126,12 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
           p.status !== PatientStatus.COMPLETED
       ).map(p => p.appointmentTime);
 
-      const slots: { time: string, isBooked: boolean, isPast: boolean }[] = [];
+      const slots: { time: string, isBooked: boolean, isPast: boolean, shiftName: string, shiftRange: string }[] = [];
       const now = new Date();
       const isToday = selectedDate === getLocalToday();
       const currentMins = now.getHours() * 60 + now.getMinutes();
 
-      daySchedule.slots.forEach(shift => {
+      daySchedule.slots.forEach((shift, sIdx) => {
           if (!shift.active) return;
           
           const [startH, startM] = shift.startTime.split(':').map(Number);
@@ -111,6 +143,8 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
           if (endMins < slotMins) endMins = 24 * 60 - 1; 
 
           const interval = doctor.consultationTime || 15;
+          const shiftName = shift.label || `Shift ${sIdx + 1}`;
+          const shiftRange = `${format12h(shift.startTime)} - ${format12h(shift.endTime)}`;
 
           while (slotMins + interval <= endMins) {
               const h = Math.floor(slotMins / 60);
@@ -120,7 +154,7 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
               const isBooked = existingBookings.includes(timeStr);
               const isPast = isToday && slotMins < currentMins;
 
-              slots.push({ time: timeStr, isBooked, isPast });
+              slots.push({ time: timeStr, isBooked, isPast, shiftName, shiftRange });
               slotMins += interval;
           }
       });
@@ -133,6 +167,19 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
 
   }, [doctorId, selectedDate, type, doctors, patients]);
 
+  const groupedByDoctorShift = useMemo(() => {
+    const groups: Record<string, { range: string, slots: typeof availableSlots }> = {};
+
+    availableSlots.forEach(slot => {
+        const key = slot.shiftName;
+        if (!groups[key]) {
+            groups[key] = { range: slot.shiftRange, slots: [] };
+        }
+        groups[key].slots.push(slot);
+    });
+
+    return groups;
+  }, [availableSlots]);
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = e.target.value.replace(/\D/g, '').slice(0, 10);
@@ -158,7 +205,6 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
       if (p.address) setAddress(p.address);
       if (p.city) setCity(p.city);
       if (p.country) setCountry(p.country);
-      
       setExistingProfiles([]);
   };
 
@@ -182,11 +228,9 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
       
       const nok = (nokName && nokPhone) ? { name: nokName, phone: nokPhone } : undefined;
 
-      // Pass undefined for location
       onAdd(name, phone, doctorId, type === 'APPOINTMENT' ? selectedDate : undefined, type === 'APPOINTMENT' ? selectedSlot : undefined, age, gender, symptoms, nok, address, city, country, undefined);
       onClose();
       
-      // Reset Form
       setName(''); setPhone(''); setDoctorId(''); setAge(''); setSymptoms(''); setType('WALK_IN'); setSelectedSlot(''); setNokName(''); setNokPhone('');
       setAddress(''); setCity(''); setCountry('India');
   };
@@ -194,10 +238,8 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={type === 'APPOINTMENT' ? 'Schedule Appointment' : 'Check-in Walk-in'} maxWidth="max-w-4xl">
         <form onSubmit={handleSubmit} className="space-y-5">
-            
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-5">
-                    {/* Step 1: Search */}
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
                         <div className="flex justify-between items-center mb-2">
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Patient Lookup</label>
@@ -218,7 +260,6 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
                         )}
                     </div>
 
-                    {/* Step 2: Details */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Input label="Patient Name" value={name} onChange={e => setName(e.target.value)} required />
                         <div className="grid grid-cols-2 gap-2">
@@ -234,7 +275,6 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
                         </div>
                     </div>
 
-                    {/* Address Fields (No Map) */}
                     <div className="bg-white p-4 rounded-xl border border-slate-200">
                         <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
                             <MapPin className="h-3 w-3" /> Address
@@ -248,7 +288,6 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
                         </div>
                     </div>
 
-                    {/* Next of Kin (Optional) */}
                     <div className="bg-orange-50/50 p-3 rounded-lg border border-orange-100">
                         <label className="block text-xs font-bold text-orange-800 uppercase tracking-wide mb-2">Emergency Contact</label>
                         <div className="grid grid-cols-2 gap-3">
@@ -259,7 +298,6 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
                 </div>
 
                 <div className="space-y-5">
-                    {/* Step 3: Doctor & Type */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Assign Doctor</label>
@@ -277,10 +315,25 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
                         </div>
                     </div>
 
-                    {/* Step 4: Appointment Grid (Conditional) */}
+                    {type === 'WALK_IN' && walkInEstimation && (
+                        <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-4 animate-in fade-in zoom-in-95 shadow-sm">
+                            <div className="p-3 bg-blue-600 rounded-2xl text-white shadow-lg shadow-blue-200">
+                                <Timer className="h-6 w-6 animate-pulse" />
+                            </div>
+                            <div className="flex-1">
+                                <h4 className="text-sm font-black text-blue-900 leading-tight">Live Wait Estimation</h4>
+                                <p className="text-xs text-blue-700 font-bold mt-0.5">
+                                    {walkInEstimation.label} wait • {walkInEstimation.count} ahead
+                                </p>
+                                <p className="text-[10px] text-blue-500 font-bold mt-1 uppercase tracking-wider flex items-center gap-1">
+                                    <Clock className="h-2.5 w-2.5" /> Expected Turn: {walkInEstimation.estClockTime}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     {type === 'APPOINTMENT' && (
-                        <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden animate-in fade-in">
-                            {/* Date Selector */}
+                        <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden animate-in fade-in shadow-inner">
                             <div className="flex overflow-x-auto no-scrollbar border-b border-slate-200 bg-white">
                                 {bookingDays.map((d) => (
                                     <button
@@ -295,33 +348,56 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
                                 ))}
                             </div>
 
-                            {/* Slot Grid */}
-                            <div className="p-4">
+                            <div className="p-4 max-h-[400px] overflow-y-auto custom-scrollbar">
                                 {!doctorId ? (
                                     <div className="text-center text-slate-400 text-sm py-4">Please select a doctor to view schedule.</div>
-                                ) : availableSlots.length > 0 ? (
-                                    <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
-                                        {availableSlots.map(slot => (
-                                            <button
-                                                key={slot.time}
-                                                type="button"
-                                                disabled={slot.isBooked || slot.isPast}
-                                                onClick={() => setSelectedSlot(slot.time)}
-                                                className={`
-                                                    relative py-2 px-1 rounded-lg text-xs font-bold border transition-all
-                                                    ${slot.isBooked || slot.isPast 
-                                                        ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed decoration-slice' 
-                                                        : selectedSlot === slot.time 
-                                                            ? 'bg-primary-600 text-white border-primary-600 shadow-md transform scale-105' 
-                                                            : 'bg-white text-slate-700 border-slate-200 hover:border-primary-300 hover:shadow-sm'
-                                                    }
-                                                `}
-                                            >
-                                                {slot.time}
-                                                {selectedSlot === slot.time && <div className="absolute -top-1.5 -right-1.5 bg-white text-primary-600 rounded-full p-0.5 shadow-sm"><Check className="h-2.5 w-2.5" /></div>}
-                                                {slot.isBooked && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="w-full h-px bg-slate-300 rotate-12"></div></div>}
-                                            </button>
-                                        ))}
+                                ) : Object.keys(groupedByDoctorShift).length > 0 ? (
+                                    <div className="space-y-8">
+                                        {(Object.keys(groupedByDoctorShift)).map(shiftKey => {
+                                            const group = groupedByDoctorShift[shiftKey];
+                                            
+                                            // Heuristic icon
+                                            let Icon = CalendarClock;
+                                            if (shiftKey.toLowerCase().includes('morn')) Icon = Sun;
+                                            else if (shiftKey.toLowerCase().includes('after')) Icon = CloudSun;
+                                            else if (shiftKey.toLowerCase().includes('even')) Icon = Moon;
+                                            else if (shiftKey.toLowerCase().includes('night')) Icon = MoonStar;
+
+                                            return (
+                                                <div key={shiftKey}>
+                                                    <div className="flex flex-col mb-4 border-l-2 border-primary-100 pl-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <Icon className="h-4 w-4 text-primary-500" />
+                                                            <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">{shiftKey}</span>
+                                                        </div>
+                                                        <div className="text-[10px] font-bold text-slate-400 mt-0.5">{group.range}</div>
+                                                    </div>
+                                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                                                        {group.slots.map(slot => (
+                                                            <button
+                                                                key={slot.time}
+                                                                type="button"
+                                                                disabled={slot.isBooked || slot.isPast}
+                                                                onClick={() => setSelectedSlot(slot.time)}
+                                                                className={`
+                                                                    relative py-2.5 px-1 rounded-xl text-xs font-black border transition-all
+                                                                    ${slot.isBooked || slot.isPast 
+                                                                        ? 'bg-slate-100 text-slate-300 border-slate-100 cursor-not-allowed grayscale' 
+                                                                        : selectedSlot === slot.time 
+                                                                            ? 'bg-primary-600 text-white border-primary-600 shadow-lg shadow-primary-200 transform scale-105 z-10' 
+                                                                            : 'bg-white text-slate-700 border-slate-200 hover:border-primary-300 hover:shadow-md'
+                                                                    }
+                                                                `}
+                                                            >
+                                                                {format12h(slot.time)}
+                                                                {selectedSlot === slot.time && <div className="absolute -top-1.5 -right-1.5 bg-white text-primary-600 rounded-full p-0.5 shadow-sm border border-primary-100"><Check className="h-2.5 w-2.5" /></div>}
+                                                                {slot.isBooked && <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20"><div className="w-full h-px bg-slate-400 rotate-12"></div></div>}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 ) : (
                                     <div className="text-center py-8">
@@ -340,8 +416,8 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
 
             <div className="pt-2 flex justify-end gap-3 border-t border-slate-100 mt-2">
                 <Button variant="secondary" type="button" onClick={onClose}>Cancel</Button>
-                <Button type="submit" disabled={type === 'APPOINTMENT' && !selectedSlot}>
-                    {type === 'APPOINTMENT' ? `Book ${selectedSlot}` : 'Check-in Now'}
+                <Button type="submit" disabled={type === 'APPOINTMENT' && !selectedSlot} className="disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed px-10">
+                    {type === 'APPOINTMENT' ? (selectedSlot ? `Book ${format12h(selectedSlot)}` : 'Pick a Slot') : 'Check-in Now'}
                 </Button>
             </div>
         </form>

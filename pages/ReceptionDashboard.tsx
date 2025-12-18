@@ -1,11 +1,11 @@
-// ... existing imports ...
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff, ClinicOperationMode, Clinic } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
 import { 
-    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin, Settings, Footprints, CalendarClock, Shuffle, Building2, ImageIcon, Plus, X, Globe, Crosshair, Trash2
+    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin, Settings, Footprints, CalendarClock, Shuffle, Building2, ImageIcon, Plus, X, Globe, Crosshair, Trash2, Info, LayoutGrid, Zap
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -80,6 +80,49 @@ const COMMON_AMENITIES = [
   'Ambulance', '24x7 Emergency', 'ICU', 'Operation Theater'
 ];
 
+/**
+ * OperationModeBadge Component
+ * Stylized badge to indicate the clinic's current operational policy.
+ */
+const OperationModeBadge: React.FC<{ mode: ClinicOperationMode }> = ({ mode }) => {
+    const config = {
+        [ClinicOperationMode.DIRECT_WALK_IN]: {
+            label: 'Walk-In Only',
+            styles: 'bg-orange-50 text-orange-700 border-orange-200',
+            icon: Footprints
+        },
+        [ClinicOperationMode.ONLINE_WALK_IN]: {
+            label: 'Online Token Only',
+            styles: 'bg-blue-50 text-blue-700 border-blue-200',
+            icon: Zap
+        },
+        [ClinicOperationMode.BOTH_WALK_IN]: {
+            label: 'Walk-In & Online Token',
+            styles: 'bg-green-50 text-green-700 border-green-200',
+            icon: Shuffle
+        },
+        [ClinicOperationMode.HYBRID_DIRECT_APPT]: {
+            label: 'Walk-In & Appointment',
+            styles: 'bg-purple-50 text-purple-700 border-purple-200',
+            icon: CalendarClock
+        },
+        [ClinicOperationMode.HYBRID_FULL]: {
+            label: 'Hybrid Full Access',
+            styles: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+            icon: LayoutGrid
+        }
+    };
+
+    const { label, styles, icon: Icon } = config[mode] || { label: mode, styles: 'bg-slate-50 text-slate-700 border-slate-200', icon: Info };
+
+    return (
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-black uppercase tracking-tight shadow-sm ${styles}`}>
+            <Icon className="h-3 w-3" />
+            {label}
+        </span>
+    );
+};
+
 export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     doctors, patients, staff = [], clinicName, clinicType, operationMode = ClinicOperationMode.HYBRID_FULL, clinicData,
     onAddPatient, onEditPatient, onDeletePatient, onDeleteMultiplePatients, 
@@ -138,7 +181,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         if (isSettingsModalOpen && clinicData) {
             setSettingsForm({
                 name: clinicName,
-                operationMode: operationMode,
+                operationMode: clinicData.operationMode || operationMode,
                 type: clinicData.type,
                 about: clinicData.about || '',
                 contactPhone: clinicData.contactPhone || '',
@@ -440,17 +483,39 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             <span className="text-slate-300">|</span>
                             <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {clinicData?.operatingHours || '9am - 9pm'}</span>
                             <span>•</span>
-                            <span className="px-1.5 py-0.5 rounded font-bold uppercase text-[9px] bg-indigo-100 text-indigo-700">
-                                {operationMode.replace(/_/g, ' ')}
-                            </span>
+                            <OperationModeBadge mode={clinicData?.operationMode || operationMode} />
                         </div>
                     </div>
-                    <div className="hidden sm:flex gap-1 bg-slate-100 p-1 rounded-lg flex-shrink-0">
-                        <button onClick={() => setActiveTab('QUEUE')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'QUEUE' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><List className="h-3 w-3" /> Queue</button>
-                        <button onClick={() => setActiveTab('DATABASE')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'DATABASE' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Database className="h-3 w-3" /> Patients</button>
-                        <button onClick={() => setActiveTab('DOCTORS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'DOCTORS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Stethoscope className="h-3 w-3" /> Doctors</button>
-                        <button onClick={() => setActiveTab('STAFF')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'STAFF' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Users className="h-3 w-3" /> Staff</button>
-                        <button onClick={() => setActiveTab('REPORTS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'REPORTS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><BarChart3 className="h-3 w-3" /> Reports</button>
+                    
+                    <div className="flex items-center gap-4">
+                        <div className="hidden lg:flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                <input 
+                                    type="text" 
+                                    placeholder="Find token or patient..." 
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-8 pr-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-primary-500 outline-none w-48"
+                                />
+                            </div>
+                        </div>
+
+                        <Button 
+                            onClick={() => setIsPatientModalOpen(true)} 
+                            size="md" 
+                            className="bg-primary-600 hover:bg-primary-700 text-white font-black shadow-lg shadow-primary-100 flex items-center gap-2 px-6 rounded-xl animate-in zoom-in-95"
+                        >
+                            <Plus className="h-4 w-4" /> Add Patient
+                        </Button>
+
+                        <div className="hidden sm:flex gap-1 bg-slate-100 p-1 rounded-lg flex-shrink-0">
+                            <button onClick={() => setActiveTab('QUEUE')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'QUEUE' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><List className="h-3 w-3" /> Queue</button>
+                            <button onClick={() => setActiveTab('DATABASE')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'DATABASE' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Database className="h-3 w-3" /> Patients</button>
+                            <button onClick={() => setActiveTab('DOCTORS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'DOCTORS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Stethoscope className="h-3 w-3" /> Doctors</button>
+                            <button onClick={() => setActiveTab('STAFF')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'STAFF' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Users className="h-3 w-3" /> Staff</button>
+                            <button onClick={() => setActiveTab('REPORTS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'REPORTS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><BarChart3 className="h-3 w-3" /> Reports</button>
+                        </div>
                     </div>
                 </div>
 
@@ -789,11 +854,11 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     <form onSubmit={handleSaveVitals} className="space-y-6">
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center"><div className="flex items-center gap-3"><div className="h-10 w-10 bg-white rounded-full flex items-center justify-center text-slate-500 font-bold border border-slate-200">{vitalsPatient.tokenNumber}</div><div><h3 className="font-bold text-slate-900">{vitalsPatient.name}</h3><p className="text-xs text-slate-500">{vitalsPatient.age} Yrs • {vitalsPatient.gender}</p></div></div></div>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                            <div className="space-y-1"><label className="text-xs font-bold text-slate-500">BP (mmHg)</label><Input placeholder="120/80" value={vitalsPatient.vitals?.bp || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, bp: e.target.value}})} /></div>
-                            <div className="space-y-1"><label className="text-xs font-bold text-slate-500">Temp (°F)</label><Input placeholder="98.6" value={vitalsPatient.vitals?.temp || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, temp: e.target.value}})} /></div>
-                            <div className="space-y-1"><label className="text-xs font-bold text-slate-500">Pulse (bpm)</label><Input placeholder="72" value={vitalsPatient.vitals?.pulse || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, pulse: e.target.value}})} /></div>
-                            <div className="space-y-1"><label className="text-xs font-bold text-slate-500">Weight (kg)</label><Input placeholder="65" value={vitalsPatient.vitals?.weight || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, weight: e.target.value}})} /></div>
-                            <div className="space-y-1"><label className="text-xs font-bold text-slate-500">SpO2 (%)</label><Input placeholder="98" value={vitalsPatient.vitals?.spo2 || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, spo2: e.target.value}})} /></div>
+                            <div className="space-y-1"><label className="text-xs font-bold text-slate-400">BP (mmHg)</label><Input placeholder="120/80" value={vitalsPatient.vitals?.bp || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, bp: e.target.value}})} /></div>
+                            <div className="space-y-1"><label className="text-xs font-bold text-slate-400">Temp (°F)</label><Input placeholder="98.6" value={vitalsPatient.vitals?.temp || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, temp: e.target.value}})} /></div>
+                            <div className="space-y-1"><label className="text-xs font-bold text-slate-400">Pulse (bpm)</label><Input placeholder="72" value={vitalsPatient.vitals?.pulse || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, pulse: e.target.value}})} /></div>
+                            <div className="space-y-1"><label className="text-xs font-bold text-slate-400">Weight (kg)</label><Input placeholder="65" value={vitalsPatient.vitals?.weight || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, weight: e.target.value}})} /></div>
+                            <div className="space-y-1"><label className="text-xs font-bold text-slate-400">SpO2 (%)</label><Input placeholder="98" value={vitalsPatient.vitals?.spo2 || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, spo2: e.target.value}})} /></div>
                         </div>
                         <div className="pt-4 flex justify-end gap-3"><Button variant="secondary" type="button" onClick={() => setVitalsPatient(null)}>Cancel</Button><Button type="submit">Save Vitals</Button></div>
                     </form>
