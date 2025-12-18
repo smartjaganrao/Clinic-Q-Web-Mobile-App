@@ -1,8 +1,8 @@
-
 import React, { useState } from 'react';
 import { Patient, Doctor, PatientStatus } from '../../../types';
 import { Badge } from '../../../components/Badge';
 import { PlayCircle, CheckSquare, Edit2, UserCheck, Activity, AlertTriangle, XCircle, ArrowUp, Calendar, User, CheckCircle, GripVertical, Clock, ChevronRight, Timer, Stethoscope, PauseCircle, Play, Phone, Zap, PhoneCall } from 'lucide-react';
+import { ConfirmationModal } from '../../../components/ConfirmationModal';
 
 interface QueueTableProps {
   patients: Patient[];
@@ -24,6 +24,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
   patients, doctors, estimatedTimes, isFiltered, nextUpPatientIds, onUpdateStatus, onManualReorder, onDragDrop, onManualCheckIn, onEditPatient, onVitalsClick, onToggleEmergency, onCancelPatient
 }) => {
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [patientToCancel, setPatientToCancel] = useState<Patient | null>(null);
 
   if (patients.length === 0) {
       return (
@@ -35,6 +36,13 @@ export const QueueTable: React.FC<QueueTableProps> = ({
         </div>
       );
   }
+
+  const handleConfirmCancel = () => {
+    if (patientToCancel) {
+      onCancelPatient(patientToCancel.id);
+      setPatientToCancel(null);
+    }
+  };
 
   return (
     <div className="flex-1 overflow-auto bg-slate-50/50 pb-20 sm:pb-0 h-full">
@@ -120,7 +128,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                                 <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.COMPLETED); }} className="flex-1 bg-green-600 text-white h-10 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform min-w-[100px]">
                                     <CheckSquare className="h-4 w-4" /> Finish
                                 </button>
-                                <button onClick={(e) => { e.stopPropagation(); if(window.confirm('Cancel this active visit?')) onCancelPatient(patient.id); }} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-red-100 text-red-500 bg-red-50 hover:bg-red-100">
+                                <button onClick={(e) => { e.stopPropagation(); setPatientToCancel(patient); }} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-red-100 text-red-500 bg-red-50 hover:bg-red-100">
                                     <XCircle className="h-4 w-4" />
                                 </button>
                               </>
@@ -160,7 +168,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                               <Edit2 className="h-4 w-4" />
                           </button>
                           {(isWaiting || isOnHold) && (
-                            <button onClick={(e) => { e.stopPropagation(); if(window.confirm('Cancel visit?')) onCancelPatient(patient.id); }} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-red-100 text-red-500 bg-red-50 hover:bg-red-100">
+                            <button onClick={(e) => { e.stopPropagation(); setPatientToCancel(patient); }} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-red-100 text-red-500 bg-red-50 hover:bg-red-100">
                                 <XCircle className="h-4 w-4" />
                             </button>
                           )}
@@ -355,7 +363,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                                 <CheckSquare className="h-3 w-3" /> Done
                             </button>
                             <button 
-                                onClick={(e) => { e.stopPropagation(); if(window.confirm('Cancel active visit?')) onCancelPatient(patient.id); }} 
+                                onClick={(e) => { e.stopPropagation(); setPatientToCancel(patient); }} 
                                 onMouseDown={(e) => e.stopPropagation()}
                                 className="p-1 bg-red-50 text-red-600 hover:bg-red-100 rounded transition-colors ml-1 border border-red-200" 
                                 title="Cancel Visit"
@@ -384,7 +392,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                                 <Edit2 className="h-3.5 w-3.5" />
                             </button>
                             <button 
-                                onClick={(e) => { e.stopPropagation(); if(window.confirm('Cancel visit?')) onCancelPatient(patient.id); }} 
+                                onClick={(e) => { e.stopPropagation(); setPatientToCancel(patient); }} 
                                 onMouseDown={(e) => e.stopPropagation()}
                                 className="p-1 bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded transition-colors" 
                                 title="Cancel"
@@ -401,6 +409,16 @@ export const QueueTable: React.FC<QueueTableProps> = ({
           </tbody>
         </table>
       </div>
+
+      <ConfirmationModal 
+        isOpen={!!patientToCancel}
+        onClose={() => setPatientToCancel(null)}
+        onConfirm={handleConfirmCancel}
+        title="Cancel Patient Visit?"
+        message={`Are you sure you want to cancel the visit for ${patientToCancel?.name}? This will remove them from the active queue.`}
+        confirmLabel="Yes, Cancel Visit"
+        variant="danger"
+      />
     </div>
   );
 };

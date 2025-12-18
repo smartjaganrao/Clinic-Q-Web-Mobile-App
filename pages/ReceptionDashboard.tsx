@@ -1,11 +1,11 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
-import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff, ClinicOperationMode, Clinic } from '../types';
+import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff, ClinicOperationMode, Clinic, AppointmentConfig } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
+import { Card } from '../components/Card';
 import { 
-    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin, Settings, Footprints, CalendarClock, Shuffle, Building2, ImageIcon, Plus, X, Globe, Crosshair, Trash2, Info, LayoutGrid, Zap
+    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin, Settings, Footprints, CalendarClock, Shuffle, Building2, ImageIcon, Plus, X, Globe, Crosshair, Trash2, Info, LayoutGrid, Zap, Mail, Shield, Save, Calendar
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -17,6 +17,24 @@ import { ReceptionStats } from '../features/reception/components/ReceptionStats'
 import { AddPatientModal } from '../features/reception/components/AddPatientModal';
 import { DoctorFormModal } from '../features/reception/components/DoctorFormModal';
 import { ConfirmationModal } from '../components/ConfirmationModal';
+
+// --- HELPERS ---
+const getLocalToday = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const getLocalTomorrow = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
 
 // --- MAP COMPONENTS ---
 const DefaultIcon = L.divIcon({
@@ -82,7 +100,6 @@ const COMMON_AMENITIES = [
 
 /**
  * OperationModeBadge Component
- * Stylized badge to indicate the clinic's current operational policy.
  */
 const OperationModeBadge: React.FC<{ mode: ClinicOperationMode }> = ({ mode }) => {
     const config = {
@@ -130,14 +147,14 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     onToggleEmergency, onManualReorder, onDragDrop, onManualCheckIn, onBulkUpdateStatus, 
     onAddStaff, onUpdateStaff, onDeleteStaff, addToast
 }) => {
-    const [activeTab, setActiveTab] = useState<'QUEUE' | 'DATABASE' | 'DOCTORS' | 'STAFF' | 'REPORTS'>('QUEUE');
+    const [activeTab, setActiveTab] = useState<'QUEUE' | 'DATABASE' | 'DOCTORS' | 'STAFF' | 'REPORTS' | 'APPOINTMENTS'>('QUEUE');
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDoctorId, setFilterDoctorId] = useState<string>('ALL');
-    const [filterStatus, setFilterStatus] = useState<string>('ACTIVE'); // 'ACTIVE', 'ALL', 'WAITING', 'WITH_DOCTOR'
-    const [filterType, setFilterType] = useState<string>('ALL');
+    const [filterStatus, setFilterStatus] = useState<string>('ACTIVE'); 
+    const [filterDate, setFilterDate] = useState<string>(getLocalToday());
 
     const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
-    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false); // Settings Modal
+    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false); 
     
     // Doctor Modal State
     const [isDoctorModalOpen, setIsDoctorModalOpen] = useState(false);
@@ -145,6 +162,9 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     const [editingDoctorData, setEditingDoctorData] = useState<Doctor | undefined>(undefined);
     const [editingDoctorId, setEditingDoctorId] = useState<string | null>(null);
     const [doctorToDelete, setDoctorToDelete] = useState<Doctor | null>(null);
+
+    // Patient History Deletion State
+    const [patientHistoryToDelete, setPatientHistoryToDelete] = useState<Patient | null>(null);
 
     // Edit Patient Modal
     const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
@@ -157,6 +177,22 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     const [newAmenity, setNewAmenity] = useState('');
     const [mapSearchQuery, setMapSearchQuery] = useState('');
     const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+
+    // Appointment Config State
+    const [apptConfig, setApptConfig] = useState<AppointmentConfig>({
+        slotDuration: 15,
+        bufferTime: 5,
+        maxDaysInAdvance: 14,
+        enableEmailNotifications: true,
+        emailTemplate: 'Your appointment at {clinic_name} with {doctor_name} is confirmed for {date} at {time}.'
+    });
+
+    // Sync appointment config from clinicData
+    useEffect(() => {
+        if (clinicData?.appointmentConfig) {
+            setApptConfig(clinicData.appointmentConfig);
+        }
+    }, [clinicData]);
 
     // Deck State
     const [isDeckExpanded, setIsDeckExpanded] = useState(false);
@@ -191,17 +227,10 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 imageUrl: clinicData.imageUrl || '',
                 amenities: clinicData.amenities || [],
                 operatingHours: clinicData.operatingHours || '09:00 AM - 09:00 PM',
-                geoLocation: clinicData.geoLocation || { lat: 13.0827, lng: 80.2707 } // Default Chennai if missing
+                geoLocation: clinicData.geoLocation || { lat: 13.0827, lng: 80.2707 } 
             });
             setActiveSettingsTab('GENERAL');
             setMapSearchQuery('');
-        } else if (isSettingsModalOpen) {
-            setSettingsForm({
-                name: clinicName,
-                operationMode: operationMode,
-                type: clinicType,
-                geoLocation: { lat: 13.0827, lng: 80.2707 }
-            });
         }
     }, [isSettingsModalOpen, clinicName, operationMode, clinicData, clinicType]);
 
@@ -287,6 +316,15 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
     const filteredPatients = useMemo(() => {
         let list = patients;
+
+        // Date Filter
+        list = list.filter(p => {
+            const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate 
+                ? p.appointmentDate 
+                : new Date(p.timeAdded).toISOString().split('T')[0];
+            return pDate === filterDate;
+        });
+
         if (filterStatus === 'ACTIVE') {
             list = list.filter(p => p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED);
         } else if (filterStatus !== 'ALL') {
@@ -300,7 +338,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             list = list.filter(p => p.name.toLowerCase().includes(q) || p.phone.includes(q) || p.tokenNumber.toString().includes(q));
         }
         return sortPatients([...list]);
-    }, [patients, filterStatus, filterDoctorId, searchQuery]);
+    }, [patients, filterStatus, filterDoctorId, searchQuery, filterDate]);
 
     const uniquePatients = useMemo(() => {
         const unique = new Map<string, Patient>();
@@ -335,13 +373,16 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
     const doctorQueueStats = useMemo(() => {
         return doctors.map(doc => {
-            const queue = patients.filter(p => p.doctorId === doc.id && (p.status === PatientStatus.WAITING || p.status === PatientStatus.ON_HOLD));
+            const queue = patients.filter(p => {
+                const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
+                return p.doctorId === doc.id && (p.status === PatientStatus.WAITING || p.status === PatientStatus.ON_HOLD) && pDate === filterDate;
+            });
             const current = patients.find(p => p.doctorId === doc.id && p.status === PatientStatus.WITH_DOCTOR);
             const sortedQueue = sortPatients([...queue]);
             const next = sortedQueue.length > 0 ? sortedQueue[0] : null;
             return { doc, count: queue.length, current, next };
         });
-    }, [doctors, patients]);
+    }, [doctors, patients, filterDate]);
 
     const visibleDeckStats = useMemo(() => {
         if (isDeckExpanded) return doctorQueueStats;
@@ -368,6 +409,15 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         if (doctorToDelete) {
             onDeleteDoctor(doctorToDelete.id);
             setDoctorToDelete(null);
+        }
+    };
+
+    const confirmPatientHistoryDelete = () => {
+        if (patientHistoryToDelete) {
+            const idsToDelete = patients.filter(pat => pat.phone === patientHistoryToDelete.phone).map(pat => pat.id);
+            onDeleteMultiplePatients(idsToDelete);
+            setPatientHistoryToDelete(null);
+            addToast(`History for ${patientHistoryToDelete.name} deleted`, 'info');
         }
     };
 
@@ -421,6 +471,11 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         addToast("Settings Updated", "success");
     };
 
+    const handleSaveApptConfig = () => {
+        onUpdateClinicSettings({ appointmentConfig: apptConfig });
+        addToast("Appointment Settings Saved", "success");
+    };
+
     const handleAddAmenity = (name: string) => {
         if (!name || (settingsForm.amenities || []).includes(name)) return;
         setSettingsForm({ ...settingsForm, amenities: [...(settingsForm.amenities || []), name] });
@@ -463,7 +518,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         }
     };
 
-    const isFiltered = searchQuery !== '' || filterDoctorId !== 'ALL' || filterStatus !== 'ACTIVE' || filterType !== 'ALL';
+    const isFiltered = searchQuery !== '' || filterDoctorId !== 'ALL' || filterStatus !== 'ACTIVE' || filterDate !== getLocalToday();
 
     return (
         <div className="h-full flex flex-col bg-slate-50 w-full max-w-[100vw] overflow-hidden">
@@ -513,7 +568,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             <button onClick={() => setActiveTab('QUEUE')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'QUEUE' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><List className="h-3 w-3" /> Queue</button>
                             <button onClick={() => setActiveTab('DATABASE')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'DATABASE' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Database className="h-3 w-3" /> Patients</button>
                             <button onClick={() => setActiveTab('DOCTORS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'DOCTORS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Stethoscope className="h-3 w-3" /> Doctors</button>
-                            <button onClick={() => setActiveTab('STAFF')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'STAFF' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Users className="h-3 w-3" /> Staff</button>
+                            <button onClick={() => setActiveTab('APPOINTMENTS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'APPOINTMENTS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><CalendarClock className="h-3 w-3" /> Appts</button>
                             <button onClick={() => setActiveTab('REPORTS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'REPORTS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><BarChart3 className="h-3 w-3" /> Reports</button>
                         </div>
                     </div>
@@ -521,6 +576,43 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
                 {activeTab === 'QUEUE' && (
                     <div className="bg-white border-b border-slate-200 w-full overflow-hidden transition-all duration-300">
+                        {/* Queue Sub-header with Date Filter */}
+                        <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Viewing:</span>
+                                <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+                                    <button 
+                                        onClick={() => setFilterDate(getLocalToday())}
+                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${filterDate === getLocalToday() ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+                                    >
+                                        Today
+                                    </button>
+                                    <button 
+                                        onClick={() => setFilterDate(getLocalTomorrow())}
+                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${filterDate === getLocalTomorrow() ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+                                    >
+                                        Tomorrow
+                                    </button>
+                                </div>
+                                <div className="relative ml-2">
+                                    <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                    <input 
+                                        type="date" 
+                                        value={filterDate}
+                                        onChange={(e) => setFilterDate(e.target.value)}
+                                        className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-primary-500 outline-none w-32 shadow-sm"
+                                    />
+                                </div>
+                            </div>
+                            
+                            {filterDate !== getLocalToday() && (
+                                <div className="animate-in fade-in slide-in-from-right-2 bg-amber-50 text-amber-700 px-3 py-1 rounded-lg border border-amber-100 flex items-center gap-2">
+                                    <Info className="h-3.5 w-3.5" />
+                                    <span className="text-[10px] font-bold uppercase tracking-tight">Viewing Future Schedule • Tokens Active only on visit date</span>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 gap-2 p-2 max-w-[1920px] mx-auto">
                             <button 
                                 onClick={() => setFilterDoctorId('ALL')} 
@@ -532,10 +624,10 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             >
                                 <div>
                                     <div className="font-bold text-xs">All Doctors</div>
-                                    <div className={`text-[9px] mt-0.5 ${filterDoctorId === 'ALL' ? 'text-slate-400' : 'text-slate-500'}`}>Overview</div>
+                                    <div className={`text-[9px] mt-0.5 ${filterDoctorId === 'ALL' ? 'text-slate-400' : 'text-slate-500'}`}>{filterDate === getLocalToday() ? 'Overview' : new Date(filterDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div>
                                 </div>
                                 <div className="mt-auto">
-                                    <div className="text-xl font-black tracking-tight leading-none">{patients.filter(p => p.status === PatientStatus.WAITING).length}</div>
+                                    <div className="text-xl font-black tracking-tight leading-none">{filteredPatients.filter(p => p.status === PatientStatus.WAITING).length}</div>
                                     <div className={`text-[8px] uppercase font-bold tracking-wider mt-1 ${filterDoctorId === 'ALL' ? 'text-slate-500' : 'text-slate-400'}`}>Total Waiting</div>
                                 </div>
                             </button>
@@ -567,9 +659,9 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                         <div className="mt-auto">
                                             <div className="grid grid-cols-3 gap-px bg-slate-100 rounded-lg p-[1px] border border-slate-200">
                                                 <div className="bg-white rounded-l-md p-1 flex flex-col justify-center items-center">
-                                                    <div className="text-[7px] text-slate-400 font-bold uppercase tracking-wider">Serving</div>
-                                                    <div className={`text-xs font-black truncate ${current ? 'text-blue-600' : 'text-slate-300'}`}>
-                                                        {current ? `#${current.tokenNumber}` : '--'}
+                                                    <div className="text-[7px] text-slate-400 font-bold uppercase tracking-wider">{filterDate === getLocalToday() ? 'Serving' : 'Slots'}</div>
+                                                    <div className={`text-xs font-black truncate ${current && filterDate === getLocalToday() ? 'text-blue-600' : 'text-slate-300'}`}>
+                                                        {filterDate === getLocalToday() ? (current ? `#${current.tokenNumber}` : '--') : (doc.consultationTime || 15) + 'm'}
                                                     </div>
                                                 </div>
                                                 <div className="bg-white p-1 flex flex-col justify-center items-center">
@@ -579,7 +671,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                                     </div>
                                                 </div>
                                                 <div className="bg-white rounded-r-md p-1 flex flex-col justify-center items-center">
-                                                    <div className="text-[7px] text-slate-400 font-bold uppercase tracking-wider">Wait</div>
+                                                    <div className="text-[7px] text-slate-400 font-bold uppercase tracking-wider">Total</div>
                                                     <div className="text-xs font-black text-slate-700">
                                                         {count}
                                                     </div>
@@ -631,7 +723,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         doctors={doctors}
                         onHistoryClick={(p) => setHistoryPatient(p)}
                         onEditClick={(p) => setEditingPatient(p)}
-                        onDeleteClick={(p) => { if(window.confirm(`Delete history for ${p.name}?`)) onDeleteMultiplePatients(patients.filter(pat => pat.phone === p.phone).map(pat => pat.id)); }}
+                        onDeleteClick={(p) => setPatientHistoryToDelete(p)}
                         onBulkDelete={handleBulkDelete}
                         onBulkStatusChange={handleBulkStatusChange}
                     />
@@ -663,6 +755,137 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 {activeTab === 'REPORTS' && (
                     <ReceptionStats patients={patients} doctors={doctors} />
                 )}
+
+                {activeTab === 'APPOINTMENTS' && (
+                    <div className="p-4 sm:p-8 max-w-4xl mx-auto h-full overflow-y-auto custom-scrollbar">
+                        <div className="mb-6 flex justify-between items-end">
+                            <div>
+                                <h2 className="text-2xl font-bold text-slate-900">Appointment Settings</h2>
+                                <p className="text-slate-500 text-sm">Configure how patients book future visits.</p>
+                            </div>
+                            <Button onClick={handleSaveApptConfig} className="shadow-lg shadow-primary-100 font-bold px-6">
+                                <Save className="h-4 w-4 mr-2" /> Save Configuration
+                            </Button>
+                        </div>
+
+                        <div className="space-y-6">
+                            {/* Booking Rules Card */}
+                            <Card className="p-6">
+                                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    <Clock className="h-5 w-5 text-primary-600" /> Booking Rules
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-1">
+                                        <label className="text-sm font-bold text-slate-600 uppercase tracking-tight">Standard Slot Duration</label>
+                                        <select 
+                                            value={apptConfig.slotDuration}
+                                            onChange={e => setApptConfig({ ...apptConfig, slotDuration: parseInt(e.target.value) })}
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary-500 outline-none transition-all"
+                                        >
+                                            <option value={10}>10 Minutes</option>
+                                            <option value={15}>15 Minutes</option>
+                                            <option value={20}>20 Minutes</option>
+                                            <option value={30}>30 Minutes</option>
+                                            <option value={45}>45 Minutes</option>
+                                            <option value={60}>60 Minutes</option>
+                                        </select>
+                                        <p className="text-[10px] text-slate-400">Standard time allocated for each consultation.</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-sm font-bold text-slate-600 uppercase tracking-tight">Buffer Time</label>
+                                        <select 
+                                            value={apptConfig.bufferTime}
+                                            onChange={e => setApptConfig({ ...apptConfig, bufferTime: parseInt(e.target.value) })}
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary-500 outline-none transition-all"
+                                        >
+                                            <option value={0}>No Buffer</option>
+                                            <option value={5}>5 Minutes</option>
+                                            <option value={10}>10 Minutes</option>
+                                            <option value={15}>15 Minutes</option>
+                                        </select>
+                                        <p className="text-[10px] text-slate-400">Break time between consecutive appointments.</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-sm font-bold text-slate-600 uppercase tracking-tight">Booking Window</label>
+                                        <select 
+                                            value={apptConfig.maxDaysInAdvance}
+                                            onChange={e => setApptConfig({ ...apptConfig, maxDaysInAdvance: parseInt(e.target.value) })}
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary-500 outline-none transition-all"
+                                        >
+                                            <option value={7}>7 Days in Advance</option>
+                                            <option value={14}>14 Days in Advance</option>
+                                            <option value={30}>30 Days in Advance</option>
+                                            <option value={90}>90 Days in Advance</option>
+                                        </select>
+                                        <p className="text-[10px] text-slate-400">How far in the future patients can see availability.</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-sm font-bold text-slate-600 uppercase tracking-tight">Emergency Reserve</label>
+                                        <div className="flex items-center gap-2 p-3 bg-orange-50 border border-orange-100 rounded-xl">
+                                            <Shield className="h-4 w-4 text-orange-500" />
+                                            <span className="text-xs text-orange-800 font-medium">1 Slot per shift reserved for emergencies.</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </Card>
+
+                            {/* Communication Card */}
+                            <Card className="p-6">
+                                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    <Mail className="h-5 w-5 text-primary-600" /> Patient Communication
+                                </h3>
+                                <div className="space-y-6">
+                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-full ${apptConfig.enableEmailNotifications ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-400'}`}>
+                                                <Zap className="h-4 w-4" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-900">Email Confirmations</p>
+                                                <p className="text-xs text-slate-500">Send automatic confirmation emails upon booking.</p>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            onClick={() => setApptConfig({ ...apptConfig, enableEmailNotifications: !apptConfig.enableEmailNotifications })}
+                                            className={`w-12 h-6 rounded-full transition-all relative ${apptConfig.enableEmailNotifications ? 'bg-primary-600' : 'bg-slate-300'}`}
+                                        >
+                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${apptConfig.enableEmailNotifications ? 'right-1' : 'left-1'}`} />
+                                        </button>
+                                    </div>
+
+                                    {apptConfig.enableEmailNotifications && (
+                                        <div className="space-y-2 animate-in slide-in-from-top-2">
+                                            <label className="text-sm font-bold text-slate-600 uppercase tracking-tight">Confirmation Template</label>
+                                            <textarea 
+                                                value={apptConfig.emailTemplate}
+                                                onChange={e => setApptConfig({ ...apptConfig, emailTemplate: e.target.value })}
+                                                rows={4}
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-primary-500 outline-none transition-all resize-none font-mono"
+                                                placeholder="Custom message..."
+                                            />
+                                            <div className="flex flex-wrap gap-2">
+                                                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">Available tags:</span>
+                                                {['{patient_name}', '{doctor_name}', '{clinic_name}', '{date}', '{time}', '{token}'].map(tag => (
+                                                    <span key={tag} className="text-[10px] font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100 cursor-help" title="Click to copy (impl)">{tag}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </Card>
+
+                            <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-start gap-4">
+                                <div className="p-2 bg-blue-100 rounded-full text-blue-600 shrink-0">
+                                    <Info className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-blue-900 text-sm">Pro Tip</h4>
+                                    <p className="text-xs text-blue-700 leading-relaxed mt-0.5">Increasing buffer time can reduce waiting room crowding, but might decrease total daily consultations. Find the right balance for your clinic's patient flow.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <nav className="sm:hidden bg-white border-t border-slate-200 fixed bottom-0 w-full z-40 flex justify-around py-2 px-1 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] pb-safe">
@@ -684,11 +907,11 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     </div>
                     <span className="text-[10px] font-bold">Doctors</span>
                 </button>
-                <button onClick={() => setActiveTab('STAFF')} className={`flex flex-col items-center gap-1 p-2 rounded-xl w-full transition-all ${activeTab === 'STAFF' ? 'text-primary-700' : 'text-slate-400'}`}>
-                    <div className={`p-1 rounded-full ${activeTab === 'STAFF' ? 'bg-primary-50' : ''}`}>
-                        <Users className={`h-5 w-5 ${activeTab === 'STAFF' ? 'stroke-primary-600' : ''}`} />
+                <button onClick={() => setActiveTab('APPOINTMENTS')} className={`flex flex-col items-center gap-1 p-2 rounded-xl w-full transition-all ${activeTab === 'APPOINTMENTS' ? 'text-primary-700' : 'text-slate-400'}`}>
+                    <div className={`p-1 rounded-full ${activeTab === 'APPOINTMENTS' ? 'bg-primary-50' : ''}`}>
+                        <CalendarClock className={`h-5 w-5 ${activeTab === 'APPOINTMENTS' ? 'stroke-primary-600' : ''}`} />
                     </div>
-                    <span className="text-[10px] font-bold">Staff</span>
+                    <span className="text-[10px] font-bold">Appts</span>
                 </button>
             </nav>
 
@@ -832,6 +1055,16 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 title="Remove Doctor?"
                 message={`Are you sure you want to remove Dr. ${doctorToDelete?.name}? This will also clear their schedule and room assignments in this clinic.`}
                 confirmLabel="Remove Doctor"
+                variant="danger"
+            />
+
+            <ConfirmationModal 
+                isOpen={!!patientHistoryToDelete}
+                onClose={() => setPatientHistoryToDelete(null)}
+                onConfirm={confirmPatientHistoryDelete}
+                title="Delete Patient History?"
+                message={`Are you sure you want to permanently delete all records and medical history for ${patientHistoryToDelete?.name}? This action cannot be undone.`}
+                confirmLabel="Delete Everything"
                 variant="danger"
             />
 

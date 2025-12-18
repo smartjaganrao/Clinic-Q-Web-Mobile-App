@@ -1,9 +1,9 @@
-
 import React, { useState } from 'react';
 import { Clinic, Doctor, DoctorStatus } from '../../../types';
 import { Modal } from '../../../components/Modal';
 import { DoctorManager } from '../../reception/components/DoctorManager';
 import { DoctorFormModal } from '../../reception/components/DoctorFormModal';
+import { ConfirmationModal } from '../../../components/ConfirmationModal';
 
 interface AdminDoctorsModalProps {
     isOpen: boolean;
@@ -22,6 +22,7 @@ export const AdminDoctorsModal: React.FC<AdminDoctorsModalProps> = ({
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingDoctor, setEditingDoctor] = useState<Doctor | undefined>(undefined);
     const [mode, setMode] = useState<'ADD' | 'EDIT'>('ADD');
+    const [doctorToDelete, setDoctorToDelete] = useState<Doctor | null>(null);
 
     const handleSave = (data: any) => {
         if (mode === 'ADD') {
@@ -81,6 +82,14 @@ export const AdminDoctorsModal: React.FC<AdminDoctorsModalProps> = ({
         }
     };
 
+    const handleConfirmDelete = () => {
+        if (doctorToDelete) {
+            onDeleteDoctor(clinic.id, doctorToDelete.id);
+            setDoctorToDelete(null);
+            addToast('Doctor profile removed', 'info');
+        }
+    };
+
     return (
         <>
             <Modal isOpen={isOpen} onClose={onClose} title={`Manage Doctors - ${clinic.name}`} maxWidth="max-w-6xl">
@@ -89,7 +98,10 @@ export const AdminDoctorsModal: React.FC<AdminDoctorsModalProps> = ({
                         doctors={clinic.doctors}
                         onAddDoctor={() => { setMode('ADD'); setEditingDoctor(undefined); setIsFormOpen(true); }}
                         onEditDoctor={(doc) => { setMode('EDIT'); setEditingDoctor(doc); setIsFormOpen(true); }}
-                        onDeleteDoctor={(id) => { if(window.confirm('Delete doctor?')) onDeleteDoctor(clinic.id, id); }}
+                        onDeleteDoctor={(id) => { 
+                            const doc = clinic.doctors.find(d => d.id === id);
+                            if (doc) setDoctorToDelete(doc);
+                        }}
                         onAddPresetSlot={handleAddPresetSlot}
                         onStatusChange={(id, status) => onEditDoctor(clinic.id, id, { status })}
                     />
@@ -104,6 +116,16 @@ export const AdminDoctorsModal: React.FC<AdminDoctorsModalProps> = ({
                 onSave={handleSave}
                 onCheckMasterDoctor={onCheckMasterDoctor}
                 addToast={addToast}
+            />
+
+            <ConfirmationModal 
+                isOpen={!!doctorToDelete}
+                onClose={() => setDoctorToDelete(null)}
+                onConfirm={handleConfirmDelete}
+                title="Remove Doctor?"
+                message={`Are you sure you want to remove Dr. ${doctorToDelete?.name}? This will clear their assignment in this clinic.`}
+                confirmLabel="Remove Doctor"
+                variant="danger"
             />
         </>
     );

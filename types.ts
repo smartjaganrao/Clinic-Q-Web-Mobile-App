@@ -46,7 +46,15 @@ export enum ClinicOperationMode {
     ONLINE_WALK_IN = 'ONLINE_WALK_IN',                 // 2. Online Walkin only
     BOTH_WALK_IN = 'BOTH_WALK_IN',                     // 3. Direct Walkin & Online Walkin (Token)
     HYBRID_DIRECT_APPT = 'HYBRID_DIRECT_APPT',         // 4. Hybrid: Direct Walkin & Appointment only
-    HYBRID_FULL = 'HYBRID_FULL'                        // 5. Hybrid: Direct, Online Walkin & Appointment
+    HYBRID_FULL = 'HYBRID_FULL'                        // 5. Hybrid: Direct, Online Token & Appointment
+}
+
+export interface AppointmentConfig {
+    slotDuration: number; // in minutes
+    bufferTime: number;   // in minutes
+    maxDaysInAdvance: number;
+    enableEmailNotifications: boolean;
+    emailTemplate?: string;
 }
 
 export interface TimeSlot {
@@ -194,6 +202,7 @@ export interface Clinic {
   plan: PlanType;
   type?: ClinicType; 
   operationMode: ClinicOperationMode; // New: Clinic Operational Mode
+  appointmentConfig?: AppointmentConfig; // New: Appointment-specific settings
   doctors: Doctor[];
   patients: Patient[];
   staff: Staff[]; // New: Staff list

@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Patient, Doctor, PatientStatus } from '../../../types';
-import { History, Edit2, Trash2, CalendarDays, Phone, User, CheckSquare, Square, X, PauseCircle, Star, MessageSquare } from 'lucide-react';
+import { History, Edit2, Trash2, CalendarDays, Phone, User, CheckSquare, Square, X, PauseCircle, Star, MessageSquare, AlertTriangle } from 'lucide-react';
+import { ConfirmationModal } from '../../../components/ConfirmationModal';
 
 interface PatientDatabaseTableProps {
   patients: Patient[];
@@ -17,11 +18,12 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
   patients, doctors, onHistoryClick, onEditClick, onDeleteClick, onBulkDelete, onBulkStatusChange
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // Clear selection if data changes significantly or on unmount
   useEffect(() => {
       setSelectedIds(new Set());
-  }, [patients.length]); // Simple heuristic to clear on filter/list change
+  }, [patients.length]); 
 
   const toggleSelectAll = () => {
       if (selectedIds.size === patients.length) {
@@ -45,16 +47,23 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
       return patients.filter(p => selectedIds.has(p.id));
   };
 
-  const handleBulkDelete = () => {
-      if (onBulkDelete && window.confirm(`Permanently delete ${selectedIds.size} patients and their history?`)) {
-          onBulkDelete(getSelectedPatients());
-          setSelectedIds(new Set());
+  const handleBulkDeleteInitiate = () => {
+      if (selectedIds.size > 0) {
+          setIsDeleteModalOpen(true);
       }
   };
 
-  const handleBulkSkip = () => {
-      if (onBulkStatusChange) {
-          onBulkStatusChange(getSelectedPatients(), PatientStatus.SKIPPED);
+  const handleConfirmBulkDelete = () => {
+      if (onBulkDelete) {
+          onBulkDelete(getSelectedPatients());
+          setSelectedIds(new Set());
+      }
+      setIsDeleteModalOpen(false);
+  };
+
+  const handleBulkStatusChange = (status: PatientStatus) => {
+      if (onBulkStatusChange && selectedIds.size > 0) {
+          onBulkStatusChange(getSelectedPatients(), status);
           setSelectedIds(new Set());
       }
   };
@@ -67,20 +76,22 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
           <div className="absolute top-2 left-4 right-4 z-20 bg-slate-900 text-white p-3 rounded-xl shadow-xl flex items-center justify-between animate-in slide-in-from-top-2">
               <div className="flex items-center gap-3">
                   <span className="bg-slate-700 px-2 py-1 rounded text-xs font-bold">{selectedIds.size} Selected</span>
-                  <button onClick={() => setSelectedIds(new Set())} className="text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
+                  <button onClick={() => setSelectedIds(new Set())} className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors">
+                      <X className="h-4 w-4" />
+                  </button>
               </div>
               <div className="flex items-center gap-2">
                   <button 
-                      onClick={handleBulkSkip}
+                      onClick={() => handleBulkStatusChange(PatientStatus.SKIPPED)}
                       className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-colors"
                   >
                       <PauseCircle className="h-3.5 w-3.5" /> Mark Skipped
                   </button>
                   <button 
-                      onClick={handleBulkDelete}
+                      onClick={handleBulkDeleteInitiate}
                       className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-colors"
                   >
-                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                      <Trash2 className="h-3.5 w-3.5" /> Delete Records
                   </button>
               </div>
           </div>
@@ -91,7 +102,7 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
           <thead className="text-slate-500 font-bold text-xs uppercase tracking-wider bg-slate-50 sticky top-0 z-10">
             <tr>
               <th className="px-4 py-4 border-b border-slate-200 w-10 text-center">
-                  <button onClick={toggleSelectAll} className="text-slate-400 hover:text-primary-600">
+                  <button onClick={toggleSelectAll} className="text-slate-400 hover:text-primary-600 transition-colors">
                       {patients.length > 0 && selectedIds.size === patients.length ? <CheckSquare className="h-4 w-4 text-primary-600" /> : <Square className="h-4 w-4" />}
                   </button>
               </th>
@@ -106,9 +117,9 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
             {patients.map((patient) => {
                 const isSelected = selectedIds.has(patient.id);
                 return (
-                    <tr key={`${patient.phone}_${patient.name}`} className={`transition-colors group ${isSelected ? 'bg-blue-50/50' : 'hover:bg-blue-50/30'}`}>
+                    <tr key={`${patient.phone}_${patient.id}`} className={`transition-colors group ${isSelected ? 'bg-blue-50/50' : 'hover:bg-blue-50/30'}`}>
                       <td className="px-4 py-4 text-center">
-                          <button onClick={() => toggleSelectRow(patient.id)} className="text-slate-400 hover:text-primary-600">
+                          <button onClick={() => toggleSelectRow(patient.id)} className="text-slate-400 hover:text-primary-600 transition-colors">
                               {isSelected ? <CheckSquare className="h-4 w-4 text-primary-600" /> : <Square className="h-4 w-4" />}
                           </button>
                       </td>
@@ -183,6 +194,16 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
           </tbody>
         </table>
       </div>
+
+      <ConfirmationModal 
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleConfirmBulkDelete}
+        title="Delete Selected Records?"
+        message={`Are you sure you want to permanently delete records and medical history for ${selectedIds.size} patients? This action cannot be undone.`}
+        confirmLabel="Delete Everything"
+        variant="danger"
+      />
     </div>
   );
 };

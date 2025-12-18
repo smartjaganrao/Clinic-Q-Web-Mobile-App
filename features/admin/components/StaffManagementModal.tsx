@@ -1,10 +1,10 @@
-
 import React, { useState } from 'react';
 import { Staff } from '../../../types';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { Modal } from '../../../components/Modal';
 import { User, Phone, CheckCircle, XCircle, Trash2, Plus, ShieldAlert, Mail, Lock } from 'lucide-react';
+import { ConfirmationModal } from '../../../components/ConfirmationModal';
 
 interface StaffManagementModalProps {
   isOpen: boolean;
@@ -24,6 +24,7 @@ export const StaffManagementModal: React.FC<StaffManagementModalProps> = ({
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [newStaffPassword, setNewStaffPassword] = useState('');
   const [newStaffRole, setNewStaffRole] = useState<'RECEPTIONIST' | 'NURSE' | 'MANAGER'>('RECEPTIONIST');
+  const [staffToDelete, setStaffToDelete] = useState<Staff | null>(null);
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +45,13 @@ export const StaffManagementModal: React.FC<StaffManagementModalProps> = ({
       setNewStaffEmail('');
       setNewStaffPassword('');
       setNewStaffRole('RECEPTIONIST');
+    }
+  };
+
+  const handleConfirmDelete = () => {
+    if (staffToDelete) {
+      onDeleteStaff(staffToDelete.id);
+      setStaffToDelete(null);
     }
   };
 
@@ -77,7 +85,7 @@ export const StaffManagementModal: React.FC<StaffManagementModalProps> = ({
                             <div className="flex items-center gap-2">
                                 <button 
                                     onClick={() => onUpdateStaff(s.id, { isActive: !s.isActive })}
-                                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${s.isActive ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100' : 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100'}`}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${s.isActive ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100' : 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100'}`}
                                 >
                                     {s.isActive ? (
                                         <><CheckCircle className="h-3 w-3" /> Active</>
@@ -86,7 +94,7 @@ export const StaffManagementModal: React.FC<StaffManagementModalProps> = ({
                                     )}
                                 </button>
                                 <button 
-                                    onClick={() => { if(window.confirm('Remove staff access?')) onDeleteStaff(s.id) }} 
+                                    onClick={() => setStaffToDelete(s)} 
                                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                     title="Delete Staff"
                                 >
@@ -158,6 +166,16 @@ export const StaffManagementModal: React.FC<StaffManagementModalProps> = ({
             </form>
         </div>
       </div>
+
+      <ConfirmationModal 
+        isOpen={!!staffToDelete}
+        onClose={() => setStaffToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Remove Staff Member?"
+        message={`Are you sure you want to remove ${staffToDelete?.name} from ${clinicName}? They will no longer be able to log in.`}
+        confirmLabel="Remove Staff"
+        variant="danger"
+      />
     </Modal>
   );
 };

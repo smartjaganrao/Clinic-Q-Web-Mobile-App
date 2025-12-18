@@ -1,10 +1,10 @@
-
 import React, { useState } from 'react';
 import { Staff } from '../../../types';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { Modal } from '../../../components/Modal';
 import { Plus, Trash2, CheckCircle, XCircle, User, ShieldAlert, Phone, Briefcase, Mail, Lock, ShieldCheck } from 'lucide-react';
+import { ConfirmationModal } from '../../../components/ConfirmationModal';
 
 interface StaffManagerProps {
   staff: Staff[];
@@ -20,6 +20,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ staff, onAddStaff, o
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [newStaffPassword, setNewStaffPassword] = useState('');
   const [newStaffRole, setNewStaffRole] = useState<'RECEPTIONIST' | 'NURSE' | 'MANAGER'>('RECEPTIONIST');
+  const [staffToDelete, setStaffToDelete] = useState<Staff | null>(null);
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +44,13 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ staff, onAddStaff, o
       setNewStaffPassword('');
       setNewStaffRole('RECEPTIONIST');
       setIsModalOpen(false);
+    }
+  };
+
+  const handleConfirmDelete = () => {
+    if (staffToDelete) {
+      onDeleteStaff(staffToDelete.id);
+      setStaffToDelete(null);
     }
   };
 
@@ -114,7 +122,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ staff, onAddStaff, o
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                     <button 
-                                        onClick={() => { if(window.confirm('Permanently remove this staff member?')) onDeleteStaff(s.id) }} 
+                                        onClick={() => setStaffToDelete(s)} 
                                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                         title="Delete Staff"
                                     >
@@ -211,6 +219,16 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ staff, onAddStaff, o
             </div>
         </form>
       </Modal>
+
+      <ConfirmationModal 
+        isOpen={!!staffToDelete}
+        onClose={() => setStaffToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Permanently Remove Staff?"
+        message={`Are you sure you want to delete ${staffToDelete?.name}? This will revoke their access and remove their record from this clinic.`}
+        confirmLabel="Remove Staff"
+        variant="danger"
+      />
     </div>
   );
 };
