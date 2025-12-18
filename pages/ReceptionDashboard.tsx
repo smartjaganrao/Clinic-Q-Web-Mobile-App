@@ -154,7 +154,7 @@ const OperationModeBadge: React.FC<{ mode: ClinicOperationMode }> = ({ mode }) =
 export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     doctors, patients, staff = [], clinicName, clinicType, operationMode = ClinicOperationMode.HYBRID_FULL, clinicData,
     onAddPatient, onEditPatient, onDeletePatient, onDeleteMultiplePatients, 
-    onAddDoctor, onCheckMasterDoctor, onEditDoctor, onDeleteDoctor, onUpdateStatus, onCancelPatient, onUpdateClinicSettings, 
+    onAddDoctor, onCheckMasterDoctor, onEditDoctor, onDeleteDoctor, onUpdateStatus, onUpdateClinicSettings, 
     onToggleEmergency, onManualReorder, onDragDrop, onManualCheckIn, onBulkUpdateStatus, 
     onAddStaff, onUpdateStaff, onDeleteStaff, addToast
 }) => {
@@ -337,7 +337,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         });
 
         if (filterStatus === 'ACTIVE') {
-            list = list.filter(p => p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED);
+            list = list.filter(p => p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED && p.status !== PatientStatus.SKIPPED);
         } else if (filterStatus !== 'ALL') {
             list = list.filter(p => p.status === filterStatus);
         }
@@ -734,7 +734,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         onEditPatient={(p) => setEditingPatient(p)}
                         onVitalsClick={(p) => setVitalsPatient(p)}
                         onToggleEmergency={onToggleEmergency}
-                        onCancelPatient={onCancelPatient}
+                        onNoShowPatient={(id) => onUpdateStatus(id, PatientStatus.SKIPPED)}
                     />
                 )}
 
