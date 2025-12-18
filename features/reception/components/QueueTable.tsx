@@ -44,6 +44,10 @@ export const QueueTable: React.FC<QueueTableProps> = ({
     }
   };
 
+  const formatBookedTime = (timestamp: number) => {
+      return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
     <div className="flex-1 overflow-auto bg-slate-50/50 pb-20 sm:pb-0 h-full">
       {/* MOBILE CARD VIEW (< 768px) */}
@@ -100,6 +104,10 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                                   </div>
                               )}
                               
+                              <div className="flex items-center gap-1 mt-2 text-[10px] text-slate-400 font-bold">
+                                  <Clock className="h-3 w-3" /> Booked: {formatBookedTime(patient.timeAdded)}
+                              </div>
+
                               {/* Missing NOK Warning for Emergency */}
                               {patient.isEmergency && !patient.nextOfKin && (
                                   <div className="flex items-center gap-1 mt-2 text-[10px] text-red-600 bg-red-50 px-2 py-1 rounded border border-red-100 w-fit animate-pulse">
@@ -179,13 +187,14 @@ export const QueueTable: React.FC<QueueTableProps> = ({
       </div>
 
       {/* DESKTOP TABLE VIEW (>= 768px) */}
-      <div className="hidden md:block min-w-[1000px] px-4 py-2">
+      <div className="hidden md:block min-w-[1100px] px-4 py-2">
         <table className="w-full text-sm text-left border-separate border-spacing-y-1">
           <thead className="text-slate-400 font-bold text-[10px] uppercase tracking-wider sticky top-0 z-20">
             <tr>
-              <th className="px-3 pb-2 w-20 text-center">Token</th>
+              <th className="px-3 pb-2 w-16 text-center">Token</th>
               <th className="px-3 pb-2">Patient Details</th>
               <th className="px-3 pb-2">Doctor</th>
+              <th className="px-3 pb-2 w-28">Booked At</th>
               <th className="px-3 pb-2">Status & Wait</th>
               <th className="px-3 pb-2">Type</th>
               <th className="px-3 pb-2 text-right">Actions</th>
@@ -194,7 +203,6 @@ export const QueueTable: React.FC<QueueTableProps> = ({
           <tbody className="align-middle">
             {patients.map((patient) => {
               const doc = doctors.find(d => d.id === patient.doctorId);
-              const hasVitals = patient.vitals && Object.values(patient.vitals).some(v => v !== '');
               const isWaiting = patient.status === PatientStatus.WAITING;
               const isServing = patient.status === PatientStatus.WITH_DOCTOR;
               const isOnHold = patient.status === PatientStatus.ON_HOLD;
@@ -219,8 +227,8 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                   onDragEnd={() => setDraggedId(null)}
                   className={`transition-all duration-200 rounded-lg border ${rowStateClass} group`}
                 >
-                  <td className="px-2 py-1.5 text-center rounded-l-lg">
-                    <div className="flex flex-col items-center justify-center gap-1">
+                  <td className="px-2 py-1 text-center rounded-l-lg">
+                    <div className="flex flex-col items-center justify-center">
                       {isWaiting && !isFiltered && <GripVertical className="h-3 w-3 text-slate-300 cursor-move hover:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />}
                       <div className="relative">
                         <div className={`inline-flex items-center justify-center h-8 w-8 rounded-lg font-black text-sm shadow-sm border ${patient.isEmergency ? 'bg-red-500 text-white border-red-600' : isServing ? 'bg-blue-600 text-white border-blue-700 animate-pulse' : isNextUp ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
@@ -231,38 +239,45 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                     </div>
                   </td>
                   
-                  <td className="px-3 py-1.5">
+                  <td className="px-3 py-1">
                     <div className="flex flex-col">
                       <div className={`font-bold text-sm truncate max-w-[180px] ${isServing ? 'text-blue-900' : isNextUp ? 'text-indigo-900' : 'text-slate-900'}`}>{patient.name}</div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium leading-none mt-0.5">
+                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium leading-none">
                         <span>{patient.age}Y</span><span className="text-slate-300">•</span><span>{patient.gender}</span><span className="text-slate-300">•</span><span className="font-mono">{patient.phone}</span>
                       </div>
                       
-                      {/* Next of Kin Display Desktop */}
-                      {patient.nextOfKin && (
-                          <div className="mt-1 flex items-center gap-1 text-[9px] text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 w-fit">
-                              <PhoneCall className="h-2.5 w-2.5 text-slate-400" />
-                              <span className="font-semibold">ICE:</span> {patient.nextOfKin.name}
-                          </div>
-                      )}
-                      {patient.isEmergency && !patient.nextOfKin && (
-                          <div className="mt-1 flex items-center gap-1 text-[9px] text-red-600 font-bold animate-pulse">
-                              <AlertTriangle className="h-2.5 w-2.5" /> No Emergency Contact
-                          </div>
-                      )}
+                      <div className="mt-0.5">
+                          {patient.nextOfKin && (
+                              <div className="flex items-center gap-1 text-[9px] text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 w-fit">
+                                  <PhoneCall className="h-2.5 w-2.5 text-slate-400" />
+                                  <span className="font-semibold">ICE:</span> {patient.nextOfKin.name}
+                              </div>
+                          )}
+                          {patient.isEmergency && !patient.nextOfKin && (
+                              <div className="mt-0.5 flex items-center gap-1 text-[9px] text-red-600 font-bold animate-pulse">
+                                  <AlertTriangle className="h-2.5 w-2.5" /> No Emergency Contact
+                              </div>
+                          )}
+                      </div>
 
                       {patient.symptoms && <div className="mt-0.5 text-[9px] text-slate-600 bg-slate-50 px-1 py-0.5 rounded w-fit max-w-[180px] truncate border border-slate-100">{patient.symptoms}</div>}
                     </div>
                   </td>
 
-                  <td className="px-3 py-1.5">
+                  <td className="px-3 py-1">
                     <div className="flex items-center gap-2">
                         {doc?.avatarUrl ? <img src={doc.avatarUrl} className="w-6 h-6 rounded-full bg-slate-200 border border-white shadow-sm object-cover" /> : <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-500">{doc?.name?.charAt(0)}</div>}
                         <div className="min-w-0"><div className="text-slate-900 font-bold text-xs truncate max-w-[120px]">{doc?.name || 'Unknown'}</div><div className="text-[9px] text-slate-500 uppercase tracking-wide font-semibold truncate max-w-[100px]">{doc?.specialty}</div></div>
                     </div>
                   </td>
+
+                  <td className="px-3 py-1">
+                      <div className="flex items-center gap-1 text-[10px] text-slate-600 font-black bg-slate-100/80 px-2 py-1 rounded border border-slate-200 w-fit">
+                          <Clock className="h-3 w-3 text-slate-400" /> {formatBookedTime(patient.timeAdded)}
+                      </div>
+                  </td>
                   
-                  <td className="px-3 py-1.5">
+                  <td className="px-3 py-1">
                       {isServing ? (
                           <div className="flex items-center gap-1.5 text-white bg-blue-600 px-2.5 py-1 rounded-full shadow-sm w-fit">
                               <Activity className="h-3 w-3 animate-pulse" />
@@ -282,9 +297,9 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                       ) : <Badge status={patient.status} />}
                   </td>
 
-                  <td className="px-3 py-1.5">
+                  <td className="px-3 py-1">
                       {patient.visitType === 'APPOINTMENT' ? (
-                          <div className="flex flex-col items-start gap-1">
+                          <div className="flex flex-col items-start gap-0.5">
                               <span className="text-[9px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100 font-bold flex w-fit items-center gap-1">
                                   <Clock className="h-2.5 w-2.5" /> {patient.appointmentTime}
                               </span>
@@ -299,7 +314,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                       )}
                   </td>
 
-                  <td className="px-3 py-1.5 text-right rounded-r-lg relative z-20">
+                  <td className="px-3 py-1 text-right rounded-r-lg relative z-20">
                     <div className="flex justify-end gap-1 items-center">
                       {/* Emergency Toggle */}
                       {(isWaiting || isOnHold) && (

@@ -36,6 +36,17 @@ const getLocalTomorrow = () => {
     return `${year}-${month}-${day}`;
 };
 
+const format12h = (time24: string) => {
+    if (!time24 || !time24.includes(':')) return time24;
+    const [hStr, mStr] = time24.split(':');
+    let h = parseInt(hStr);
+    const m = mStr.padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    return `${h}:${m} ${ampm}`;
+};
+
 // --- MAP COMPONENTS ---
 const DefaultIcon = L.divIcon({
     className: 'custom-pin',
@@ -380,7 +391,15 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             const current = patients.find(p => p.doctorId === doc.id && p.status === PatientStatus.WITH_DOCTOR);
             const sortedQueue = sortPatients([...queue]);
             const next = sortedQueue.length > 0 ? sortedQueue[0] : null;
-            return { doc, count: queue.length, current, next };
+            
+            // Get Shift Timings for the selected date
+            const dayName = new Date(filterDate).toLocaleDateString('en-US', { weekday: 'long' });
+            const schedule = doc.weeklySchedule.find(s => s.day === dayName);
+            const shiftTiming = schedule && !schedule.isOff && schedule.slots.length > 0 
+                ? schedule.slots.map(s => `${format12h(s.startTime)} - ${format12h(s.endTime)}`).join(', ')
+                : 'Off Duty';
+
+            return { doc, count: queue.length, current, next, shiftTiming };
         });
     }, [doctors, patients, filterDate]);
 
@@ -618,7 +637,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 onClick={() => setFilterDoctorId('ALL')} 
                                 className={`
                                     w-full
-                                    p-2.5 rounded-xl border transition-all text-left flex flex-col justify-between h-28
+                                    p-2.5 rounded-xl border transition-all text-left flex flex-col justify-between h-32
                                     ${filterDoctorId === 'ALL' ? 'bg-slate-900 border-slate-900 text-white shadow-lg ring-2 ring-slate-900 ring-offset-1' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-900 hover:shadow-sm'}
                                 `}
                             >
@@ -632,7 +651,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 </div>
                             </button>
 
-                            {visibleDeckStats.map(({ doc, current, next, count }) => {
+                            {visibleDeckStats.map(({ doc, current, next, count, shiftTiming }) => {
                                 const isSelected = filterDoctorId === doc.id;
                                 return (
                                     <button 
@@ -641,7 +660,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                         className={`
                                             w-full
                                             p-2.5 rounded-xl border transition-all text-left relative group 
-                                            flex flex-col h-28 justify-between
+                                            flex flex-col h-32 justify-between
                                             ${isSelected ? 'bg-white border-primary-500 ring-2 ring-primary-500 shadow-md z-10' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}
                                         `}
                                     >
@@ -652,7 +671,9 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="font-bold text-slate-900 text-xs truncate leading-tight">{doc.name}</div>
-                                                <div className="text-[9px] text-slate-500 truncate mt-0.5">{doc.specialty}</div>
+                                                <div className="text-[9px] text-slate-500 truncate mt-0.5 font-bold uppercase tracking-tighter flex items-center gap-1">
+                                                    <Clock className="h-2.5 w-2.5" /> {shiftTiming}
+                                                </div>
                                             </div>
                                         </div>
 
