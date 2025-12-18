@@ -1,4 +1,3 @@
-
 // ... existing imports ...
 import React, { useState, useMemo, useEffect } from 'react';
 import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff, ClinicOperationMode, Clinic } from '../types';
@@ -6,7 +5,7 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
 import { 
-    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin, Settings, Footprints, CalendarClock, Shuffle, Building2, ImageIcon, Plus, X, Globe, Crosshair
+    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin, Settings, Footprints, CalendarClock, Shuffle, Building2, ImageIcon, Plus, X, Globe, Crosshair, Trash2
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -17,6 +16,7 @@ import { StaffManager } from '../features/reception/components/StaffManager';
 import { ReceptionStats } from '../features/reception/components/ReceptionStats';
 import { AddPatientModal } from '../features/reception/components/AddPatientModal';
 import { DoctorFormModal } from '../features/reception/components/DoctorFormModal';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 
 // --- MAP COMPONENTS ---
 const DefaultIcon = L.divIcon({
@@ -101,6 +101,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     const [doctorModalMode, setDoctorModalMode] = useState<'ADD' | 'EDIT'>('ADD');
     const [editingDoctorData, setEditingDoctorData] = useState<Doctor | undefined>(undefined);
     const [editingDoctorId, setEditingDoctorId] = useState<string | null>(null);
+    const [doctorToDelete, setDoctorToDelete] = useState<Doctor | null>(null);
 
     // Edit Patient Modal
     const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
@@ -152,7 +153,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             setActiveSettingsTab('GENERAL');
             setMapSearchQuery('');
         } else if (isSettingsModalOpen) {
-            // Fallback if clinicData not passed (should ideally be passed)
             setSettingsForm({
                 name: clinicName,
                 operationMode: operationMode,
@@ -162,7 +162,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         }
     }, [isSettingsModalOpen, clinicName, operationMode, clinicData, clinicType]);
 
-    // ... (Keep existing handlers for Map, Doctors, Patients) ...
     const handleSearchLocation = async () => {
         if (!mapSearchQuery) return;
         setIsSearchingLocation(true);
@@ -184,13 +183,12 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         }
     };
 
-    // Estimated Times Calculation
     const estimatedTimes = useMemo(() => {
         const times: Record<string, number> = {};
         doctors.forEach(doc => {
             const docQueue = patients
                 .filter(p => p.doctorId === doc.id && p.status === PatientStatus.WAITING)
-                .sort((a, b) => a.timeAdded - b.timeAdded); // Simple FIFO for estimation
+                .sort((a, b) => a.timeAdded - b.timeAdded); 
             
             let currentTime = Date.now();
             if (doc.status === DoctorStatus.ON_BREAK && doc.delayMinutes) {
@@ -207,7 +205,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         return times;
     }, [patients, doctors]);
 
-    // Helper: Unified Sorting Logic
     const sortPatients = (list: Patient[]) => {
         return list.sort((a, b) => {
             if (a.queueOrder !== undefined || b.queueOrder !== undefined) {
@@ -223,7 +220,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 if (hasNokA !== hasNokB) return hasNokA ? 1 : -1; 
             }
 
-            // NEW: Prioritize Checked In
             const checkInA = a.isCheckedIn ? 1 : 0;
             const checkInB = b.isCheckedIn ? 1 : 0;
             if (checkInA !== checkInB) return checkInB - checkInA;
@@ -246,29 +242,20 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         });
     };
 
-    // Derived Lists
     const filteredPatients = useMemo(() => {
         let list = patients;
-
-        // 1. Status Filter
         if (filterStatus === 'ACTIVE') {
             list = list.filter(p => p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED);
         } else if (filterStatus !== 'ALL') {
             list = list.filter(p => p.status === filterStatus);
         }
-
-        // 2. Doctor Filter
         if (filterDoctorId !== 'ALL') {
             list = list.filter(p => p.doctorId === filterDoctorId);
         }
-
-        // 3. Search
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
             list = list.filter(p => p.name.toLowerCase().includes(q) || p.phone.includes(q) || p.tokenNumber.toString().includes(q));
         }
-
-        // Use sophisticated sorting
         return sortPatients([...list]);
     }, [patients, filterStatus, filterDoctorId, searchQuery]);
 
@@ -313,32 +300,13 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         });
     }, [doctors, patients]);
 
-    // Sorted Deck Logic
-    const sortedDeckStats = useMemo(() => {
-        // Return original order to prevent layout shifts on selection
-        return [...doctorQueueStats];
-    }, [doctorQueueStats]);
-
     const visibleDeckStats = useMemo(() => {
-        if (isDeckExpanded) return sortedDeckStats;
-        // Collapsed logic: Mobile shows 1 doctor (+ All), Desktop shows 5 (+ All)
+        if (isDeckExpanded) return doctorQueueStats;
         const limit = isMobile ? 1 : 5;
-        return sortedDeckStats.slice(0, limit);
-    }, [sortedDeckStats, isDeckExpanded, isMobile]);
+        return doctorQueueStats.slice(0, limit);
+    }, [doctorQueueStats, isDeckExpanded, isMobile]);
 
-    const hiddenDeckCount = sortedDeckStats.length - visibleDeckStats.length;
-
-    // Handlers
-    const clearFilters = () => {
-        setSearchQuery('');
-        setFilterDoctorId('ALL');
-        setFilterStatus('ACTIVE');
-        setFilterType('ALL');
-    };
-
-    const handleLocalDragDrop = (draggedId: string, targetId: string) => {
-        onDragDrop(draggedId, targetId);
-    };
+    const hiddenDeckCount = doctorQueueStats.length - visibleDeckStats.length;
 
     const handleSaveDoctor = (data: any) => {
         if (doctorModalMode === 'ADD') {
@@ -346,10 +314,17 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         } else if (editingDoctorId) {
             onEditDoctor(editingDoctorId, {
                 ...data,
-                weeklySchedule: data.schedule, // CRITICAL FIX: Map schedule to weeklySchedule
+                weeklySchedule: data.schedule,
                 consultationFee: parseFloat(data.fee),
                 consultationTime: parseFloat(data.consultationTime)
             });
+        }
+    };
+
+    const confirmDoctorDelete = () => {
+        if (doctorToDelete) {
+            onDeleteDoctor(doctorToDelete.id);
+            setDoctorToDelete(null);
         }
     };
 
@@ -417,9 +392,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         return patients.filter(p => p.phone === patient.phone).sort((a, b) => b.timeAdded - a.timeAdded);
     };
 
-    // BULK HANDLERS FOR DATABASE TABLE
     const handleBulkDelete = (selectedPatients: Patient[]) => {
-        // Collect all IDs for the selected unique patients
         const idsToDelete: string[] = [];
         selectedPatients.forEach(p => {
             const matched = patients.filter(pat => pat.phone === p.phone).map(pat => pat.id);
@@ -434,14 +407,12 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         if (!onBulkUpdateStatus) return;
         const idsToUpdate: string[] = [];
         selectedPatients.forEach(p => {
-            // Find active/latest visit for this patient
             const latest = patients
                 .filter(pat => pat.phone === p.phone && pat.status !== PatientStatus.COMPLETED && pat.status !== PatientStatus.CANCELLED)
                 .sort((a, b) => b.timeAdded - a.timeAdded)[0];
             
             if (latest) idsToUpdate.push(latest.id);
         });
-        
         if (idsToUpdate.length > 0) {
             onBulkUpdateStatus(idsToUpdate, status);
         } else {
@@ -453,7 +424,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
     return (
         <div className="h-full flex flex-col bg-slate-50 w-full max-w-[100vw] overflow-hidden">
-            {/* HEADER & TABS */}
             <div className="flex flex-col flex-shrink-0 bg-white shadow-sm z-30 w-full">
                 <div className="px-4 py-3 flex justify-between items-center border-b border-slate-100">
                     <div className="min-w-0">
@@ -475,7 +445,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             </span>
                         </div>
                     </div>
-                    {/* DESKTOP TABS */}
                     <div className="hidden sm:flex gap-1 bg-slate-100 p-1 rounded-lg flex-shrink-0">
                         <button onClick={() => setActiveTab('QUEUE')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'QUEUE' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><List className="h-3 w-3" /> Queue</button>
                         <button onClick={() => setActiveTab('DATABASE')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'DATABASE' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Database className="h-3 w-3" /> Patients</button>
@@ -485,12 +454,9 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     </div>
                 </div>
 
-                {/* DOCTOR STATUS DECK - Only visible in Queue Tab */}
                 {activeTab === 'QUEUE' && (
                     <div className="bg-white border-b border-slate-200 w-full overflow-hidden transition-all duration-300">
-                        {/* ... (Keep Doctor Status Deck) ... */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 gap-2 p-2 max-w-[1920px] mx-auto">
-                            {/* "All" Card */}
                             <button 
                                 onClick={() => setFilterDoctorId('ALL')} 
                                 className={`
@@ -509,7 +475,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 </div>
                             </button>
 
-                            {/* Individual Doctor Cards */}
                             {visibleDeckStats.map(({ doc, current, next, count }) => {
                                 const isSelected = filterDoctorId === doc.id;
                                 return (
@@ -536,21 +501,18 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
                                         <div className="mt-auto">
                                             <div className="grid grid-cols-3 gap-px bg-slate-100 rounded-lg p-[1px] border border-slate-200">
-                                                {/* Serving */}
                                                 <div className="bg-white rounded-l-md p-1 flex flex-col justify-center items-center">
                                                     <div className="text-[7px] text-slate-400 font-bold uppercase tracking-wider">Serving</div>
                                                     <div className={`text-xs font-black truncate ${current ? 'text-blue-600' : 'text-slate-300'}`}>
                                                         {current ? `#${current.tokenNumber}` : '--'}
                                                     </div>
                                                 </div>
-                                                {/* Next */}
                                                 <div className="bg-white p-1 flex flex-col justify-center items-center">
                                                     <div className="text-[7px] text-slate-400 font-bold uppercase tracking-wider">Next</div>
                                                     <div className={`text-xs font-black truncate ${next ? 'text-indigo-600' : 'text-slate-300'}`}>
                                                         {next ? `#${next.tokenNumber}` : '--'}
                                                     </div>
                                                 </div>
-                                                {/* Waiting */}
                                                 <div className="bg-white rounded-r-md p-1 flex flex-col justify-center items-center">
                                                     <div className="text-[7px] text-slate-400 font-bold uppercase tracking-wider">Wait</div>
                                                     <div className="text-xs font-black text-slate-700">
@@ -563,8 +525,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 );
                             })}
                         </div>
-                        
-                        {/* Expand/Collapse Control */}
                         {doctors.length > (isMobile ? 1 : 5) && (
                             <button 
                                 onClick={() => setIsDeckExpanded(!isDeckExpanded)}
@@ -581,7 +541,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 )}
             </div>
 
-            {/* MAIN CONTENT AREA */}
             <div className="flex-1 overflow-hidden relative bg-slate-100 pb-16 sm:pb-0">
                 {activeTab === 'QUEUE' && (
                     <QueueTable 
@@ -592,7 +551,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         nextUpPatientIds={nextUpPatientIds}
                         onUpdateStatus={onUpdateStatus}
                         onManualReorder={onManualReorder}
-                        onDragDrop={handleLocalDragDrop}
+                        onDragDrop={onDragDrop}
                         onManualCheckIn={onManualCheckIn}
                         onEditPatient={(p) => setEditingPatient(p)}
                         onVitalsClick={(p) => setVitalsPatient(p)}
@@ -618,7 +577,10 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         doctors={doctors}
                         onAddDoctor={() => { setDoctorModalMode('ADD'); setEditingDoctorData(undefined); setIsDoctorModalOpen(true); }}
                         onEditDoctor={(doc) => { setDoctorModalMode('EDIT'); setEditingDoctorId(doc.id); setEditingDoctorData(doc); setIsDoctorModalOpen(true); }}
-                        onDeleteDoctor={(id) => { if(window.confirm("Remove Doctor?")) onDeleteDoctor(id); }}
+                        onDeleteDoctor={(id) => { 
+                            const doc = doctors.find(d => d.id === id);
+                            if (doc) setDoctorToDelete(doc);
+                        }}
                         onAddPresetSlot={handleAddPresetSlot}
                         onStatusChange={(id, status) => onEditDoctor(id, { status })}
                     />
@@ -638,7 +600,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 )}
             </div>
 
-            {/* MOBILE BOTTOM NAVIGATION */}
             <nav className="sm:hidden bg-white border-t border-slate-200 fixed bottom-0 w-full z-40 flex justify-around py-2 px-1 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] pb-safe">
                 <button onClick={() => setActiveTab('QUEUE')} className={`flex flex-col items-center gap-1 p-2 rounded-xl w-full transition-all ${activeTab === 'QUEUE' ? 'text-primary-700' : 'text-slate-400'}`}>
                     <div className={`p-1 rounded-full ${activeTab === 'QUEUE' ? 'bg-primary-50' : ''}`}>
@@ -666,23 +627,19 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 </button>
             </nav>
 
-            {/* MODALS */}
             <AddPatientModal isOpen={isPatientModalOpen} onClose={() => setIsPatientModalOpen(false)} onAdd={onAddPatient} doctors={doctors} patients={patients} addToast={addToast} />
             <DoctorFormModal isOpen={isDoctorModalOpen} onClose={() => setIsDoctorModalOpen(false)} mode={doctorModalMode} initialData={editingDoctorData} onSave={handleSaveDoctor} onCheckMasterDoctor={onCheckMasterDoctor} addToast={addToast} />
             
-            {/* Improved Settings Modal */}
             <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} title="Clinic Configuration" maxWidth="max-w-2xl">
                 <div className="flex border-b border-slate-200 mb-6">
                     <button onClick={() => setActiveSettingsTab('GENERAL')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'GENERAL' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>General</button>
                     <button onClick={() => setActiveSettingsTab('LOCATION')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'LOCATION' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>Location</button>
                     <button onClick={() => setActiveSettingsTab('BRANDING')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'BRANDING' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>Branding & Amenities</button>
                 </div>
-
                 <div className="space-y-6">
                     {activeSettingsTab === 'GENERAL' && (
                         <div className="space-y-4 animate-in fade-in">
                             <Input label="Clinic Name" value={settingsForm.name || ''} onChange={e => setSettingsForm({ ...settingsForm, name: e.target.value })} />
-                            
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Clinic Type</label>
@@ -692,14 +649,11 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 </div>
                                 <Input label="Contact Phone" value={settingsForm.contactPhone || ''} onChange={e => setSettingsForm({ ...settingsForm, contactPhone: e.target.value })} />
                             </div>
-
                             <Input label="Operating Hours (e.g. 09:00 AM - 09:00 PM)" value={settingsForm.operatingHours || ''} onChange={e => setSettingsForm({ ...settingsForm, operatingHours: e.target.value })} />
-
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">About / Tagline</label>
                                 <textarea className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none h-20" value={settingsForm.about || ''} onChange={e => setSettingsForm({ ...settingsForm, about: e.target.value })} placeholder="Brief description of your clinic..." />
                             </div>
-
                             <div className="space-y-3 pt-2">
                                 <label className="block text-sm font-medium text-slate-700">Operation Mode</label>
                                 <select 
@@ -716,8 +670,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             </div>
                         </div>
                     )}
-
-                    {/* ... (Keep Location and Branding Tabs unchanged) ... */}
                     {activeSettingsTab === 'LOCATION' && (
                         <div className="space-y-4 animate-in fade-in">
                             <Input label="Address Line 1" value={settingsForm.address || ''} onChange={e => setSettingsForm({ ...settingsForm, address: e.target.value })} />
@@ -725,11 +677,8 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 <Input label="City" value={settingsForm.city || ''} onChange={e => setSettingsForm({ ...settingsForm, city: e.target.value })} />
                                 <Input label="Pincode" value={settingsForm.pincode || ''} onChange={e => setSettingsForm({ ...settingsForm, pincode: e.target.value })} />
                             </div>
-                            
                             <div className="border-t border-slate-200 pt-4 mt-2">
                                 <label className="block text-sm font-bold text-slate-800 mb-2">Pin Location on Map</label>
-                                
-                                {/* Search Bar */}
                                 <div className="flex gap-2 mb-3">
                                     <div className="relative flex-1">
                                         <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -746,8 +695,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                         {isSearchingLocation ? '...' : 'Search'}
                                     </Button>
                                 </div>
-
-                                {/* Map */}
                                 <div className="h-64 w-full rounded-xl overflow-hidden border border-slate-300 shadow-sm relative z-0">
                                     <MapContainer 
                                         center={[settingsForm.geoLocation?.lat || 13.0827, settingsForm.geoLocation?.lng || 80.2707]} 
@@ -763,32 +710,19 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                         Tap to pin
                                     </div>
                                 </div>
-
-                                {/* Lat/Lng Manual Input */}
                                 <div className="grid grid-cols-2 gap-4 mt-3">
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Lat</span>
-                                        <input 
-                                            type="number" 
-                                            className="w-full pl-10 pr-3 py-2 rounded-lg border border-slate-300 text-xs font-mono" 
-                                            value={settingsForm.geoLocation?.lat || ''} 
-                                            onChange={e => setSettingsForm(prev => ({ ...prev, geoLocation: { ...prev.geoLocation!, lat: parseFloat(e.target.value) } }))} 
-                                        />
+                                        <input type="number" className="w-full pl-10 pr-3 py-2 rounded-lg border border-slate-300 text-xs font-mono" value={settingsForm.geoLocation?.lat || ''} onChange={e => setSettingsForm(prev => ({ ...prev, geoLocation: { ...prev.geoLocation!, lat: parseFloat(e.target.value) } }))} />
                                     </div>
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Lng</span>
-                                        <input 
-                                            type="number" 
-                                            className="w-full pl-10 pr-3 py-2 rounded-lg border border-slate-300 text-xs font-mono" 
-                                            value={settingsForm.geoLocation?.lng || ''} 
-                                            onChange={e => setSettingsForm(prev => ({ ...prev, geoLocation: { ...prev.geoLocation!, lng: parseFloat(e.target.value) } }))} 
-                                        />
+                                        <input type="number" className="w-full pl-10 pr-3 py-2 rounded-lg border border-slate-300 text-xs font-mono" value={settingsForm.geoLocation?.lng || ''} onChange={e => setSettingsForm(prev => ({ ...prev, geoLocation: { ...prev.geoLocation!, lng: parseFloat(e.target.value) } }))} />
                                     </div>
                                 </div>
                             </div>
                         </div>
                     )}
-
                     {activeSettingsTab === 'BRANDING' && (
                         <div className="space-y-6 animate-in fade-in">
                             <div>
@@ -799,11 +733,9 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                     </div>
                                     <div className="flex-1">
                                         <Input placeholder="https://example.com/image.jpg" value={settingsForm.imageUrl || ''} onChange={e => setSettingsForm({ ...settingsForm, imageUrl: e.target.value })} />
-                                        <p className="text-xs text-slate-500 mt-2">Enter a direct image link. This will be shown to patients.</p>
                                     </div>
                                 </div>
                             </div>
-
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-2">Amenities</label>
                                 <div className="flex flex-wrap gap-2 mb-3">
@@ -815,30 +747,12 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                     ))}
                                 </div>
                                 <div className="flex gap-2 mb-4">
-                                    <input 
-                                        className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                                        placeholder="Add amenity (e.g. Parking)"
-                                        value={newAmenity}
-                                        onChange={e => setNewAmenity(e.target.value)}
-                                        onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); handleAddAmenity(newAmenity); } }}
-                                    />
+                                    <input className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="Add amenity" value={newAmenity} onChange={e => setNewAmenity(e.target.value)} onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); handleAddAmenity(newAmenity); } }} />
                                     <Button onClick={() => handleAddAmenity(newAmenity)} size="sm" variant="secondary"><Plus className="h-4 w-4" /></Button>
-                                </div>
-                                
-                                <div>
-                                    <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Popular</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {COMMON_AMENITIES.filter(a => !(settingsForm.amenities || []).includes(a)).map(a => (
-                                            <button key={a} onClick={() => handleAddAmenity(a)} className="px-2 py-1 rounded border border-slate-200 text-xs text-slate-600 hover:bg-slate-50 transition-colors">
-                                                + {a}
-                                            </button>
-                                        ))}
-                                    </div>
                                 </div>
                             </div>
                         </div>
                     )}
-
                     <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                         <Button variant="secondary" onClick={() => setIsSettingsModalOpen(false)}>Cancel</Button>
                         <Button onClick={handleSaveSettings}>Save Changes</Button>
@@ -846,35 +760,31 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 </div>
             </Modal>
 
-            {/* ... (Keep existing modals: Patient, Doctor etc) ... */}
+            <ConfirmationModal 
+                isOpen={!!doctorToDelete}
+                onClose={() => setDoctorToDelete(null)}
+                onConfirm={confirmDoctorDelete}
+                title="Remove Doctor?"
+                message={`Are you sure you want to remove Dr. ${doctorToDelete?.name}? This will also clear their schedule and room assignments in this clinic.`}
+                confirmLabel="Remove Doctor"
+                variant="danger"
+            />
+
             <Modal isOpen={!!editingPatient} onClose={() => setEditingPatient(null)} title="Edit Patient Profile" maxWidth="max-w-md">
-                {/* ... existing content ... */}
                 {editingPatient && (
                     <form onSubmit={handleSaveEditedPatient} className="space-y-4">
-                        <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 mb-2 border border-blue-100 flex gap-2"><Activity className="h-5 w-5 flex-shrink-0" /><p>Changes apply to <strong>all visits</strong>.</p></div>
                         <Input label="Name" value={editingPatient.name} onChange={(e) => setEditingPatient({...editingPatient, name: e.target.value})} required />
                         <div className="grid grid-cols-2 gap-4">
                             <Input label="Age" value={editingPatient.age || ''} onChange={(e) => setEditingPatient({...editingPatient, age: e.target.value})} />
                             <div><label className="block text-sm font-medium text-slate-700 mb-1">Gender</label><select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={editingPatient.gender} onChange={(e) => setEditingPatient({...editingPatient, gender: e.target.value as any})}><option>Male</option><option>Female</option><option>Other</option></select></div>
                         </div>
                         <Input label="Phone" value={editingPatient.phone} onChange={(e) => setEditingPatient({...editingPatient, phone: e.target.value})} required />
-                        
-                        <div className="space-y-3 pt-2 border-t border-slate-100">
-                            <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><MapPin className="h-3 w-3" /> Address</h4>
-                            <Input label="Address" value={editingPatient.address || ''} onChange={(e) => setEditingPatient({...editingPatient, address: e.target.value})} />
-                            <div className="grid grid-cols-2 gap-3">
-                                <Input label="City" value={editingPatient.city || ''} onChange={(e) => setEditingPatient({...editingPatient, city: e.target.value})} />
-                                <Input label="Country" value={editingPatient.country || ''} onChange={(e) => setEditingPatient({...editingPatient, country: e.target.value})} />
-                            </div>
-                        </div>
-
                         <div className="pt-2 flex justify-end gap-3"><Button variant="secondary" type="button" onClick={() => setEditingPatient(null)}>Cancel</Button><Button type="submit">Save</Button></div>
                     </form>
                 )}
             </Modal>
 
             <Modal isOpen={!!vitalsPatient} onClose={() => setVitalsPatient(null)} title="Record Vitals" maxWidth="max-w-2xl">
-                {/* ... existing content ... */}
                 {vitalsPatient && (
                     <form onSubmit={handleSaveVitals} className="space-y-6">
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center"><div className="flex items-center gap-3"><div className="h-10 w-10 bg-white rounded-full flex items-center justify-center text-slate-500 font-bold border border-slate-200">{vitalsPatient.tokenNumber}</div><div><h3 className="font-bold text-slate-900">{vitalsPatient.name}</h3><p className="text-xs text-slate-500">{vitalsPatient.age} Yrs • {vitalsPatient.gender}</p></div></div></div>
@@ -891,7 +801,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             </Modal>
 
             <Modal isOpen={!!historyPatient} onClose={() => setHistoryPatient(null)} title="Patient History" maxWidth="max-w-2xl">
-                {/* ... existing content ... */}
                 {historyPatient && (() => {
                     const history = getPatientHistoryData(historyPatient);
                     return (
