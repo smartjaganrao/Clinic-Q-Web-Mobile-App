@@ -103,14 +103,13 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
                                   </div>
                               </div>
                               
-                              <Button 
-                                size="sm" 
+                              <button 
                                 onClick={(e) => { e.stopPropagation(); onBook(clinic, docInstance); }} 
-                                className={`h-7 text-[10px] px-2 font-bold shadow-sm transition-all flex-shrink-0 ${isAvailable ? 'bg-primary-600 text-white hover:bg-primary-700' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
+                                className={`h-9 px-4 rounded-xl text-[10px] font-black shadow-md transition-all flex items-center gap-1 active:scale-95 ${isAvailable ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-primary-100' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100'}`}
                               >
-                                  {isAvailable ? <Zap className="h-2.5 w-2.5 mr-0.5 fill-current" /> : <Calendar className="h-2.5 w-2.5 mr-0.5" />}
-                                  {isAvailable ? 'Join' : 'Book'}
-                              </Button>
+                                  {isAvailable ? <Zap className="h-3 w-3 fill-current" /> : <Calendar className="h-3 w-3" />}
+                                  {isAvailable ? 'Join Queue' : 'Book Slot'}
+                              </button>
                           </div>
                       </div>
                   );
