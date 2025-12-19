@@ -179,8 +179,8 @@ const OperationModeBadge: React.FC<{ mode: ClinicOperationMode }> = ({ mode }) =
     };
     const { label, styles, icon: Icon } = config[mode] || { label: mode, styles: 'bg-slate-50 text-slate-700 border-slate-200', icon: Info };
     return (
-        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full border text-[9px] font-black uppercase tracking-tight shadow-sm ${styles}`}>
-            <Icon className="h-2.5 w-2.5" />
+        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-tight shadow-sm ${styles}`}>
+            <Icon className="h-2 w-2" />
             <span className="truncate">{label}</span>
         </span>
     );
@@ -525,28 +525,33 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         <div className="h-full flex flex-col bg-slate-50 w-full max-w-[100vw] overflow-hidden">
             {/* COMPACT TOP HEADER */}
             <div className="flex flex-col flex-shrink-0 bg-white shadow-sm z-30 w-full border-b border-slate-100">
-                <div className="px-4 sm:px-6 py-2.5 sm:py-4 flex justify-between items-center">
+                <div className="px-4 sm:px-6 py-1.5 sm:py-2 flex justify-between items-center">
                     <div className="min-w-0 flex-1 flex items-center gap-3">
                         <div className="lg:hidden">
-                            <Logo className="h-8 w-8" />
+                            <Logo className="h-7 w-7" />
                         </div>
                         <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                                <h1 className="text-base sm:text-xl font-black text-slate-900 truncate tracking-tight">{clinicName}</h1>
-                                <button onClick={() => setIsSettingsModalOpen(true)} className="text-slate-300 hover:text-slate-600 p-1 transition-all"><Settings className="h-3.5 w-3.5" /></button>
+                                <h1 className="text-sm sm:text-base font-black text-slate-900 truncate tracking-tight">{clinicName}</h1>
+                                <button onClick={() => setIsSettingsModalOpen(true)} className="text-slate-300 hover:text-slate-600 p-1 transition-all"><Settings className="h-3 w-3" /></button>
                             </div>
-                            <div className="hidden sm:flex flex-wrap gap-3 mt-1 text-[10px] text-slate-400 items-center font-bold uppercase tracking-wider">
-                                <span className="text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-1.5 flex-shrink-0 font-mono">
+                            <div className="hidden sm:flex flex-wrap gap-1.5 mt-0.5 text-[8px] text-slate-400 items-center font-bold uppercase tracking-wider">
+                                <span className="text-slate-900 bg-slate-100 px-1 py-0.5 rounded flex items-center gap-1 flex-shrink-0 font-mono">
                                     {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </span>
+                                {clinicData?.operatingHours && (
+                                    <span className="text-slate-500 bg-slate-50 px-1 py-0.5 rounded flex items-center gap-1 flex-shrink-0 border border-slate-100">
+                                        <Clock className="h-2 w-2" /> {clinicData.operatingHours}
+                                    </span>
+                                )}
                                 <OperationModeBadge mode={clinicData?.operationMode || operationMode} />
                             </div>
                         </div>
                     </div>
                     
                     <div className="flex items-center gap-2 shrink-0">
-                        <Button onClick={() => setIsPatientModalOpen(true)} size="sm" className="bg-primary-600 hover:bg-primary-700 text-white font-black shadow-lg shadow-primary-100 flex items-center gap-1.5 px-3 sm:px-4 rounded-xl text-[10px] sm:text-xs">
-                            <Plus className="h-3.5 w-3.5" /> <span className="hidden xs:inline">Add Patient</span><span className="xs:hidden">Add</span>
+                        <Button onClick={() => setIsPatientModalOpen(true)} size="sm" className="bg-primary-600 hover:bg-primary-700 text-white font-black shadow-md shadow-primary-100 flex items-center gap-1.5 px-3 sm:px-4 h-7 rounded-lg text-[10px]">
+                            <Plus className="h-3 w-3" /> <span className="hidden xs:inline">Add Patient</span><span className="xs:hidden">Add</span>
                         </Button>
                         
                         {/* Desktop Tab Bar */}
@@ -555,9 +560,9 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 <button 
                                     key={item.id}
                                     onClick={() => setActiveTab(item.id as any)} 
-                                    className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-2 ${activeTab === item.id ? 'bg-white shadow-md text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}
+                                    className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1.5 ${activeTab === item.id ? 'bg-white shadow-sm text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}
                                 >
-                                    <item.icon className="h-3.5" /> {item.label}
+                                    <item.icon className="h-2.5" /> {item.label}
                                 </button>
                             ))}
                         </div>
@@ -567,35 +572,34 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 {/* Sub-header for Date selection in Queue tab */}
                 {activeTab === 'QUEUE' && (
                     <div className="bg-white border-t border-slate-100 w-full">
-                        <div className="px-4 sm:px-6 py-2 bg-slate-50/30 flex items-center gap-3 overflow-x-auto no-scrollbar">
+                        <div className="px-4 sm:px-6 py-1 bg-slate-50/30 flex items-center gap-3 overflow-x-auto no-scrollbar">
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex-shrink-0">Viewing:</span>
                             <div className="flex bg-white p-0.5 rounded-lg border border-slate-200 shadow-sm flex-shrink-0">
-                                <button onClick={() => setFilterDate(getLocalToday())} className={`px-3 py-1 rounded-md text-[9px] font-black transition-all ${filterDate === getLocalToday() ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}`}>Today</button>
-                                <button onClick={() => setFilterDate(getLocalTomorrow())} className={`px-3 py-1 rounded-md text-[9px] font-black transition-all ${filterDate === getLocalTomorrow() ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}`}>Tomorrow</button>
+                                <button onClick={() => setFilterDate(getLocalToday())} className={`px-3 py-0.5 rounded-md text-[9px] font-black transition-all ${filterDate === getLocalToday() ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}`}>Today</button>
+                                <button onClick={() => setFilterDate(getLocalTomorrow())} className={`px-3 py-0.5 rounded-md text-[9px] font-black transition-all ${filterDate === getLocalTomorrow() ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}`}>Tomorrow</button>
                             </div>
                             <div className="relative flex-shrink-0">
-                                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 text-slate-400" />
+                                <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 h-2.5 text-slate-400" />
                                 <input 
                                     type="date" 
                                     value={filterDate} 
                                     onChange={(e) => setFilterDate(e.target.value)} 
-                                    className="pl-7 pr-3 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-black focus:ring-2 focus:ring-primary-500 outline-none w-32 shadow-sm" 
+                                    className="pl-6 pr-2 py-0.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black focus:ring-2 focus:ring-primary-500 outline-none w-28 shadow-sm" 
                                 />
                             </div>
                         </div>
 
-                        {/* Doctor Quick Cards - Scrollable Grid / "Dock" Style */}
-                        <div className="flex gap-2.5 p-3 overflow-x-auto no-scrollbar bg-white snap-x snap-mandatory scroll-smooth border-b border-slate-100 shadow-inner">
+                        {/* Doctor Quick Cards - More Compact */}
+                        <div className="flex gap-2 p-2 overflow-x-auto no-scrollbar bg-white snap-x snap-mandatory scroll-smooth border-b border-slate-100 shadow-inner">
                             <button 
                                 onClick={() => setFilterDoctorId('ALL')} 
-                                className={`p-2.5 rounded-xl border transition-all text-left flex flex-col justify-between h-20 min-w-[110px] flex-shrink-0 snap-center ${filterDoctorId === 'ALL' ? 'bg-slate-900 border-slate-900 text-white shadow-xl ring-2 ring-slate-900/10' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-900 hover:shadow-lg'}`}
+                                className={`p-2 rounded-xl border transition-all text-left flex flex-col justify-between h-14 min-w-[100px] flex-shrink-0 snap-center ${filterDoctorId === 'ALL' ? 'bg-slate-900 border-slate-900 text-white shadow-md ring-2 ring-slate-900/10' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-900 hover:shadow-sm'}`}
                             >
                                 <div>
-                                    <div className="font-black text-[9px] uppercase tracking-tighter leading-none mb-1">All Doctors</div>
-                                    <div className="text-[7px] font-bold opacity-60 uppercase tracking-widest">Overview</div>
+                                    <div className="font-black text-[8px] uppercase tracking-tighter leading-none">All Doctors</div>
                                 </div>
                                 <div className="mt-auto flex justify-between items-end">
-                                    <div className="text-2xl font-black tracking-tighter leading-none">{patients.filter(p => p.status === PatientStatus.WAITING && (p.appointmentDate === filterDate || (p.visitType === 'WALK_IN' && filterDate === getLocalToday()))).length}</div>
+                                    <div className="text-xl font-black tracking-tighter leading-none">{patients.filter(p => p.status === PatientStatus.WAITING && (p.appointmentDate === filterDate || (p.visitType === 'WALK_IN' && filterDate === getLocalToday()))).length}</div>
                                     <div className="text-[7px] uppercase font-black tracking-widest mb-0.5 opacity-60">Wait</div>
                                 </div>
                             </button>
@@ -606,32 +610,29 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                     <button 
                                         key={doc.id} 
                                         onClick={() => setFilterDoctorId(isSelected ? 'ALL' : doc.id)} 
-                                        className={`p-2.5 rounded-xl border transition-all text-left relative flex flex-col h-20 min-w-[155px] flex-shrink-0 justify-between snap-center ${isSelected ? 'bg-white border-primary-500 ring-2 ring-primary-500/10 shadow-xl z-10' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+                                        className={`p-2 rounded-xl border transition-all text-left relative flex flex-col h-14 min-w-[140px] flex-shrink-0 justify-between snap-center ${isSelected ? 'bg-white border-primary-500 ring-2 ring-primary-500/10 shadow-md z-10' : 'bg-white border-slate-200 hover:border-slate-300'}`}
                                     >
                                         <div className="flex items-start gap-1.5">
                                             <div className="relative flex-shrink-0">
-                                                <img src={doc.avatarUrl} className="w-7 h-7 rounded-lg object-cover border border-slate-100" />
-                                                <div className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 border-[1.5px] border-white rounded-full ${doc.status === DoctorStatus.AVAILABLE ? 'bg-green-50' : doc.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-300'}`}></div>
+                                                <img src={doc.avatarUrl} className="w-5 h-5 rounded-lg object-cover border border-slate-100" />
+                                                <div className={`absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 border-[1px] border-white rounded-full ${doc.status === DoctorStatus.AVAILABLE ? 'bg-green-500' : doc.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-300'}`}></div>
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="font-black text-slate-900 text-[9px] truncate leading-tight">{doc.name.split(' ').pop()}</div>
-                                                <div className="text-[7px] text-slate-400 truncate mt-0.5 font-bold uppercase tracking-tight flex items-center gap-0.5">
-                                                    <Clock className="h-1.5 w-1.5 opacity-50" /> {shiftTiming.split(',')[0]}
-                                                </div>
                                             </div>
                                         </div>
                                         <div className="mt-auto">
                                             <div className="grid grid-cols-3 gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200/50">
                                                 <div className="bg-white rounded-md p-0.5 flex flex-col items-center">
-                                                    <div className="text-[6px] font-black text-slate-300 uppercase leading-none mb-0.5">Now</div>
+                                                    <div className="text-[5px] font-black text-slate-300 uppercase leading-none">Now</div>
                                                     <div className={`text-[8px] font-black ${current ? 'text-blue-600' : 'text-slate-200'}`}>{current ? `#${current.tokenNumber}` : '--'}</div>
                                                 </div>
                                                 <div className="bg-white rounded-md p-0.5 flex flex-col items-center">
-                                                    <div className="text-[6px] font-black text-slate-300 uppercase leading-none mb-0.5">Next</div>
+                                                    <div className="text-[5px] font-black text-slate-300 uppercase leading-none">Next</div>
                                                     <div className={`text-[8px] font-black ${next ? 'text-indigo-600' : 'text-slate-200'}`}>{next ? `#${next.tokenNumber}` : '--'}</div>
                                                 </div>
                                                 <div className={`rounded-md p-0.5 flex flex-col items-center ${count > 0 ? 'bg-primary-600' : 'bg-slate-200'}`}>
-                                                    <div className={`text-[6px] font-black uppercase leading-none mb-0.5 ${count > 0 ? 'text-primary-200' : 'text-slate-400'}`}>Q</div>
+                                                    <div className={`text-[5px] font-black uppercase leading-none ${count > 0 ? 'text-primary-200' : 'text-slate-400'}`}>Q</div>
                                                     <div className={`text-[8px] font-black ${count > 0 ? 'text-white' : 'text-slate-400'}`}>{count}</div>
                                                 </div>
                                             </div>
@@ -648,14 +649,14 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             <div className="flex-1 overflow-hidden relative bg-slate-100 pb-20 lg:pb-0 flex flex-col">
                 {activeTab === 'QUEUE' && (
                     <>
-                        <div className="px-4 sm:px-6 py-1 bg-white border-b border-slate-200 flex items-center justify-between shadow-sm z-10 gap-4 overflow-x-auto no-scrollbar">
-                            <div className="flex items-center gap-4 sm:gap-8 flex-shrink-0">
-                                <button onClick={() => setQueueSubTab('ACTIVE')} className={`px-2 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border-b-[3px] transition-all whitespace-nowrap ${queueSubTab === 'ACTIVE' ? 'border-primary-600 text-primary-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><Activity className="h-3.5" /> Live Queue ({subTabCounts.ACTIVE})</button>
-                                <button onClick={() => setQueueSubTab('HOLD')} className={`px-2 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border-b-[3px] transition-all whitespace-nowrap ${queueSubTab === 'HOLD' ? 'border-orange-500 text-orange-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><PauseCircle className="h-3.5" /> Hold ({subTabCounts.HOLD})</button>
-                                <button onClick={() => setQueueSubTab('COMPLETED')} className={`px-2 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border-b-[3px] transition-all whitespace-nowrap ${queueSubTab === 'COMPLETED' ? 'border-green-600 text-green-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><CheckCircle2 className="h-3.5" /> Done ({subTabCounts.COMPLETED})</button>
-                                <button onClick={() => setQueueSubTab('SKIPPED')} className={`px-2 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border-b-[3px] transition-all whitespace-nowrap ${queueSubTab === 'SKIPPED' ? 'border-rose-500 text-rose-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><UserX className="h-3.5" /> No Show ({subTabCounts.SKIPPED})</button>
+                        <div className="px-4 sm:px-6 py-0.5 bg-white border-b border-slate-200 flex items-center justify-between shadow-sm z-10 gap-4 overflow-x-auto no-scrollbar">
+                            <div className="flex items-center gap-4 sm:gap-6 flex-shrink-0">
+                                <button onClick={() => setQueueSubTab('ACTIVE')} className={`px-1 py-2 text-[9px] sm:text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 border-b-2 transition-all whitespace-nowrap ${queueSubTab === 'ACTIVE' ? 'border-primary-600 text-primary-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><Activity className="h-3" /> Live ({subTabCounts.ACTIVE})</button>
+                                <button onClick={() => setQueueSubTab('HOLD')} className={`px-1 py-2 text-[9px] sm:text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 border-b-2 transition-all whitespace-nowrap ${queueSubTab === 'HOLD' ? 'border-orange-500 text-orange-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><PauseCircle className="h-3" /> Hold ({subTabCounts.HOLD})</button>
+                                <button onClick={() => setQueueSubTab('COMPLETED')} className={`px-1 py-2 text-[9px] sm:text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 border-b-2 transition-all whitespace-nowrap ${queueSubTab === 'COMPLETED' ? 'border-green-600 text-green-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><CheckCircle2 className="h-3" /> Done ({subTabCounts.COMPLETED})</button>
+                                <button onClick={() => setQueueSubTab('SKIPPED')} className={`px-1 py-2 text-[9px] sm:text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 border-b-2 transition-all whitespace-nowrap ${queueSubTab === 'SKIPPED' ? 'border-rose-500 text-rose-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><UserX className="h-3" /> Absent ({subTabCounts.SKIPPED})</button>
                             </div>
-                            <div className="relative group w-48 sm:w-64 hidden xs:block"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 text-slate-300 group-focus-within:text-primary-500" /><input type="text" placeholder="Find token..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[9px] font-bold outline-none w-full transition-all focus:bg-white" /></div>
+                            <div className="relative group w-40 sm:w-48 hidden xs:block"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 text-slate-300" /><input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-8 pr-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold outline-none w-full transition-all focus:bg-white" /></div>
                         </div>
                         <QueueTable patients={filteredPatients} doctors={doctors} estimatedTimes={estimatedTimes} isFiltered={searchQuery !== '' || filterDoctorId !== 'ALL'} nextUpPatientIds={new Set(doctorQueueStats.map(s => s.next?.id).filter(Boolean) as string[])} onUpdateStatus={onUpdateStatus} onManualReorder={onManualReorder} onDragDrop={onDragDrop} onManualCheckIn={onManualCheckIn} onEditPatient={setEditingPatient} onVitalsClick={setVitalsPatient} onToggleEmergency={onToggleEmergency} onNoShowPatient={(id) => onUpdateStatus(id, PatientStatus.SKIPPED)} />
                     </>

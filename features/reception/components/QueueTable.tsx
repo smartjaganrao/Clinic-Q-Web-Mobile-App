@@ -68,7 +68,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
     
     if (items.length === 0) return null;
     return (
-        <div className="flex flex-wrap gap-x-2.5 gap-y-1 text-[9px] font-black text-slate-400 uppercase tracking-tighter mt-1">
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[8px] font-black text-slate-400 uppercase tracking-tighter mt-0.5">
             {items}
         </div>
     );
@@ -77,7 +77,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
   return (
     <div className="flex-1 overflow-auto bg-slate-50/50 pb-24 sm:pb-0 h-full scroll-smooth">
       {/* MOBILE CARD VIEW (< 768px) */}
-      <div className="block md:hidden p-3 space-y-3">
+      <div className="block md:hidden p-2 space-y-2">
           {patients.map(patient => {
               const doc = doctors.find(d => d.id === patient.doctorId);
               const estTimeMs = estimatedTimes[patient.id];
@@ -90,98 +90,82 @@ export const QueueTable: React.FC<QueueTableProps> = ({
               const currentlyServingToken = getDoctorServingToken(patient.doctorId);
               
               let cardClass = "bg-white border-slate-200 shadow-sm";
-              if (isServing) cardClass = "bg-blue-50/40 border-2 border-blue-600 shadow-lg shadow-blue-100 ring-4 ring-blue-500/10 z-10 scale-[1.02] transition-transform";
-              else if (isNextUp) cardClass = "border-indigo-500 shadow-md shadow-indigo-50 ring-2 ring-indigo-500/5";
+              if (isServing) cardClass = "bg-blue-50/40 border-blue-600 shadow-md ring-2 ring-blue-500/10 z-10 transition-transform";
+              else if (isNextUp) cardClass = "border-indigo-500 shadow-sm ring-1 ring-indigo-500/5";
               else if (patient.isEmergency) cardClass = "border-red-300 bg-red-50/20";
               else if (isOnHold) cardClass = "border-orange-200 bg-orange-50/10 grayscale-[0.2]";
 
               return (
-                  <div key={patient.id} className={`rounded-2xl p-4 border relative overflow-hidden transition-all duration-200 ${cardClass}`}>
+                  <div key={patient.id} className={`rounded-xl p-3 border relative overflow-hidden transition-all duration-200 ${cardClass}`}>
                       <div className="absolute top-0 right-0 flex items-start">
-                          {isServing && <div className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-bl-xl flex items-center gap-1 shadow-sm z-10 animate-pulse uppercase"><Activity className="h-2.5 w-2.5" /> Consulting</div>}
-                          {isNextUp && !isServing && <div className="bg-indigo-600 text-white text-[8px] font-black px-2 py-1 rounded-bl-xl flex items-center gap-1 shadow-sm z-10 uppercase tracking-widest">Next Up</div>}
+                          {isServing && <div className="bg-blue-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-bl-lg flex items-center gap-1 shadow-sm z-10 animate-pulse uppercase"><Activity className="h-2 w-2" /> Consulting</div>}
+                          {isNextUp && !isServing && <div className="bg-indigo-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-bl-lg flex items-center gap-1 shadow-sm z-10 uppercase tracking-widest">Next</div>}
                       </div>
                       
-                      <div className="flex items-start gap-4">
-                          <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex-shrink-0 transition-all ${isServing ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white border-blue-600 shadow-lg' : isNextUp ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'shadow-sm'}`}>
-                              <span className="text-2xl font-black tracking-tighter">{patient.tokenNumber}</span>
+                      <div className="flex items-start gap-3">
+                          <div className={`flex flex-col items-center justify-center w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex-shrink-0 transition-all ${isServing ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white border-blue-600 shadow-md' : isNextUp ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'shadow-sm'}`}>
+                              <span className="text-xl font-black tracking-tighter">{patient.tokenNumber}</span>
                           </div>
                           
                           <div className="flex-1 min-w-0">
                               <div className="flex justify-between items-start">
-                                  <h3 className="font-black text-slate-900 truncate pr-16 tracking-tight text-base">{patient.name}</h3>
+                                  <h3 className="font-black text-slate-900 truncate pr-14 tracking-tight text-sm">{patient.name}</h3>
                               </div>
-                              <div className="text-[11px] text-slate-500 font-bold mt-0.5 flex flex-col gap-0.5">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="text-primary-600 truncate max-w-[100px]">{doc?.name}</span>
+                              <div className="text-[10px] text-slate-500 font-bold mt-0.5 flex flex-col gap-0.5">
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                      <span className="text-primary-600 truncate max-w-[90px]">{doc?.name.split(' ').pop()}</span>
                                       {!isServing && <span className="text-slate-300">•</span>}
                                       {!isServing && <span className={waitMins > 30 ? 'text-rose-500 font-black' : 'font-black text-slate-700'}>~{waitMins}m Wait</span>}
                                   </div>
-                                  {!isServing && currentlyServingToken && (
-                                      <div className="text-[9px] text-blue-600 font-black flex items-center gap-1 mt-0.5 bg-blue-50 px-2 py-0.5 rounded-lg w-fit border border-blue-100/50">
-                                          <Activity className="h-2.5 w-2.5 animate-pulse" /> Consulting: #{currentlyServingToken}
-                                      </div>
-                                  )}
                                   <VitalsSummary vitals={patient.vitals} />
-                              </div>
-                              
-                              <div className="flex items-center justify-between mt-2.5">
-                                  <div className="flex items-center gap-1.5 text-[9px] text-slate-400 font-black uppercase tracking-wider">
-                                      <Clock className="h-3 w-3" /> {formatBookedTime(patient.timeAdded)}
-                                  </div>
-                                  {!isServing && estTimeMs && (
-                                      <div className="flex items-center gap-1 text-[9px] text-primary-600 font-black uppercase tracking-wider bg-primary-50 px-2 py-0.5 rounded-lg border border-primary-100">
-                                          <Hourglass className="h-2.5 w-2.5" /> Est: {formatBookedTime(estTimeMs)}
-                                      </div>
-                                  )}
                               </div>
                           </div>
                       </div>
 
-                      {/* REDESIGNED MOBILE ACTION BAR */}
-                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2">
+                      {/* REDESIGNED MOBILE ACTION BAR - COMPACT */}
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-2">
                           <div className="flex-1 flex gap-2">
                             {isServing ? (
-                                    <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.COMPLETED); }} className="flex-1 bg-green-600 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-green-100 active:scale-95 transition-all">
-                                        <CheckCircle className="h-4 w-4" /> Finish Visit
+                                    <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.COMPLETED); }} className="flex-1 bg-green-600 text-white h-9 rounded-lg font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all">
+                                        <CheckCircle className="h-3.5 w-3.5" /> Done
                                     </button>
                             ) : (
                                 (isWaiting && !isOnHold) ? (isCheckedIn ? (
-                                    <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR); }} className="flex-1 bg-primary-600 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-primary-100 active:scale-95 transition-all">
-                                        <PlayCircle className="h-4 w-4" /> Start Visit
+                                    <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR); }} className="flex-1 bg-primary-600 text-white h-9 rounded-lg font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all">
+                                        <PlayCircle className="h-3.5 w-3.5" /> Start
                                     </button>
                                 ) : (
-                                    <button onClick={(e) => { e.stopPropagation(); onManualCheckIn(patient.id); }} className="flex-1 bg-emerald-600 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 active:scale-95 transition-all">
-                                        <UserCheck className="h-4 w-4" /> Mark Arrival
+                                    <button onClick={(e) => { e.stopPropagation(); onManualCheckIn(patient.id); }} className="flex-1 bg-emerald-600 text-white h-9 rounded-lg font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all">
+                                        <UserCheck className="h-3.5 w-3.5" /> Check-In
                                     </button>
                                 )) : (
                                     isOnHold && (
-                                        <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.WAITING); }} className="flex-1 bg-orange-500 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-100 active:scale-95 transition-all">
-                                            <Play className="h-4 w-4 fill-current" /> Resume
+                                        <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.WAITING); }} className="flex-1 bg-orange-500 text-white h-9 rounded-lg font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all">
+                                            <Play className="h-3.5 w-3.5 fill-current" /> Resume
                                         </button>
                                     )
                                 )
                             )}
                           </div>
 
-                          <div className="flex gap-1.5 shrink-0">
+                          <div className="flex gap-1 shrink-0">
                                 {isWaiting && !isOnHold && (
-                                    <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.ON_HOLD); }} className="h-11 w-11 flex items-center justify-center rounded-xl border border-orange-100 text-orange-500 bg-orange-50 hover:bg-orange-100 transition-all active:scale-95" title="Hold">
-                                        <PauseCircle className="h-5 w-5" />
+                                    <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.ON_HOLD); }} className="h-9 w-9 flex items-center justify-center rounded-lg border border-orange-100 text-orange-500 bg-orange-50 active:scale-95" title="Hold">
+                                        <PauseCircle className="h-4 w-4" />
                                     </button>
                                 )}
 
-                                <button onClick={(e) => { e.stopPropagation(); onVitalsClick(patient); }} className="h-11 w-11 flex items-center justify-center rounded-xl border border-slate-100 text-slate-400 bg-white hover:bg-slate-50 transition-all active:scale-95" title="Vitals">
-                                    <Activity className="h-5 w-5" />
+                                <button onClick={(e) => { e.stopPropagation(); onVitalsClick(patient); }} className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-100 text-slate-400 bg-white active:scale-95" title="Vitals">
+                                    <Activity className="h-4 w-4" />
                                 </button>
 
-                                <button onClick={(e) => { e.stopPropagation(); onToggleEmergency(patient.id); }} className={`h-11 w-11 flex items-center justify-center rounded-xl transition-all active:scale-95 border ${patient.isEmergency ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-slate-300 border-slate-100'}`} title="Emergency">
-                                    <Zap className={`h-5 w-5 ${patient.isEmergency ? 'fill-current' : ''}`} />
+                                <button onClick={(e) => { e.stopPropagation(); onToggleEmergency(patient.id); }} className={`h-9 w-9 flex items-center justify-center rounded-lg transition-all active:scale-95 border ${patient.isEmergency ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-slate-300 border-slate-100'}`} title="Emergency">
+                                    <Zap className={`h-4 w-4 ${patient.isEmergency ? 'fill-current' : ''}`} />
                                 </button>
 
                                 {(isWaiting || isOnHold) && (
-                                    <button onClick={(e) => { e.stopPropagation(); setPatientForNoShow(patient); }} className="h-11 w-11 flex items-center justify-center rounded-xl border border-rose-100 text-rose-400 bg-rose-50/50 hover:bg-rose-100 transition-all active:scale-95" title="No Show">
-                                        <UserX className="h-5 w-5" />
+                                    <button onClick={(e) => { e.stopPropagation(); setPatientForNoShow(patient); }} className="h-9 w-9 flex items-center justify-center rounded-lg border border-rose-100 text-rose-400 bg-rose-50/50 active:scale-95" title="No Show">
+                                        <UserX className="h-4 w-4" />
                                     </button>
                                 )}
                           </div>
@@ -191,20 +175,20 @@ export const QueueTable: React.FC<QueueTableProps> = ({
           })}
       </div>
 
-      {/* DESKTOP TABLE VIEW (>= 768px) */}
-      <div className="hidden md:block min-w-[1200px] px-6 py-4">
-        <table className="w-full text-sm text-left border-separate border-spacing-y-2">
-          <thead className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] sticky top-0 z-20">
+      {/* DESKTOP TABLE VIEW (>= 768px) - Reduced height spacing */}
+      <div className="hidden md:block min-w-[1200px] px-6 py-2">
+        <table className="w-full text-sm text-left border-separate border-spacing-y-1">
+          <thead className="text-slate-400 font-black text-[9px] uppercase tracking-[0.2em] sticky top-0 z-20">
             <tr>
-              <th className="px-5 pb-3 w-20 text-center">Token</th>
-              <th className="px-5 pb-3">Patient Details</th>
-              <th className="px-5 pb-3">Reason & Vitals</th>
-              <th className="px-5 pb-3">Doctor</th>
-              <th className="px-5 pb-3 w-28">Booked At</th>
-              <th className="px-5 pb-3 w-28">Est. Turn</th>
-              <th className="px-5 pb-3">Status</th>
-              <th className="px-5 pb-3">Type</th>
-              <th className="px-5 pb-3 text-right">Actions</th>
+              <th className="px-5 pb-2 w-20 text-center">Token</th>
+              <th className="px-5 pb-2">Patient Details</th>
+              <th className="px-5 pb-2">Reason & Vitals</th>
+              <th className="px-5 pb-2">Doctor</th>
+              <th className="px-5 pb-2 w-24 text-center">Booked</th>
+              <th className="px-5 pb-2 w-24 text-center">Est. Turn</th>
+              <th className="px-5 pb-2">Status</th>
+              <th className="px-5 pb-2">Type</th>
+              <th className="px-5 pb-2 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="align-middle">
@@ -218,9 +202,9 @@ export const QueueTable: React.FC<QueueTableProps> = ({
               const currentlyServingToken = getDoctorServingToken(patient.doctorId);
               const estTimeMs = estimatedTimes[patient.id];
               
-              let rowStateClass = "bg-white border-slate-100 hover:border-primary-200 hover:shadow-xl shadow-sm";
-              if (isServing) rowStateClass = "bg-blue-50/30 border-2 border-blue-500 shadow-xl shadow-blue-100 scale-[1.01] z-10 relative ring-4 ring-blue-500/10";
-              else if (isNextUp) rowStateClass = "bg-indigo-50/10 border-indigo-300 shadow-lg shadow-indigo-50 ring-4 ring-indigo-500/5";
+              let rowStateClass = "bg-white border-slate-100 hover:border-primary-200 hover:shadow-md shadow-sm";
+              if (isServing) rowStateClass = "bg-blue-50/20 border-blue-500 shadow-md ring-2 ring-blue-500/10 z-10 relative";
+              else if (isNextUp) rowStateClass = "bg-indigo-50/10 border-indigo-300 shadow-sm ring-2 ring-indigo-500/5";
               else if (isOnHold) rowStateClass = "bg-orange-50/10 border-orange-200 grayscale-[0.2]";
 
               return (
@@ -231,134 +215,125 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                   onDragOver={(e) => { if (draggedId && draggedId !== patient.id && isWaiting && !isFiltered) { e.preventDefault(); } }}
                   onDrop={(e) => { e.preventDefault(); if (draggedId && draggedId !== patient.id && !isFiltered) { onDragDrop(draggedId, patient.id); setDraggedId(null); } }}
                   onDragEnd={() => setDraggedId(null)}
-                  className={`transition-all duration-300 rounded-[1.5rem] border ${rowStateClass} group relative`}
+                  className={`transition-all duration-300 rounded-xl border ${rowStateClass} group relative`}
                 >
-                  <td className="px-4 py-3 text-center rounded-l-[1.5rem]">
+                  <td className="px-4 py-1.5 text-center rounded-l-xl">
                     <div className="flex flex-col items-center justify-center">
                       <div className={`
-                        inline-flex items-center justify-center h-11 w-11 rounded-[1.1rem] font-black text-base shadow-lg border-2 transition-all
+                        inline-flex items-center justify-center h-9 w-9 rounded-lg font-black text-sm shadow-sm border transition-all
                         ${patient.isEmergency ? 'bg-rose-500 text-white border-rose-600 shadow-rose-200' : 
-                          isServing ? 'bg-blue-600 text-white border-blue-700 animate-pulse shadow-blue-200' : 
+                          isServing ? 'bg-blue-600 text-white border-blue-700 shadow-blue-200' : 
                           isNextUp ? 'bg-indigo-600 text-white border-indigo-700 shadow-indigo-200' : 
                           'bg-white text-slate-700 border-slate-100'}
                       `}>
                         {patient.tokenNumber}
                       </div>
-                      {isNextUp && isWaiting && !isServing && (
-                          <div className="text-[7px] font-black text-indigo-600 uppercase tracking-[0.2em] mt-1.5">Next Up</div>
-                      )}
                     </div>
                   </td>
                   
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-1.5">
                     <div className="flex flex-col">
-                      <div className="font-black text-[15px] text-slate-900 flex items-center gap-2 group-hover:text-primary-700 transition-colors">
+                      <div className="font-black text-xs text-slate-900 group-hover:text-primary-700 transition-colors truncate max-w-[150px]">
                           {patient.name}
-                          {isNextUp && <Zap className="h-3 w-3 text-indigo-500 fill-indigo-500" />}
                       </div>
-                      <div className="flex items-center gap-2 text-[10px] text-slate-400 font-black uppercase mt-1 leading-none">
+                      <div className="flex items-center gap-1 text-[9px] text-slate-400 font-bold uppercase mt-0.5 leading-none">
                         <span>{patient.age}Y</span><span className="opacity-30">•</span><span>{patient.gender}</span><span className="opacity-30">•</span><span className="font-mono text-slate-500">{patient.phone}</span>
                       </div>
-                      {!isServing && !isCompleted && currentlyServingToken && (
-                        <div className="mt-1.5 text-[9px] text-blue-600 font-black uppercase tracking-widest flex items-center gap-1.5 bg-blue-50/50 px-2 py-0.5 rounded-lg border border-blue-100/50 w-fit">
-                          <Activity className="h-2.5 w-2.5 animate-pulse" /> Consulting: #{currentlyServingToken}
-                        </div>
-                      )}
                     </div>
                   </td>
 
-                  <td className="px-5 py-3">
-                      <div className="flex flex-col gap-1.5">
-                          <div className="text-[11px] text-slate-500 font-bold max-w-[180px] truncate leading-tight italic" title={patient.symptoms}>
-                              {patient.symptoms || <span className="text-slate-300 font-normal">No reason provided</span>}
+                  <td className="px-5 py-1.5">
+                      <div className="flex flex-col">
+                          <div className="text-[10px] text-slate-500 font-bold max-w-[160px] truncate leading-tight italic" title={patient.symptoms}>
+                              {patient.symptoms || <span className="text-slate-300 font-normal">No reason</span>}
                           </div>
                           <VitalsSummary vitals={patient.vitals} />
                       </div>
                   </td>
 
-                  <td className="px-5 py-3">
-                    <div className="text-slate-900 font-black text-xs leading-none">{doc?.name || 'Unknown'}</div>
-                    <div className="text-[9px] text-slate-400 uppercase tracking-widest font-black mt-1.5">{doc?.specialty}</div>
+                  <td className="px-5 py-1.5">
+                    <div className="text-slate-900 font-black text-[11px] leading-none">Dr. {doc?.name.split(' ').pop()}</div>
+                    <div className="text-[8px] text-slate-400 uppercase tracking-widest font-black mt-1 leading-none">{doc?.specialty}</div>
                   </td>
 
-                  <td className="px-5 py-3">
-                      <div className="flex items-center gap-2 text-[10px] text-slate-500 font-black bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-100 w-fit shadow-inner">
-                          <Clock className="h-3 w-3 text-slate-300" /> {formatBookedTime(patient.timeAdded)}
+                  <td className="px-5 py-1.5 text-center">
+                      <div className="inline-flex items-center gap-1 text-[9px] text-slate-500 font-black bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 shadow-inner">
+                          {formatBookedTime(patient.timeAdded)}
                       </div>
                   </td>
 
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-1.5 text-center">
                       {isServing ? (
-                          <div className="text-[10px] text-blue-600 font-black uppercase tracking-widest flex items-center gap-1.5 bg-blue-50 px-2.5 py-1.5 rounded-xl border border-blue-100 w-fit">
+                          <div className="text-[9px] text-blue-600 font-black uppercase tracking-widest bg-blue-50 px-2 py-1 rounded-lg border border-blue-100">
                               Now
                           </div>
                       ) : (isWaiting || isOnHold) && estTimeMs ? (
-                          <div className={`flex items-center gap-2 text-[10px] font-black px-2.5 py-1.5 rounded-xl border w-fit shadow-sm ${estTimeMs - Date.now() > 3600000 ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-primary-50 text-primary-700 border-primary-100'}`}>
-                              <Hourglass className="h-3 w-3 opacity-50" /> {formatBookedTime(estTimeMs)}
+                          <div className={`inline-flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-lg border shadow-sm ${estTimeMs - Date.now() > 3600000 ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-primary-50 text-primary-700 border-primary-100'}`}>
+                              {formatBookedTime(estTimeMs)}
                           </div>
                       ) : (
-                          <div className="text-[10px] text-slate-300 font-black uppercase tracking-widest">--</div>
+                          <div className="text-[9px] text-slate-300 font-black uppercase tracking-widest">--</div>
                       )}
                   </td>
                   
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-1.5">
                       {isServing ? (
-                          <div className="flex items-center gap-2 text-white bg-blue-600 px-3 py-1.5 rounded-full shadow-lg shadow-blue-100 w-fit ring-2 ring-blue-500/20">
-                              <Activity className="h-3.5 w-3.5 animate-pulse" />
-                              <span className="text-[10px] font-black uppercase tracking-widest">Consulting</span>
+                          <div className="flex items-center gap-1 text-white bg-blue-600 px-2 py-1 rounded-full shadow-md w-fit ring-1 ring-blue-500/20">
+                              <Activity className="h-2.5 w-2.5 animate-pulse" />
+                              <span className="text-[8px] font-black uppercase tracking-widest">Active</span>
                           </div>
                       ) : isNextUp && isWaiting ? (
-                        <div className="flex items-center gap-2 text-indigo-700 bg-indigo-50 border-2 border-indigo-100 px-3 py-1 rounded-full shadow-sm w-fit">
-                            <ArrowRightCircle className="h-3.5 w-3.5" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Next Ready</span>
+                        <div className="flex items-center gap-1 text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full shadow-sm w-fit">
+                            <ArrowRightCircle className="h-2.5 w-2.5" />
+                            <span className="text-[8px] font-black uppercase tracking-widest">Next</span>
                         </div>
                       ) : <Badge status={patient.status} />}
                   </td>
 
-                  <td className="px-5 py-3">
-                      <span className={`text-[9px] px-2 py-1 rounded-lg border-2 font-black uppercase tracking-widest ${patient.visitType === 'APPOINTMENT' ? 'text-purple-700 bg-purple-50 border-purple-100' : 'text-slate-500 bg-slate-50 border-slate-100'}`}>
+                  <td className="px-5 py-1.5">
+                      <span className={`text-[8px] px-1.5 py-0.5 rounded-md border font-black uppercase tracking-tighter ${patient.visitType === 'APPOINTMENT' ? 'text-purple-700 bg-purple-50 border-purple-100' : 'text-slate-500 bg-slate-50 border-slate-100'}`}>
                         {patient.visitType}
                       </span>
                   </td>
 
-                  <td className="px-5 py-3 text-right rounded-r-[1.5rem]">
-                    <div className="flex justify-end gap-2 items-center">
+                  <td className="px-5 py-1.5 text-right rounded-r-xl">
+                    <div className="flex justify-end gap-1.5 items-center">
                       {(isWaiting || isOnHold) && (
-                          <button onClick={() => onToggleEmergency(patient.id)} className={`p-2 rounded-xl transition-all hover:scale-110 active:scale-95 ${patient.isEmergency ? 'bg-red-50 text-red-600 shadow-inner border border-red-200' : 'bg-slate-100 text-slate-400 hover:bg-rose-50 hover:text-rose-500 border border-transparent'}`} title="Emergency"><Zap className="h-4 w-4" /></button>
+                          <button onClick={() => onToggleEmergency(patient.id)} className={`p-1.5 rounded-lg transition-all ${patient.isEmergency ? 'bg-red-50 text-red-600 border border-red-200 shadow-inner' : 'bg-slate-50 text-slate-300 hover:text-rose-500 border border-transparent'}`} title="Urgent"><Zap className="h-3.5 w-3.5" /></button>
                       )}
                       
                       {isWaiting && !isOnHold && (patient.isCheckedIn ? 
                         <button 
                             onClick={() => onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR)} 
-                            className={`px-5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center gap-2 ${isNextUp ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100' : 'bg-primary-600 hover:bg-primary-700 text-white shadow-primary-100'}`}
+                            className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider shadow-md transition-all active:scale-95 flex items-center gap-1.5 ${isNextUp ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-primary-600 hover:bg-primary-700 text-white'}`}
                         >
-                            <PlayCircle className="h-4 w-4" /> Start
+                            <PlayCircle className="h-3.5 w-3.5" /> Start
                         </button> : 
-                        <button onClick={() => onManualCheckIn(patient.id)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-emerald-100 transition-all active:scale-95">Check-in</button>
+                        <button onClick={() => onManualCheckIn(patient.id)} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider shadow-md transition-all active:scale-95">In</button>
                       )}
                       
                       {isServing && (
-                        <button onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)} className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-green-100 transition-all active:scale-95 flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4" /> Done
+                        <button onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider shadow-md transition-all active:scale-95 flex items-center gap-1.5">
+                            <CheckCircle className="h-3.5 w-3.5" /> Done
                         </button>
                       )}
 
                       {isWaiting && !isOnHold && (
                           <button 
                             onClick={() => onUpdateStatus(patient.id, PatientStatus.ON_HOLD)} 
-                            className="p-2 bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200 rounded-xl transition-all hover:scale-110" 
-                            title="Put on Hold"
+                            className="p-1.5 bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-100 rounded-lg" 
+                            title="Hold"
                           >
-                            <PauseCircle className="h-4 w-4" />
+                            <PauseCircle className="h-3.5 w-3.5" />
                           </button>
                       )}
 
                       {isOnHold && (
-                          <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WAITING)} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg transition-all active:scale-95">Resume</button>
+                          <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WAITING)} className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[9px] font-black uppercase tracking-wider shadow-md">Resume</button>
                       )}
 
-                      <button onClick={(e) => { e.stopPropagation(); onVitalsClick(patient); }} className="p-2 bg-slate-50 text-slate-400 hover:bg-blue-50 hover:text-blue-600 border border-slate-100 rounded-xl transition-all hover:scale-110" title="Vitals"><Activity className="h-4 w-4" /></button>
-                      <button onClick={() => setPatientForNoShow(patient)} className="p-2 bg-slate-50 text-slate-300 hover:bg-rose-50 hover:text-rose-500 border border-slate-100 rounded-xl transition-all hover:scale-110" title="No Show"><UserX className="h-4 w-4" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); onVitalsClick(patient); }} className="p-1.5 bg-slate-50 text-slate-400 hover:bg-blue-50 hover:text-blue-600 border border-slate-100 rounded-lg" title="Vitals"><Activity className="h-3.5 w-3.5" /></button>
+                      <button onClick={() => setPatientForNoShow(patient)} className="p-1.5 bg-slate-50 text-slate-300 hover:bg-rose-50 hover:text-rose-500 border border-slate-100 rounded-lg" title="No Show"><UserX className="h-3.5 w-3.5" /></button>
                     </div>
                   </td>
                 </tr>

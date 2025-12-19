@@ -323,7 +323,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const [viewingDoctor, setViewingDoctor] = useState<Doctor | null>(null);
-  const [feedbackModal, setFeedbackModal] = useState<{ isOpen: boolean; visit: any | null; rating: number; text: string }>({ isOpen: false, visit: null; rating: 0, text: '' });
+  const [feedbackModal, setFeedbackModal] = useState<{ isOpen: boolean; visit: any | null; rating: number; text: string }>({ isOpen: false, visit: null, rating: 0, text: '' });
 
   const navigateToView = (view: 'LIST' | 'CLINIC_DETAILS' | null, clinic?: Clinic | null, doctor?: Doctor) => {
       if (view === 'LIST') navigate('/patient/find');
