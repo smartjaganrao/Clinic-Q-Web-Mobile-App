@@ -1,11 +1,12 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
-import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff, ClinicOperationMode, Clinic, AppointmentConfig } from '../types';
+import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff, ClinicOperationMode, Clinic, AppointmentConfig, TimeSlot } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
 import { Card } from '../components/Card';
 import { 
-    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin, Settings, Footprints, CalendarClock, Shuffle, Building2, ImageIcon, Plus, X, Globe, Crosshair, Trash2, Info, LayoutGrid, Zap, Mail, Shield, Save, Calendar
+    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin, Settings, Footprints, CalendarClock, Shuffle, Building2, ImageIcon, Plus, X, Globe, Crosshair, Trash2, Info, LayoutGrid, Zap, Mail, Shield, Save, Calendar, CheckCircle2, PauseCircle, Timer, Bell, MessageSquare, ShieldCheck, Repeat, Clock3, AlertCircle, CalendarX, Menu, UserX, Navigation, Navigation2
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -17,6 +18,7 @@ import { ReceptionStats } from '../features/reception/components/ReceptionStats'
 import { AddPatientModal } from '../features/reception/components/AddPatientModal';
 import { DoctorFormModal } from '../features/reception/components/DoctorFormModal';
 import { ConfirmationModal } from '../components/ConfirmationModal';
+import { Logo } from '../components/Logo';
 
 // --- HELPERS ---
 const getLocalToday = () => {
@@ -43,14 +45,35 @@ const format12h = (time24: string) => {
     const m = mStr.padStart(2, '0');
     const ampm = h >= 12 ? 'PM' : 'AM';
     h = h % 12;
-    h = h ? h : 12;
-    return `${h}:${m} ${ampm}`;
+    h = h ? h : 12; // the hour '0' should be '12'
+    return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
 };
 
-// --- MAP COMPONENTS ---
-const DefaultIcon = L.divIcon({
-    className: 'custom-pin',
-    html: `<div style="background-color: #ef4444; width: 1.5rem; height: 1.5rem; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);"></div>`,
+const parse12hTo24h = (time12: string) => {
+    if (!time12 || typeof time12 !== 'string') return "09:00";
+    const cleanTime = time12.trim().toUpperCase();
+    if (cleanTime === '24 HOURS') return "00:00";
+    
+    const parts = cleanTime.split(/\s+/);
+    if (parts.length < 2) return "09:00";
+    
+    const [time, modifier] = parts;
+    const timeParts = time.split(':');
+    if (timeParts.length < 2) return "09:00";
+    
+    let hours = parseInt(timeParts[0]);
+    const minutes = timeParts[1].padStart(2, '0');
+    
+    if (modifier === 'PM' && hours !== 12) hours += 12;
+    if (modifier === 'AM' && hours === 12) hours = 0;
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes}`;
+};
+
+// --- MAP COMPONENTS FOR SETTINGS ---
+const SettingsPinIcon = L.divIcon({
+    className: 'settings-pin',
+    html: `<div style="background-color: #0d9488; width: 1.5rem; height: 1.5rem; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);"></div>`,
     iconSize: [24, 24],
     iconAnchor: [12, 12],
 });
@@ -67,9 +90,33 @@ const MapClickHandler = ({ onLocationSelect }: { onLocationSelect: (lat: number,
 const MapUpdater = ({ center }: { center: [number, number] }) => {
     const map = useMap();
     useEffect(() => {
-        map.flyTo(center, map.getZoom());
+        map.flyTo(center, 14);
     }, [center, map]);
     return null;
+};
+
+// Helper for draggable marker to update coordinates
+const DraggableSettingsMarker = ({ position, onDragEnd }: { position: [number, number], onDragEnd: (lat: number, lng: number) => void }) => {
+    const markerRef = React.useRef<L.Marker>(null);
+    const eventHandlers = useMemo(() => ({
+        dragend() {
+            const marker = markerRef.current;
+            if (marker != null) {
+                const { lat, lng } = marker.getLatLng();
+                onDragEnd(lat, lng);
+            }
+        },
+    }), [onDragEnd]);
+
+    return (
+        <Marker 
+            draggable={true} 
+            eventHandlers={eventHandlers} 
+            position={position} 
+            icon={SettingsPinIcon} 
+            ref={markerRef} 
+        />
+    );
 };
 
 interface ReceptionDashboardProps {
@@ -79,7 +126,7 @@ interface ReceptionDashboardProps {
     clinicName: string;
     clinicType?: ClinicType;
     operationMode?: ClinicOperationMode; 
-    clinicData?: Clinic; // Pass full clinic data for settings
+    clinicData?: Clinic; 
     onAddPatient: (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string, nextOfKin?: {name: string, phone: string}, address?: string, city?: string, country?: string, location?: {lat: number, lng: number}) => void;
     onEditPatient: (id: string, updates: Partial<Patient>) => void;
     onDeletePatient: (id: string) => void;
@@ -96,22 +143,12 @@ interface ReceptionDashboardProps {
     onDragDrop: (draggedId: string, targetId: string) => void;
     onManualCheckIn: (id: string) => void;
     onBulkUpdateStatus?: (ids: string[], status: PatientStatus) => void;
-    // Staff Props
     onAddStaff?: (staff: Staff) => void;
     onUpdateStaff?: (id: string, updates: Partial<Staff>) => void;
     onDeleteStaff?: (id: string) => void;
     addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
-const COMMON_AMENITIES = [
-  'Pharmacy', 'Pathology Lab', 'X-Ray', 'Ultrasound',
-  'Parking', 'Wheelchair Access', 'Wifi', 'Cafeteria',
-  'Ambulance', '24x7 Emergency', 'ICU', 'Operation Theater'
-];
-
-/**
- * OperationModeBadge Component
- */
 const OperationModeBadge: React.FC<{ mode: ClinicOperationMode }> = ({ mode }) => {
     const config = {
         [ClinicOperationMode.DIRECT_WALK_IN]: {
@@ -140,13 +177,11 @@ const OperationModeBadge: React.FC<{ mode: ClinicOperationMode }> = ({ mode }) =
             icon: LayoutGrid
         }
     };
-
     const { label, styles, icon: Icon } = config[mode] || { label: mode, styles: 'bg-slate-50 text-slate-700 border-slate-200', icon: Info };
-
     return (
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-black uppercase tracking-tight shadow-sm ${styles}`}>
-            <Icon className="h-3 w-3" />
-            {label}
+        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full border text-[9px] font-black uppercase tracking-tight shadow-sm ${styles}`}>
+            <Icon className="h-2.5 w-2.5" />
+            <span className="truncate">{label}</span>
         </span>
     );
 };
@@ -161,11 +196,15 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     const [activeTab, setActiveTab] = useState<'QUEUE' | 'DATABASE' | 'DOCTORS' | 'STAFF' | 'REPORTS' | 'APPOINTMENTS'>('QUEUE');
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDoctorId, setFilterDoctorId] = useState<string>('ALL');
-    const [filterStatus, setFilterStatus] = useState<string>('ACTIVE'); 
+    const [queueSubTab, setQueueSubTab] = useState<'ACTIVE' | 'HOLD' | 'COMPLETED' | 'SKIPPED'>('ACTIVE');
     const [filterDate, setFilterDate] = useState<string>(getLocalToday());
-
     const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false); 
+
+    // Feature Specific Modals
+    const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
+    const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
+    const [newHolidayDate, setNewHolidayDate] = useState('');
     
     // Doctor Modal State
     const [isDoctorModalOpen, setIsDoctorModalOpen] = useState(false);
@@ -176,8 +215,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
     // Patient History Deletion State
     const [patientHistoryToDelete, setPatientHistoryToDelete] = useState<Patient | null>(null);
-
-    // Edit Patient Modal
     const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
     const [vitalsPatient, setVitalsPatient] = useState<Patient | null>(null);
     const [historyPatient, setHistoryPatient] = useState<Patient | null>(null);
@@ -185,9 +222,11 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     // Settings State
     const [activeSettingsTab, setActiveSettingsTab] = useState<'GENERAL' | 'LOCATION' | 'BRANDING'>('GENERAL');
     const [settingsForm, setSettingsForm] = useState<Partial<Clinic>>({});
+    const [hoursRange, setHoursRange] = useState({ start: '09:00', end: '21:00' });
     const [newAmenity, setNewAmenity] = useState('');
     const [mapSearchQuery, setMapSearchQuery] = useState('');
     const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+    const [isDetectingLocation, setIsDetectingLocation] = useState(false);
 
     // Appointment Config State
     const [apptConfig, setApptConfig] = useState<AppointmentConfig>({
@@ -195,37 +234,42 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         bufferTime: 5,
         maxDaysInAdvance: 14,
         enableEmailNotifications: true,
-        emailTemplate: 'Your appointment at {clinic_name} with {doctor_name} is confirmed for {date} at {time}.'
+        emailTemplate: 'Your appointment at {clinic_name} with {doctor_name} is confirmed for {date} at {time}.',
+        lateArrivalThreshold: 10,
+        lateArrivalAction: 'PENALTY'
     });
 
-    // Sync appointment config from clinicData
     useEffect(() => {
         if (clinicData?.appointmentConfig) {
-            setApptConfig(clinicData.appointmentConfig);
+            setApptConfig(prev => ({
+                ...prev,
+                ...clinicData.appointmentConfig
+            }));
         }
     }, [clinicData]);
 
-    // Deck State
-    const [isDeckExpanded, setIsDeckExpanded] = useState(false);
-    const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
-
-    // Time State
     const [currentTime, setCurrentTime] = useState(new Date());
-
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
 
-    useEffect(() => {
-        const handleResize = () => setIsMobile(window.innerWidth < 640);
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
-
     // Sync settings state when modal opens
     useEffect(() => {
         if (isSettingsModalOpen && clinicData) {
+            const h = clinicData.operatingHours || '09:00 AM - 09:00 PM';
+            let startVal = '09:00';
+            let endVal = '21:00';
+            
+            if (h.toUpperCase() !== '24 HOURS' && h.includes(' - ')) {
+                const [startPart, endPart] = h.split(' - ');
+                startVal = parse12hTo24h(startPart);
+                endVal = parse12hTo24h(endPart);
+            } else if (h.toUpperCase() === '24 HOURS') {
+                startVal = '00:00';
+                endVal = '23:59';
+            }
+
             setSettingsForm({
                 name: clinicName,
                 operationMode: clinicData.operationMode || operationMode,
@@ -237,8 +281,12 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 pincode: clinicData.pincode || '',
                 imageUrl: clinicData.imageUrl || '',
                 amenities: clinicData.amenities || [],
-                operatingHours: clinicData.operatingHours || '09:00 AM - 09:00 PM',
+                operatingHours: h,
                 geoLocation: clinicData.geoLocation || { lat: 13.0827, lng: 80.2707 } 
+            });
+            setHoursRange({
+                start: startVal,
+                end: endVal
             });
             setActiveSettingsTab('GENERAL');
             setMapSearchQuery('');
@@ -264,6 +312,29 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         } finally {
             setIsSearchingLocation(false);
         }
+    };
+
+    const handleDetectLocation = () => {
+        if (!navigator.geolocation) {
+            addToast("Geolocation not supported", "error");
+            return;
+        }
+        setIsDetectingLocation(true);
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                setSettingsForm(prev => ({ 
+                    ...prev, 
+                    geoLocation: { lat: pos.coords.latitude, lng: pos.coords.longitude } 
+                }));
+                setIsDetectingLocation(false);
+                addToast("Current location detected!", "success");
+            },
+            (err) => {
+                setIsDetectingLocation(false);
+                addToast("Could not detect location. Please check permissions.", "error");
+            },
+            { enableHighAccuracy: true }
+        );
     };
 
     const estimatedTimes = useMemo(() => {
@@ -296,51 +367,31 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 if (orderA !== orderB) return orderA - orderB;
             }
             if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
-            
-            if (a.isEmergency && b.isEmergency) {
-                const hasNokA = a.nextOfKin?.name && a.nextOfKin?.phone;
-                const hasNokB = b.nextOfKin?.name && b.nextOfKin?.phone;
-                if (hasNokA !== hasNokB) return hasNokA ? 1 : -1; 
-            }
-
             const checkInA = a.isCheckedIn ? 1 : 0;
             const checkInB = b.isCheckedIn ? 1 : 0;
             if (checkInA !== checkInB) return checkInB - checkInA;
-
-            const getStatusPriority = (s: PatientStatus) => {
-                if (s === PatientStatus.ON_HOLD) return 0;
-                if (s === PatientStatus.WAITING) return 1;
-                return 2;
-            };
-            const priorityA = getStatusPriority(a.status);
-            const priorityB = getStatusPriority(b.status);
-            if (priorityA !== priorityB) return priorityA - priorityB;
-            const getSortTime = (p: Patient) => {
-                if (p.visitType === 'APPOINTMENT' && p.appointmentDate && p.appointmentTime) {
-                    return new Date(`${p.appointmentDate}T${p.appointmentTime}:00`).getTime();
-                }
-                return p.timeAdded;
-            };
-            return getSortTime(a) - getSortTime(b);
+            return a.timeAdded - b.timeAdded;
         });
     };
 
     const filteredPatients = useMemo(() => {
-        let list = patients;
-
-        // Date Filter
-        list = list.filter(p => {
+        let list = patients.filter(p => {
             const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate 
                 ? p.appointmentDate 
                 : new Date(p.timeAdded).toISOString().split('T')[0];
             return pDate === filterDate;
         });
 
-        if (filterStatus === 'ACTIVE') {
-            list = list.filter(p => p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED && p.status !== PatientStatus.SKIPPED);
-        } else if (filterStatus !== 'ALL') {
-            list = list.filter(p => p.status === filterStatus);
+        if (queueSubTab === 'ACTIVE') {
+            list = list.filter(p => p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR);
+        } else if (queueSubTab === 'HOLD') {
+            list = list.filter(p => p.status === PatientStatus.ON_HOLD);
+        } else if (queueSubTab === 'COMPLETED') {
+            list = list.filter(p => p.status === PatientStatus.COMPLETED);
+        } else if (queueSubTab === 'SKIPPED') {
+            list = list.filter(p => p.status === PatientStatus.SKIPPED);
         }
+
         if (filterDoctorId !== 'ALL') {
             list = list.filter(p => p.doctorId === filterDoctorId);
         }
@@ -349,19 +400,30 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             list = list.filter(p => p.name.toLowerCase().includes(q) || p.phone.includes(q) || p.tokenNumber.toString().includes(q));
         }
         return sortPatients([...list]);
-    }, [patients, filterStatus, filterDoctorId, searchQuery, filterDate]);
+    }, [patients, queueSubTab, filterDoctorId, searchQuery, filterDate]);
+
+    const subTabCounts = useMemo(() => {
+        const dateFiltered = patients.filter(p => {
+            const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate 
+                ? p.appointmentDate 
+                : new Date(p.timeAdded).toISOString().split('T')[0];
+            return pDate === filterDate;
+        });
+        const docFiltered = filterDoctorId === 'ALL' ? dateFiltered : dateFiltered.filter(p => p.doctorId === filterDoctorId);
+        return {
+            ACTIVE: docFiltered.filter(p => p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR).length,
+            HOLD: docFiltered.filter(p => p.status === PatientStatus.ON_HOLD).length,
+            COMPLETED: docFiltered.filter(p => p.status === PatientStatus.COMPLETED).length,
+            SKIPPED: docFiltered.filter(p => p.status === PatientStatus.SKIPPED).length
+        };
+    }, [patients, filterDate, filterDoctorId]);
 
     const uniquePatients = useMemo(() => {
         const unique = new Map<string, Patient>();
         patients.forEach(p => {
             const key = `${p.phone}_${p.name.toLowerCase()}`;
-            if (!unique.has(key)) {
-                unique.set(key, p);
-            } else {
-                if (p.timeAdded > unique.get(key)!.timeAdded) {
-                    unique.set(key, p);
-                }
-            }
+            if (!unique.has(key)) unique.set(key, p);
+            else if (p.timeAdded > unique.get(key)!.timeAdded) unique.set(key, p);
         });
         let list = Array.from(unique.values());
         if (searchQuery) {
@@ -371,133 +433,60 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         return list;
     }, [patients, searchQuery]);
 
-    const nextUpPatientIds = useMemo(() => {
-        const ids = new Set<string>();
-        doctors.forEach(doc => {
-            const queue = patients
-                .filter(p => p.doctorId === doc.id && (p.status === PatientStatus.WAITING || p.status === PatientStatus.ON_HOLD));
-            const sortedQueue = sortPatients([...queue]);
-            if (sortedQueue.length > 0) ids.add(sortedQueue[0].id);
-        });
-        return ids;
-    }, [patients, doctors]);
+    const isDoctorOnShift = (doc: Doctor, targetDate: string) => {
+        const dayName = new Date(targetDate).toLocaleDateString('en-US', { weekday: 'long' });
+        const schedule = doc.weeklySchedule.find(s => s.day === dayName);
+        if (!schedule || schedule.isOff || !schedule.slots?.length) return false;
+        if (targetDate === getLocalToday()) {
+            const now = new Date();
+            const currentMins = now.getHours() * 60 + now.getMinutes();
+            return schedule.slots.some(slot => {
+                const [sh, sm] = slot.startTime.split(':').map(Number);
+                const [eh, em] = slot.endTime.split(':').map(Number);
+                const sTotal = sh * 60 + sm;
+                let eTotal = eh * 60 + em;
+                if (eTotal <= sTotal) eTotal += 1440;
+                return currentMins >= sTotal && currentMins < eTotal;
+            });
+        }
+        return true; 
+    };
 
     const doctorQueueStats = useMemo(() => {
-        return doctors.map(doc => {
+        const activeDocs = doctors.filter(doc => isDoctorOnShift(doc, filterDate));
+        return activeDocs.map(doc => {
             const queue = patients.filter(p => {
                 const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
                 return p.doctorId === doc.id && (p.status === PatientStatus.WAITING || p.status === PatientStatus.ON_HOLD) && pDate === filterDate;
             });
             const current = patients.find(p => p.doctorId === doc.id && p.status === PatientStatus.WITH_DOCTOR);
-            const sortedQueue = sortPatients([...queue]);
-            const next = sortedQueue.length > 0 ? sortedQueue[0] : null;
-            
-            // Get Shift Timings for the selected date
+            const next = sortPatients([...queue])[0] || null;
             const dayName = new Date(filterDate).toLocaleDateString('en-US', { weekday: 'long' });
             const schedule = doc.weeklySchedule.find(s => s.day === dayName);
             const shiftTiming = schedule && !schedule.isOff && schedule.slots.length > 0 
                 ? schedule.slots.map(s => `${format12h(s.startTime)} - ${format12h(s.endTime)}`).join(', ')
                 : 'Off Duty';
-
             return { doc, count: queue.length, current, next, shiftTiming };
         });
     }, [doctors, patients, filterDate]);
 
-    const visibleDeckStats = useMemo(() => {
-        if (isDeckExpanded) return doctorQueueStats;
-        const limit = isMobile ? 1 : 5;
-        return doctorQueueStats.slice(0, limit);
-    }, [doctorQueueStats, isDeckExpanded, isMobile]);
-
-    const hiddenDeckCount = doctorQueueStats.length - visibleDeckStats.length;
-
-    const handleSaveDoctor = (data: any) => {
-        if (doctorModalMode === 'ADD') {
-            onAddDoctor(data.name, data.specialty, data.room, data.schedule, data.mobile, data.regNo, data.masterId, data.avatarUrl, parseFloat(data.fee), parseFloat(data.consultationTime));
-        } else if (editingDoctorId) {
-            onEditDoctor(editingDoctorId, {
-                ...data,
-                weeklySchedule: data.schedule,
-                consultationFee: parseFloat(data.fee),
-                consultationTime: parseFloat(data.consultationTime)
-            });
-        }
-    };
-
-    const confirmDoctorDelete = () => {
-        if (doctorToDelete) {
-            onDeleteDoctor(doctorToDelete.id);
-            setDoctorToDelete(null);
-        }
-    };
-
-    const confirmPatientHistoryDelete = () => {
-        if (patientHistoryToDelete) {
-            const idsToDelete = patients.filter(pat => pat.phone === patientHistoryToDelete.phone).map(pat => pat.id);
-            onDeleteMultiplePatients(idsToDelete);
-            setPatientHistoryToDelete(null);
-            addToast(`History for ${patientHistoryToDelete.name} deleted`, 'info');
-        }
-    };
-
-    const handleAddPresetSlot = (doctorId: string, day: string) => {
-        const doc = doctors.find(d => d.id === doctorId);
-        if (doc) {
-            const newSchedule = doc.weeklySchedule.map(s => {
-                if (s.day === day) {
-                    return {
-                        ...s,
-                        isOff: false,
-                        slots: [...(s.slots || []), { startTime: '09:00', endTime: '13:00', active: true, label: 'Morning' }]
-                    };
-                }
-                return s;
-            });
-            onEditDoctor(doctorId, { weeklySchedule: newSchedule });
-            addToast('Morning slot added', 'success');
-        }
-    };
-
-    const handleSaveEditedPatient = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (editingPatient) {
-            onEditPatient(editingPatient.id, {
-                name: editingPatient.name,
-                age: editingPatient.age,
-                gender: editingPatient.gender,
-                phone: editingPatient.phone,
-                address: editingPatient.address,
-                city: editingPatient.city,
-                country: editingPatient.country
-            });
-            setEditingPatient(null);
-            addToast('Patient updated', 'success');
-        }
-    };
-
-    const handleSaveVitals = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (vitalsPatient) {
-            onEditPatient(vitalsPatient.id, { vitals: vitalsPatient.vitals });
-            setVitalsPatient(null);
-            addToast('Vitals recorded', 'success');
-        }
-    };
-
     const handleSaveSettings = () => {
-        onUpdateClinicSettings(settingsForm);
+        const hString = `${format12h(hoursRange.start)} - ${format12h(hoursRange.end)}`;
+        onUpdateClinicSettings({ ...settingsForm, operatingHours: hString });
         setIsSettingsModalOpen(false);
         addToast("Settings Updated", "success");
     };
 
-    const handleSaveApptConfig = () => {
-        onUpdateClinicSettings({ appointmentConfig: apptConfig });
-        addToast("Appointment Settings Saved", "success");
+    const handleUpdateApptConfig = (updates: Partial<AppointmentConfig>) => {
+        const newConfig = { ...apptConfig, ...updates };
+        setApptConfig(newConfig);
+        onUpdateClinicSettings({ appointmentConfig: newConfig });
+        addToast("Appointment Settings Updated", "success");
     };
 
-    const handleAddAmenity = (name: string) => {
-        if (!name || (settingsForm.amenities || []).includes(name)) return;
-        setSettingsForm({ ...settingsForm, amenities: [...(settingsForm.amenities || []), name] });
+    const handleAddAmenity = () => {
+        if (!newAmenity || (settingsForm.amenities || []).includes(newAmenity)) return;
+        setSettingsForm({ ...settingsForm, amenities: [...(settingsForm.amenities || []), newAmenity] });
         setNewAmenity('');
     };
 
@@ -505,197 +494,145 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         setSettingsForm({ ...settingsForm, amenities: (settingsForm.amenities || []).filter(a => a !== name) });
     };
 
-    const getPatientHistoryData = (patient: Patient) => {
-        return patients.filter(p => p.phone === patient.phone).sort((a, b) => b.timeAdded - a.timeAdded);
-    };
-
-    const handleBulkDelete = (selectedPatients: Patient[]) => {
-        const idsToDelete: string[] = [];
-        selectedPatients.forEach(p => {
-            const matched = patients.filter(pat => pat.phone === p.phone).map(pat => pat.id);
-            idsToDelete.push(...matched);
-        });
-        if (idsToDelete.length > 0) {
-            onDeleteMultiplePatients(idsToDelete);
+    const handleAddHoliday = () => {
+        if (!newHolidayDate) return;
+        const currentHolidays = clinicData?.holidays || [];
+        if (currentHolidays.includes(newHolidayDate)) {
+            addToast("Date already blocked", "warning");
+            return;
         }
+        onUpdateClinicSettings({ holidays: [...currentHolidays, newHolidayDate] });
+        setNewHolidayDate('');
+        addToast("Holiday added to calendar", "success");
     };
 
-    const handleBulkStatusChange = (selectedPatients: Patient[], status: PatientStatus) => {
-        if (!onBulkUpdateStatus) return;
-        const idsToUpdate: string[] = [];
-        selectedPatients.forEach(p => {
-            const latest = patients
-                .filter(pat => pat.phone === p.phone && pat.status !== PatientStatus.COMPLETED && pat.status !== PatientStatus.CANCELLED)
-                .sort((a, b) => b.timeAdded - a.timeAdded)[0];
-            
-            if (latest) idsToUpdate.push(latest.id);
-        });
-        if (idsToUpdate.length > 0) {
-            onBulkUpdateStatus(idsToUpdate, status);
-        } else {
-            addToast("No active visits found for selected patients", "warning");
-        }
+    const handleRemoveHoliday = (date: string) => {
+        const currentHolidays = clinicData?.holidays || [];
+        onUpdateClinicSettings({ holidays: currentHolidays.filter(h => h !== date) });
+        addToast("Date removed from holidays", "info");
     };
 
-    const isFiltered = searchQuery !== '' || filterDoctorId !== 'ALL' || filterStatus !== 'ACTIVE' || filterDate !== getLocalToday();
+    // Mobile Navigation Configuration
+    const mobileNavItems = [
+        { id: 'QUEUE', label: 'Queue', icon: List },
+        { id: 'DATABASE', label: 'Patients', icon: Database },
+        { id: 'DOCTORS', label: 'Doctors', icon: Stethoscope },
+        { id: 'APPOINTMENTS', label: 'Appts', icon: CalendarClock },
+        { id: 'REPORTS', label: 'Reports', icon: BarChart3 }
+    ];
 
     return (
         <div className="h-full flex flex-col bg-slate-50 w-full max-w-[100vw] overflow-hidden">
-            <div className="flex flex-col flex-shrink-0 bg-white shadow-sm z-30 w-full">
-                <div className="px-4 py-3 flex justify-between items-center border-b border-slate-100">
-                    <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                            <h1 className="text-lg sm:text-xl font-bold text-slate-900 truncate">{clinicName}</h1>
-                            <button onClick={() => setIsSettingsModalOpen(true)} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1 rounded-full"><Settings className="h-4 w-4" /></button>
+            {/* COMPACT TOP HEADER */}
+            <div className="flex flex-col flex-shrink-0 bg-white shadow-sm z-30 w-full border-b border-slate-100">
+                <div className="px-4 sm:px-6 py-2.5 sm:py-4 flex justify-between items-center">
+                    <div className="min-w-0 flex-1 flex items-center gap-3">
+                        <div className="lg:hidden">
+                            <Logo className="h-8 w-8" />
                         </div>
-                        <div className="hidden sm:flex flex-wrap gap-3 mt-0.5 text-xs text-slate-500 items-center">
-                            <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
-                                {currentTime.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-                                <span className="mx-1">•</span>
-                                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                            <span className="text-slate-300">|</span>
-                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {clinicData?.operatingHours || '9am - 9pm'}</span>
-                            <span>•</span>
-                            <OperationModeBadge mode={clinicData?.operationMode || operationMode} />
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-base sm:text-xl font-black text-slate-900 truncate tracking-tight">{clinicName}</h1>
+                                <button onClick={() => setIsSettingsModalOpen(true)} className="text-slate-300 hover:text-slate-600 p-1 transition-all"><Settings className="h-3.5 w-3.5" /></button>
+                            </div>
+                            <div className="hidden sm:flex flex-wrap gap-3 mt-1 text-[10px] text-slate-400 items-center font-bold uppercase tracking-wider">
+                                <span className="text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-1.5 flex-shrink-0 font-mono">
+                                    {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                <OperationModeBadge mode={clinicData?.operationMode || operationMode} />
+                            </div>
                         </div>
                     </div>
                     
-                    <div className="flex items-center gap-4">
-                        <div className="hidden lg:flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-                            <div className="relative">
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                                <input 
-                                    type="text" 
-                                    placeholder="Find token or patient..." 
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-8 pr-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-primary-500 outline-none w-48"
-                                />
-                            </div>
-                        </div>
-
-                        <Button 
-                            onClick={() => setIsPatientModalOpen(true)} 
-                            size="md" 
-                            className="bg-primary-600 hover:bg-primary-700 text-white font-black shadow-lg shadow-primary-100 flex items-center gap-2 px-6 rounded-xl animate-in zoom-in-95"
-                        >
-                            <Plus className="h-4 w-4" /> Add Patient
+                    <div className="flex items-center gap-2 shrink-0">
+                        <Button onClick={() => setIsPatientModalOpen(true)} size="sm" className="bg-primary-600 hover:bg-primary-700 text-white font-black shadow-lg shadow-primary-100 flex items-center gap-1.5 px-3 sm:px-4 rounded-xl text-[10px] sm:text-xs">
+                            <Plus className="h-3.5 w-3.5" /> <span className="hidden xs:inline">Add Patient</span><span className="xs:hidden">Add</span>
                         </Button>
-
-                        <div className="hidden sm:flex gap-1 bg-slate-100 p-1 rounded-lg flex-shrink-0">
-                            <button onClick={() => setActiveTab('QUEUE')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'QUEUE' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><List className="h-3 w-3" /> Queue</button>
-                            <button onClick={() => setActiveTab('DATABASE')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'DATABASE' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Database className="h-3 w-3" /> Patients</button>
-                            <button onClick={() => setActiveTab('DOCTORS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'DOCTORS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><Stethoscope className="h-3 w-3" /> Doctors</button>
-                            <button onClick={() => setActiveTab('APPOINTMENTS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'APPOINTMENTS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><CalendarClock className="h-3 w-3" /> Appts</button>
-                            <button onClick={() => setActiveTab('REPORTS')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'REPORTS' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}><BarChart3 className="h-3 w-3" /> Reports</button>
+                        
+                        {/* Desktop Tab Bar */}
+                        <div className="hidden lg:flex gap-1 bg-slate-100 p-1 rounded-xl ml-4">
+                            {mobileNavItems.map(item => (
+                                <button 
+                                    key={item.id}
+                                    onClick={() => setActiveTab(item.id as any)} 
+                                    className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-2 ${activeTab === item.id ? 'bg-white shadow-md text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    <item.icon className="h-3.5" /> {item.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </div>
 
+                {/* Sub-header for Date selection in Queue tab */}
                 {activeTab === 'QUEUE' && (
-                    <div className="bg-white border-b border-slate-200 w-full overflow-hidden transition-all duration-300">
-                        {/* Queue Sub-header with Date Filter */}
-                        <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Viewing:</span>
-                                <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
-                                    <button 
-                                        onClick={() => setFilterDate(getLocalToday())}
-                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${filterDate === getLocalToday() ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
-                                    >
-                                        Today
-                                    </button>
-                                    <button 
-                                        onClick={() => setFilterDate(getLocalTomorrow())}
-                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${filterDate === getLocalTomorrow() ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
-                                    >
-                                        Tomorrow
-                                    </button>
-                                </div>
-                                <div className="relative ml-2">
-                                    <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                                    <input 
-                                        type="date" 
-                                        value={filterDate}
-                                        onChange={(e) => setFilterDate(e.target.value)}
-                                        className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-primary-500 outline-none w-32 shadow-sm"
-                                    />
-                                </div>
+                    <div className="bg-white border-t border-slate-100 w-full">
+                        <div className="px-4 sm:px-6 py-2 bg-slate-50/30 flex items-center gap-3 overflow-x-auto no-scrollbar">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex-shrink-0">Viewing:</span>
+                            <div className="flex bg-white p-0.5 rounded-lg border border-slate-200 shadow-sm flex-shrink-0">
+                                <button onClick={() => setFilterDate(getLocalToday())} className={`px-3 py-1 rounded-md text-[9px] font-black transition-all ${filterDate === getLocalToday() ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}`}>Today</button>
+                                <button onClick={() => setFilterDate(getLocalTomorrow())} className={`px-3 py-1 rounded-md text-[9px] font-black transition-all ${filterDate === getLocalTomorrow() ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}`}>Tomorrow</button>
                             </div>
-                            
-                            {filterDate !== getLocalToday() && (
-                                <div className="animate-in fade-in slide-in-from-right-2 bg-amber-50 text-amber-700 px-3 py-1 rounded-lg border border-amber-100 flex items-center gap-2">
-                                    <Info className="h-3.5 w-3.5" />
-                                    <span className="text-[10px] font-bold uppercase tracking-tight">Viewing Future Schedule • Tokens Active only on visit date</span>
-                                </div>
-                            )}
+                            <div className="relative flex-shrink-0">
+                                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 text-slate-400" />
+                                <input 
+                                    type="date" 
+                                    value={filterDate} 
+                                    onChange={(e) => setFilterDate(e.target.value)} 
+                                    className="pl-7 pr-3 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-black focus:ring-2 focus:ring-primary-500 outline-none w-32 shadow-sm" 
+                                />
+                            </div>
                         </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-8 gap-2 p-2 max-w-[1920px] mx-auto">
+                        {/* Doctor Quick Cards - Scrollable Grid / "Dock" Style */}
+                        <div className="flex gap-2.5 p-3 overflow-x-auto no-scrollbar bg-white snap-x snap-mandatory scroll-smooth border-b border-slate-100 shadow-inner">
                             <button 
                                 onClick={() => setFilterDoctorId('ALL')} 
-                                className={`
-                                    w-full
-                                    p-2.5 rounded-xl border transition-all text-left flex flex-col justify-between h-32
-                                    ${filterDoctorId === 'ALL' ? 'bg-slate-900 border-slate-900 text-white shadow-lg ring-2 ring-slate-900 ring-offset-1' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-900 hover:shadow-sm'}
-                                `}
+                                className={`p-2.5 rounded-xl border transition-all text-left flex flex-col justify-between h-20 min-w-[110px] flex-shrink-0 snap-center ${filterDoctorId === 'ALL' ? 'bg-slate-900 border-slate-900 text-white shadow-xl ring-2 ring-slate-900/10' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-900 hover:shadow-lg'}`}
                             >
                                 <div>
-                                    <div className="font-bold text-xs">All Doctors</div>
-                                    <div className={`text-[9px] mt-0.5 ${filterDoctorId === 'ALL' ? 'text-slate-400' : 'text-slate-500'}`}>{filterDate === getLocalToday() ? 'Overview' : new Date(filterDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div>
+                                    <div className="font-black text-[9px] uppercase tracking-tighter leading-none mb-1">All Doctors</div>
+                                    <div className="text-[7px] font-bold opacity-60 uppercase tracking-widest">Overview</div>
                                 </div>
-                                <div className="mt-auto">
-                                    <div className="text-xl font-black tracking-tight leading-none">{filteredPatients.filter(p => p.status === PatientStatus.WAITING).length}</div>
-                                    <div className={`text-[8px] uppercase font-bold tracking-wider mt-1 ${filterDoctorId === 'ALL' ? 'text-slate-500' : 'text-slate-400'}`}>Total Waiting</div>
+                                <div className="mt-auto flex justify-between items-end">
+                                    <div className="text-2xl font-black tracking-tighter leading-none">{patients.filter(p => p.status === PatientStatus.WAITING && (p.appointmentDate === filterDate || (p.visitType === 'WALK_IN' && filterDate === getLocalToday()))).length}</div>
+                                    <div className="text-[7px] uppercase font-black tracking-widest mb-0.5 opacity-60">Wait</div>
                                 </div>
                             </button>
-
-                            {visibleDeckStats.map(({ doc, current, next, count, shiftTiming }) => {
+                            
+                            {doctorQueueStats.map(({ doc, current, next, count, shiftTiming }) => {
                                 const isSelected = filterDoctorId === doc.id;
                                 return (
                                     <button 
-                                        key={doc.id}
-                                        onClick={() => setFilterDoctorId(isSelected ? 'ALL' : doc.id)}
-                                        className={`
-                                            w-full
-                                            p-2.5 rounded-xl border transition-all text-left relative group 
-                                            flex flex-col h-32 justify-between
-                                            ${isSelected ? 'bg-white border-primary-500 ring-2 ring-primary-500 shadow-md z-10' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'}
-                                        `}
+                                        key={doc.id} 
+                                        onClick={() => setFilterDoctorId(isSelected ? 'ALL' : doc.id)} 
+                                        className={`p-2.5 rounded-xl border transition-all text-left relative flex flex-col h-20 min-w-[155px] flex-shrink-0 justify-between snap-center ${isSelected ? 'bg-white border-primary-500 ring-2 ring-primary-500/10 shadow-xl z-10' : 'bg-white border-slate-200 hover:border-slate-300'}`}
                                     >
-                                        <div className="flex items-start gap-2 w-full">
+                                        <div className="flex items-start gap-1.5">
                                             <div className="relative flex-shrink-0">
-                                                <img src={doc.avatarUrl} className="w-8 h-8 rounded-full bg-slate-100 object-cover border border-slate-100" />
-                                                <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 border-2 border-white rounded-full ${doc.status === DoctorStatus.AVAILABLE ? 'bg-green-500' : 'bg-slate-300'}`}></div>
+                                                <img src={doc.avatarUrl} className="w-7 h-7 rounded-lg object-cover border border-slate-100" />
+                                                <div className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 border-[1.5px] border-white rounded-full ${doc.status === DoctorStatus.AVAILABLE ? 'bg-green-50' : doc.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-300'}`}></div>
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <div className="font-bold text-slate-900 text-xs truncate leading-tight">{doc.name}</div>
-                                                <div className="text-[9px] text-slate-500 truncate mt-0.5 font-bold uppercase tracking-tighter flex items-center gap-1">
-                                                    <Clock className="h-2.5 w-2.5" /> {shiftTiming}
+                                                <div className="font-black text-slate-900 text-[9px] truncate leading-tight">{doc.name.split(' ').pop()}</div>
+                                                <div className="text-[7px] text-slate-400 truncate mt-0.5 font-bold uppercase tracking-tight flex items-center gap-0.5">
+                                                    <Clock className="h-1.5 w-1.5 opacity-50" /> {shiftTiming.split(',')[0]}
                                                 </div>
                                             </div>
                                         </div>
-
                                         <div className="mt-auto">
-                                            <div className="grid grid-cols-3 gap-px bg-slate-100 rounded-lg p-[1px] border border-slate-200">
-                                                <div className="bg-white rounded-l-md p-1 flex flex-col justify-center items-center">
-                                                    <div className="text-[7px] text-slate-400 font-bold uppercase tracking-wider">{filterDate === getLocalToday() ? 'Serving' : 'Slots'}</div>
-                                                    <div className={`text-xs font-black truncate ${current && filterDate === getLocalToday() ? 'text-blue-600' : 'text-slate-300'}`}>
-                                                        {filterDate === getLocalToday() ? (current ? `#${current.tokenNumber}` : '--') : (doc.consultationTime || 15) + 'm'}
-                                                    </div>
+                                            <div className="grid grid-cols-3 gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200/50">
+                                                <div className="bg-white rounded-md p-0.5 flex flex-col items-center">
+                                                    <div className="text-[6px] font-black text-slate-300 uppercase leading-none mb-0.5">Now</div>
+                                                    <div className={`text-[8px] font-black ${current ? 'text-blue-600' : 'text-slate-200'}`}>{current ? `#${current.tokenNumber}` : '--'}</div>
                                                 </div>
-                                                <div className="bg-white p-1 flex flex-col justify-center items-center">
-                                                    <div className="text-[7px] text-slate-400 font-bold uppercase tracking-wider">Next</div>
-                                                    <div className={`text-xs font-black truncate ${next ? 'text-indigo-600' : 'text-slate-300'}`}>
-                                                        {next ? `#${next.tokenNumber}` : '--'}
-                                                    </div>
+                                                <div className="bg-white rounded-md p-0.5 flex flex-col items-center">
+                                                    <div className="text-[6px] font-black text-slate-300 uppercase leading-none mb-0.5">Next</div>
+                                                    <div className={`text-[8px] font-black ${next ? 'text-indigo-600' : 'text-slate-200'}`}>{next ? `#${next.tokenNumber}` : '--'}</div>
                                                 </div>
-                                                <div className="bg-white rounded-r-md p-1 flex flex-col justify-center items-center">
-                                                    <div className="text-[7px] text-slate-400 font-bold uppercase tracking-wider">Total</div>
-                                                    <div className="text-xs font-black text-slate-700">
-                                                        {count}
-                                                    </div>
+                                                <div className={`rounded-md p-0.5 flex flex-col items-center ${count > 0 ? 'bg-primary-600' : 'bg-slate-200'}`}>
+                                                    <div className={`text-[6px] font-black uppercase leading-none mb-0.5 ${count > 0 ? 'text-primary-200' : 'text-slate-400'}`}>Q</div>
+                                                    <div className={`text-[8px] font-black ${count > 0 ? 'text-white' : 'text-slate-400'}`}>{count}</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -703,205 +640,177 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 );
                             })}
                         </div>
-                        {doctors.length > (isMobile ? 1 : 5) && (
-                            <button 
-                                onClick={() => setIsDeckExpanded(!isDeckExpanded)}
-                                className="w-full py-1 text-[10px] font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-50 flex items-center justify-center gap-1 border-t border-slate-100 transition-colors"
-                            >
-                                {isDeckExpanded ? (
-                                    <>Show Less <ChevronUp className="h-3 w-3" /></>
-                                ) : (
-                                    <>Show {hiddenDeckCount} more doctors <ChevronDown className="h-3 w-3" /></>
-                                )}
-                            </button>
-                        )}
                     </div>
                 )}
             </div>
 
-            <div className="flex-1 overflow-hidden relative bg-slate-100 pb-16 sm:pb-0">
+            {/* MAIN CONTENT AREA */}
+            <div className="flex-1 overflow-hidden relative bg-slate-100 pb-20 lg:pb-0 flex flex-col">
                 {activeTab === 'QUEUE' && (
-                    <QueueTable 
-                        patients={filteredPatients}
-                        doctors={doctors}
-                        estimatedTimes={estimatedTimes}
-                        isFiltered={isFiltered}
-                        nextUpPatientIds={nextUpPatientIds}
-                        onUpdateStatus={onUpdateStatus}
-                        onManualReorder={onManualReorder}
-                        onDragDrop={onDragDrop}
-                        onManualCheckIn={onManualCheckIn}
-                        onEditPatient={(p) => setEditingPatient(p)}
-                        onVitalsClick={(p) => setVitalsPatient(p)}
-                        onToggleEmergency={onToggleEmergency}
-                        onNoShowPatient={(id) => onUpdateStatus(id, PatientStatus.SKIPPED)}
-                    />
-                )}
-
-                {activeTab === 'DATABASE' && (
-                    <PatientDatabaseTable 
-                        patients={uniquePatients}
-                        doctors={doctors}
-                        onHistoryClick={(p) => setHistoryPatient(p)}
-                        onEditClick={(p) => setEditingPatient(p)}
-                        onDeleteClick={(p) => setPatientHistoryToDelete(p)}
-                        onBulkDelete={handleBulkDelete}
-                        onBulkStatusChange={handleBulkStatusChange}
-                    />
-                )}
-
-                {activeTab === 'DOCTORS' && (
-                    <DoctorManager 
-                        doctors={doctors}
-                        onAddDoctor={() => { setDoctorModalMode('ADD'); setEditingDoctorData(undefined); setIsDoctorModalOpen(true); }}
-                        onEditDoctor={(doc) => { setDoctorModalMode('EDIT'); setEditingDoctorId(doc.id); setEditingDoctorData(doc); setIsDoctorModalOpen(true); }}
-                        onDeleteDoctor={(id) => { 
-                            const doc = doctors.find(d => d.id === id);
-                            if (doc) setDoctorToDelete(doc);
-                        }}
-                        onAddPresetSlot={handleAddPresetSlot}
-                        onStatusChange={(id, status) => onEditDoctor(id, { status })}
-                    />
-                )}
-
-                {activeTab === 'STAFF' && onAddStaff && onUpdateStaff && onDeleteStaff && (
-                    <StaffManager 
-                        staff={staff}
-                        onAddStaff={onAddStaff}
-                        onUpdateStaff={onUpdateStaff}
-                        onDeleteStaff={onDeleteStaff}
-                    />
-                )}
-
-                {activeTab === 'REPORTS' && (
-                    <ReceptionStats patients={patients} doctors={doctors} />
-                )}
-
-                {activeTab === 'APPOINTMENTS' && (
-                    <div className="p-4 sm:p-8 max-w-4xl mx-auto h-full overflow-y-auto custom-scrollbar">
-                        <div className="mb-6 flex justify-between items-end">
-                            <div>
-                                <h2 className="text-2xl font-bold text-slate-900">Appointment Settings</h2>
-                                <p className="text-slate-500 text-sm">Configure how patients book future visits.</p>
+                    <>
+                        <div className="px-4 sm:px-6 py-1 bg-white border-b border-slate-200 flex items-center justify-between shadow-sm z-10 gap-4 overflow-x-auto no-scrollbar">
+                            <div className="flex items-center gap-4 sm:gap-8 flex-shrink-0">
+                                <button onClick={() => setQueueSubTab('ACTIVE')} className={`px-2 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border-b-[3px] transition-all whitespace-nowrap ${queueSubTab === 'ACTIVE' ? 'border-primary-600 text-primary-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><Activity className="h-3.5" /> Live Queue ({subTabCounts.ACTIVE})</button>
+                                <button onClick={() => setQueueSubTab('HOLD')} className={`px-2 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border-b-[3px] transition-all whitespace-nowrap ${queueSubTab === 'HOLD' ? 'border-orange-500 text-orange-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><PauseCircle className="h-3.5" /> Hold ({subTabCounts.HOLD})</button>
+                                <button onClick={() => setQueueSubTab('COMPLETED')} className={`px-2 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border-b-[3px] transition-all whitespace-nowrap ${queueSubTab === 'COMPLETED' ? 'border-green-600 text-green-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><CheckCircle2 className="h-3.5" /> Done ({subTabCounts.COMPLETED})</button>
+                                <button onClick={() => setQueueSubTab('SKIPPED')} className={`px-2 py-3 text-[9px] sm:text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border-b-[3px] transition-all whitespace-nowrap ${queueSubTab === 'SKIPPED' ? 'border-rose-500 text-rose-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><UserX className="h-3.5" /> No Show ({subTabCounts.SKIPPED})</button>
                             </div>
-                            <Button onClick={handleSaveApptConfig} className="shadow-lg shadow-primary-100 font-bold px-6">
-                                <Save className="h-4 w-4 mr-2" /> Save Configuration
-                            </Button>
+                            <div className="relative group w-48 sm:w-64 hidden xs:block"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 text-slate-300 group-focus-within:text-primary-500" /><input type="text" placeholder="Find token..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[9px] font-bold outline-none w-full transition-all focus:bg-white" /></div>
                         </div>
+                        <QueueTable patients={filteredPatients} doctors={doctors} estimatedTimes={estimatedTimes} isFiltered={searchQuery !== '' || filterDoctorId !== 'ALL'} nextUpPatientIds={new Set(doctorQueueStats.map(s => s.next?.id).filter(Boolean) as string[])} onUpdateStatus={onUpdateStatus} onManualReorder={onManualReorder} onDragDrop={onDragDrop} onManualCheckIn={onManualCheckIn} onEditPatient={setEditingPatient} onVitalsClick={setVitalsPatient} onToggleEmergency={onToggleEmergency} onNoShowPatient={(id) => onUpdateStatus(id, PatientStatus.SKIPPED)} />
+                    </>
+                )}
+                {activeTab === 'DATABASE' && <PatientDatabaseTable patients={uniquePatients} doctors={doctors} onHistoryClick={setHistoryPatient} onEditClick={setEditingPatient} onDeleteClick={setPatientHistoryToDelete} />}
+                {activeTab === 'DOCTORS' && <DoctorManager doctors={doctors} onAddDoctor={() => { setDoctorModalMode('ADD'); setEditingDoctorData(undefined); setIsDoctorModalOpen(true); }} onEditDoctor={(doc) => { setDoctorModalMode('EDIT'); setEditingDoctorId(doc.id); setEditingDoctorData(doc); setIsDoctorModalOpen(true); }} onDeleteDoctor={onDeleteDoctor} onAddPresetSlot={() => {}} onStatusChange={(id, status) => onEditDoctor(id, { status })} />}
+                {activeTab === 'STAFF' && onAddStaff && onUpdateStaff && onDeleteStaff && <StaffManager staff={staff} onAddStaff={onAddStaff} onUpdateStaff={onUpdateStaff} onDeleteStaff={onDeleteStaff} />}
+                {activeTab === 'REPORTS' && <ReceptionStats patients={patients} doctors={doctors} />}
+                {activeTab === 'APPOINTMENTS' && (
+                    <div className="p-4 sm:p-8 overflow-y-auto h-full custom-scrollbar animate-in fade-in pb-32">
+                        <div className="max-w-4xl mx-auto">
+                            <div className="mb-8">
+                                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                                    Appointment Settings <CalendarClock className="h-6 sm:h-8 w-6 sm:w-8 text-primary-600" />
+                                </h2>
+                                <p className="text-slate-500 font-medium mt-1 text-sm">Configure slot logic and automated patient alerts.</p>
+                            </div>
 
-                        <div className="space-y-6">
-                            {/* Booking Rules Card */}
-                            <Card className="p-6">
-                                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                    <Clock className="h-5 w-5 text-primary-600" /> Booking Rules
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-1">
-                                        <label className="text-sm font-bold text-slate-600 uppercase tracking-tight">Standard Slot Duration</label>
-                                        <select 
-                                            value={apptConfig.slotDuration}
-                                            onChange={e => setApptConfig({ ...apptConfig, slotDuration: parseInt(e.target.value) })}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary-500 outline-none transition-all"
-                                        >
-                                            <option value={10}>10 Minutes</option>
-                                            <option value={15}>15 Minutes</option>
-                                            <option value={20}>20 Minutes</option>
-                                            <option value={30}>30 Minutes</option>
-                                            <option value={45}>45 Minutes</option>
-                                            <option value={60}>60 Minutes</option>
-                                        </select>
-                                        <p className="text-[10px] text-slate-400">Standard time allocated for each consultation.</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-sm font-bold text-slate-600 uppercase tracking-tight">Buffer Time</label>
-                                        <select 
-                                            value={apptConfig.bufferTime}
-                                            onChange={e => setApptConfig({ ...apptConfig, bufferTime: parseInt(e.target.value) })}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary-500 outline-none transition-all"
-                                        >
-                                            <option value={0}>No Buffer</option>
-                                            <option value={5}>5 Minutes</option>
-                                            <option value={10}>10 Minutes</option>
-                                            <option value={15}>15 Minutes</option>
-                                        </select>
-                                        <p className="text-[10px] text-slate-400">Break time between consecutive appointments.</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-sm font-bold text-slate-600 uppercase tracking-tight">Booking Window</label>
-                                        <select 
-                                            value={apptConfig.maxDaysInAdvance}
-                                            onChange={e => setApptConfig({ ...apptConfig, maxDaysInAdvance: parseInt(e.target.value) })}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary-500 outline-none transition-all"
-                                        >
-                                            <option value={7}>7 Days in Advance</option>
-                                            <option value={14}>14 Days in Advance</option>
-                                            <option value={30}>30 Days in Advance</option>
-                                            <option value={90}>90 Days in Advance</option>
-                                        </select>
-                                        <p className="text-[10px] text-slate-400">How far in the future patients can see availability.</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-sm font-bold text-slate-600 uppercase tracking-tight">Emergency Reserve</label>
-                                        <div className="flex items-center gap-2 p-3 bg-orange-50 border border-orange-100 rounded-xl">
-                                            <Shield className="h-4 w-4 text-orange-500" />
-                                            <span className="text-xs text-orange-800 font-medium">1 Slot per shift reserved for emergencies.</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </Card>
-
-                            {/* Communication Card */}
-                            <Card className="p-6">
-                                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                    <Mail className="h-5 w-5 text-primary-600" /> Patient Communication
-                                </h3>
-                                <div className="space-y-6">
-                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-2 rounded-full ${apptConfig.enableEmailNotifications ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-400'}`}>
-                                                <Zap className="h-4 w-4" />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-900">Email Confirmations</p>
-                                                <p className="text-xs text-slate-500">Send automatic confirmation emails upon booking.</p>
-                                            </div>
-                                        </div>
-                                        <button 
-                                            onClick={() => setApptConfig({ ...apptConfig, enableEmailNotifications: !apptConfig.enableEmailNotifications })}
-                                            className={`w-12 h-6 rounded-full transition-all relative ${apptConfig.enableEmailNotifications ? 'bg-primary-600' : 'bg-slate-300'}`}
-                                        >
-                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${apptConfig.enableEmailNotifications ? 'right-1' : 'left-1'}`} />
-                                        </button>
-                                    </div>
-
-                                    {apptConfig.enableEmailNotifications && (
-                                        <div className="space-y-2 animate-in slide-in-from-top-2">
-                                            <label className="text-sm font-bold text-slate-600 uppercase tracking-tight">Confirmation Template</label>
-                                            <textarea 
-                                                value={apptConfig.emailTemplate}
-                                                onChange={e => setApptConfig({ ...apptConfig, emailTemplate: e.target.value })}
-                                                rows={4}
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-primary-500 outline-none transition-all resize-none font-mono"
-                                                placeholder="Custom message..."
-                                            />
-                                            <div className="flex flex-wrap gap-2">
-                                                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">Available tags:</span>
-                                                {['{patient_name}', '{doctor_name}', '{clinic_name}', '{date}', '{time}', '{token}'].map(tag => (
-                                                    <span key={tag} className="text-[10px] font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100 cursor-help" title="Click to copy (impl)">{tag}</span>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* CARD: Scheduling Parameters */}
+                                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+                                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                        <Clock3 className="h-4 w-4" /> Scheduling Logic
+                                    </h3>
+                                    
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-bold text-slate-700 mb-2">Default Slot Duration</label>
+                                            <div className="grid grid-cols-4 gap-2">
+                                                {[10, 15, 20, 30].map(mins => (
+                                                    <button 
+                                                        key={mins}
+                                                        onClick={() => handleUpdateApptConfig({ slotDuration: mins })}
+                                                        className={`py-2 rounded-xl text-xs font-black transition-all border ${apptConfig.slotDuration === mins ? 'bg-primary-600 text-white border-primary-600 shadow-lg' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300'}`}
+                                                    >
+                                                        {mins}m
+                                                    </button>
                                                 ))}
                                             </div>
                                         </div>
-                                    )}
-                                </div>
-                            </Card>
 
-                            <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-start gap-4">
-                                <div className="p-2 bg-blue-100 rounded-full text-blue-600 shrink-0">
-                                    <Info className="h-5 w-5" />
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Buffer Time (m)</label>
+                                                <input 
+                                                    type="number" 
+                                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none"
+                                                    value={apptConfig.bufferTime}
+                                                    onChange={e => handleUpdateApptConfig({ bufferTime: parseInt(e.target.value) || 0 })}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Lead Time (Days)</label>
+                                                <input 
+                                                    type="number" 
+                                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none"
+                                                    value={apptConfig.maxDaysInAdvance}
+                                                    onChange={e => handleUpdateApptConfig({ maxDaysInAdvance: parseInt(e.target.value) || 0 })}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="p-4 bg-primary-50 rounded-2xl border border-primary-100 flex gap-3">
+                                        <Info className="h-5 w-5 text-primary-600 flex-shrink-0" />
+                                        <p className="text-[11px] text-primary-800 leading-relaxed font-medium">
+                                            These settings apply globally to all new appointments. Doctors can still override individual consultation times in their dashboard.
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h4 className="font-bold text-blue-900 text-sm">Pro Tip</h4>
-                                    <p className="text-xs text-blue-700 leading-relaxed mt-0.5">Increasing buffer time can reduce waiting room crowding, but might decrease total daily consultations. Find the right balance for your clinic's patient flow.</p>
+
+                                {/* CARD: Communication & Alerts */}
+                                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+                                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                        <Bell className="h-4 w-4" /> Automation & Alerts
+                                    </h3>
+
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-900">Email Notifications</p>
+                                                <p className="text-[10px] text-slate-500">Auto-send confirmation and reminders</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => handleUpdateApptConfig({ enableEmailNotifications: !apptConfig.enableEmailNotifications })}
+                                                className={`w-12 h-6 rounded-full transition-all relative ${apptConfig.enableEmailNotifications ? 'bg-primary-600' : 'bg-slate-300'}`}
+                                            >
+                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${apptConfig.enableEmailNotifications ? 'left-7' : 'left-1'}`} />
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                <MessageSquare className="h-3 w-3" /> Confirmation Template
+                                            </label>
+                                            <textarea 
+                                                className="w-full h-32 p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-600 focus:ring-2 focus:ring-primary-500 outline-none resize-none leading-relaxed"
+                                                value={apptConfig.emailTemplate}
+                                                onChange={e => handleUpdateApptConfig({ emailTemplate: e.target.value })}
+                                                placeholder="Enter message template..."
+                                            />
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {['{patient_name}', '{doctor_name}', '{date}', '{time}'].map(tag => (
+                                                    <span key={tag} className="text-[9px] bg-white border border-slate-200 text-slate-400 px-1.5 py-0.5 rounded-lg cursor-default hover:text-primary-600 transition-colors">{tag}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* CARD: SaaS Value Add - No Show Policy */}
+                                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                        <ShieldCheck className="h-4 w-4" /> Late Arrival Policy
+                                    </h3>
+                                    <p className="text-xs text-slate-500 leading-relaxed">Automate how the queue treats patients who arrive late for their confirmed slots.</p>
+                                    
+                                    <div className="flex gap-4">
+                                        <div className="flex-1 p-3 bg-slate-50 rounded-2xl border border-slate-100 text-center">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Threshold</p>
+                                            <p className="text-xl font-black text-slate-900">{apptConfig.lateArrivalThreshold}m</p>
+                                        </div>
+                                        <div className="flex-1 p-3 bg-slate-50 rounded-2xl border border-slate-100 text-center">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Action</p>
+                                            <p className="text-xs font-black text-primary-600 uppercase">
+                                                {apptConfig.lateArrivalAction === 'PENALTY' ? 'Penalty Pos.' : apptConfig.lateArrivalAction === 'SKIP' ? 'Auto-Skip' : 'Notify only'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="pt-2">
+                                        <button 
+                                            onClick={() => setIsPolicyModalOpen(true)}
+                                            className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:bg-slate-800 transition-all"
+                                        >
+                                            Customize Policy
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* CARD: Holiday Sync */}
+                                <div className="bg-gradient-to-br from-indigo-600 to-primary-600 p-6 rounded-[2.5rem] text-white shadow-xl shadow-indigo-100 flex flex-col justify-between">
+                                    <div>
+                                        <h3 className="text-sm font-black opacity-60 uppercase tracking-widest mb-4">Integrations</h3>
+                                        <h4 className="text-xl font-bold mb-2">Clinic Holiday Sync</h4>
+                                        <p className="text-xs opacity-80 leading-relaxed">Bulk block all doctor slots for public holidays or clinic maintenance events with one tap.</p>
+                                    </div>
+                                    <div className="mt-8">
+                                        <button 
+                                            onClick={() => setIsHolidayModalOpen(true)}
+                                            className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all"
+                                        >
+                                            <Calendar className="h-4 w-4" /> Manage Calendar
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -909,239 +818,359 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 )}
             </div>
 
-            <nav className="sm:hidden bg-white border-t border-slate-200 fixed bottom-0 w-full z-40 flex justify-around py-2 px-1 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] pb-safe">
-                <button onClick={() => setActiveTab('QUEUE')} className={`flex flex-col items-center gap-1 p-2 rounded-xl w-full transition-all ${activeTab === 'QUEUE' ? 'text-primary-700' : 'text-slate-400'}`}>
-                    <div className={`p-1 rounded-full ${activeTab === 'QUEUE' ? 'bg-primary-50' : ''}`}>
-                        <List className={`h-5 w-5 ${activeTab === 'QUEUE' ? 'stroke-primary-600' : ''}`} />
-                    </div>
-                    <span className="text-[10px] font-bold">Queue</span>
-                </button>
-                <button onClick={() => setActiveTab('DATABASE')} className={`flex flex-col items-center gap-1 p-2 rounded-xl w-full transition-all ${activeTab === 'DATABASE' ? 'text-primary-700' : 'text-slate-400'}`}>
-                    <div className={`p-1 rounded-full ${activeTab === 'DATABASE' ? 'bg-primary-50' : ''}`}>
-                        <Database className={`h-5 w-5 ${activeTab === 'DATABASE' ? 'stroke-primary-600' : ''}`} />
-                    </div>
-                    <span className="text-[10px] font-bold">Patients</span>
-                </button>
-                <button onClick={() => setActiveTab('DOCTORS')} className={`flex flex-col items-center gap-1 p-2 rounded-xl w-full transition-all ${activeTab === 'DOCTORS' ? 'text-primary-700' : 'text-slate-400'}`}>
-                    <div className={`p-1 rounded-full ${activeTab === 'DOCTORS' ? 'bg-primary-50' : ''}`}>
-                        <Stethoscope className={`h-5 w-5 ${activeTab === 'DOCTORS' ? 'stroke-primary-600' : ''}`} />
-                    </div>
-                    <span className="text-[10px] font-bold">Doctors</span>
-                </button>
-                <button onClick={() => setActiveTab('APPOINTMENTS')} className={`flex flex-col items-center gap-1 p-2 rounded-xl w-full transition-all ${activeTab === 'APPOINTMENTS' ? 'text-primary-700' : 'text-slate-400'}`}>
-                    <div className={`p-1 rounded-full ${activeTab === 'APPOINTMENTS' ? 'bg-primary-50' : ''}`}>
-                        <CalendarClock className={`h-5 w-5 ${activeTab === 'APPOINTMENTS' ? 'stroke-primary-600' : ''}`} />
-                    </div>
-                    <span className="text-[10px] font-bold">Appts</span>
-                </button>
-            </nav>
-
-            <AddPatientModal isOpen={isPatientModalOpen} onClose={() => setIsPatientModalOpen(false)} onAdd={onAddPatient} doctors={doctors} patients={patients} addToast={addToast} />
-            <DoctorFormModal isOpen={isDoctorModalOpen} onClose={() => setIsDoctorModalOpen(false)} mode={doctorModalMode} initialData={editingDoctorData} onSave={handleSaveDoctor} onCheckMasterDoctor={onCheckMasterDoctor} addToast={addToast} />
-            
-            <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} title="Clinic Configuration" maxWidth="max-w-2xl">
-                <div className="flex border-b border-slate-200 mb-6">
-                    <button onClick={() => setActiveSettingsTab('GENERAL')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'GENERAL' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>General</button>
-                    <button onClick={() => setActiveSettingsTab('LOCATION')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'LOCATION' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>Location</button>
-                    <button onClick={() => setActiveSettingsTab('BRANDING')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'BRANDING' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>Branding & Amenities</button>
+            {/* STICKY BOTTOM NAVIGATION FOR MOBILE/TABLET */}
+            <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-[40] shadow-[0_-4px_12px_rgba(0,0,0,0.05)] pb-safe">
+                <div className="flex justify-around items-center h-16 sm:h-20">
+                    {mobileNavItems.map(item => {
+                        const isActive = activeTab === item.id;
+                        return (
+                            <button 
+                                key={item.id} 
+                                onClick={() => setActiveTab(item.id as any)} 
+                                className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-all ${isActive ? 'text-primary-600' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                                <item.icon className={`h-5 w-5 sm:h-6 sm:w-6 ${isActive ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+                                <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-tight ${isActive ? 'opacity-100' : 'opacity-70'}`}>
+                                    {item.label}
+                                </span>
+                            </button>
+                        );
+                    })}
+                    <button 
+                        onClick={() => setIsSettingsModalOpen(true)}
+                        className={`flex flex-col items-center justify-center w-full h-full space-y-1 text-slate-400 hover:text-slate-600`}
+                    >
+                        <Settings className="h-5 w-5 sm:h-6 sm:w-6" />
+                        <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-tight opacity-70">Admin</span>
+                    </button>
                 </div>
+            </div>
+
+            {/* Late Arrival Policy Modal */}
+            <Modal isOpen={isPolicyModalOpen} onClose={() => setIsPolicyModalOpen(false)} title="Late Arrival Logic" maxWidth="max-w-md">
+                <div className="space-y-6">
+                    <p className="text-sm text-slate-500">Configure how the automated queue system handles patients who arrive after their scheduled time slot.</p>
+                    
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">Late Threshold (Minutes)</label>
+                            <input 
+                                type="number" 
+                                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none"
+                                value={apptConfig.lateArrivalThreshold}
+                                onChange={e => setApptConfig({ ...apptConfig, lateArrivalThreshold: parseInt(e.target.value) || 0 })}
+                            />
+                            <p className="text-[10px] text-slate-400 mt-1.5 italic">Example: If threshold is 10m, a 10:00 AM patient becomes "Late" at 10:11 AM.</p>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">Automated Action</label>
+                            <div className="space-y-2">
+                                {[
+                                    { id: 'PENALTY', label: 'Penalty Position', desc: 'Move patient 5 spots back in the queue.' },
+                                    { id: 'SKIP', label: 'Auto-Skip', desc: 'Mark patient as No-Show and remove from queue.' },
+                                    { id: 'NOTIFY', label: 'Notify Only', desc: 'Just highlight the patient on dashboard.' }
+                                ].map(action => (
+                                    <button 
+                                        key={action.id}
+                                        onClick={() => setApptConfig({ ...apptConfig, lateArrivalAction: action.id as any })}
+                                        className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-4 ${apptConfig.lateArrivalAction === action.id ? 'bg-primary-50 border-primary-500 ring-1 ring-primary-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+                                    >
+                                        <div className={`p-2 rounded-full ${apptConfig.lateArrivalAction === action.id ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                            {apptConfig.lateArrivalAction === action.id ? <CheckCircle2 className="h-4 w-4" /> : <div className="h-4 w-4" />}
+                                        </div>
+                                        <div>
+                                            <div className={`text-sm font-bold ${apptConfig.lateArrivalAction === action.id ? 'text-primary-900' : 'text-slate-800'}`}>{action.label}</div>
+                                            <div className="text-[10px] text-slate-500">{action.desc}</div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+                        <Button variant="secondary" onClick={() => setIsPolicyModalOpen(false)}>Cancel</Button>
+                        <Button onClick={() => { handleUpdateApptConfig(apptConfig); setIsPolicyModalOpen(false); }}>Save Policy</Button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Holiday Sync Modal */}
+            <Modal isOpen={isHolidayModalOpen} onClose={() => setIsHolidayModalOpen(false)} title="Clinic Holiday Calendar" maxWidth="max-w-md">
+                <div className="space-y-6">
+                    <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex gap-3">
+                        <Info className="h-5 w-5 text-indigo-600 flex-shrink-0" />
+                        <p className="text-xs text-indigo-800 leading-relaxed">
+                            Blocking a date will automatically cancel all existing appointments and disable slot booking for all doctors in this clinic for that day.
+                        </p>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex gap-2">
+                            <input 
+                                type="date" 
+                                className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none"
+                                value={newHolidayDate}
+                                min={getLocalToday()}
+                                onChange={e => setNewHolidayDate(e.target.value)}
+                            />
+                            <Button onClick={handleAddHoliday} disabled={!newHolidayDate}>
+                                <Plus className="h-4 w-4 mr-1.5" /> Block Date
+                            </Button>
+                        </div>
+
+                        <div>
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Upcoming Holidays / Closures</h4>
+                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                                {(clinicData?.holidays || []).length > 0 ? (
+                                    clinicData?.holidays?.sort().map(h => (
+                                        <div key={h} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl group hover:border-indigo-300 transition-colors">
+                                            <div className="flex items-center gap-3">
+                                                <CalendarX className="h-4 w-4 text-rose-500" />
+                                                <span className="text-sm font-bold text-slate-700">
+                                                    {new Date(h).toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })}
+                                                </span>
+                                            </div>
+                                            <button 
+                                                onClick={() => handleRemoveHoliday(h)}
+                                                className="text-slate-300 hover:text-rose-500 transition-colors p-1"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="py-8 text-center text-slate-400 italic text-xs bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                                        No holidays scheduled.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-100 flex justify-end">
+                        <Button variant="secondary" onClick={() => setIsHolidayModalOpen(false)}>Close Calendar</Button>
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} title="Clinic Configuration" maxWidth="max-w-4xl">
+                <div className="flex border-b border-slate-200 mb-6 sticky top-0 bg-white z-10">
+                    <button onClick={() => setActiveSettingsTab('GENERAL')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'GENERAL' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500'}`}>General Info</button>
+                    <button onClick={() => setActiveSettingsTab('LOCATION')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'LOCATION' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500'}`}>Location & Map</button>
+                    <button onClick={() => setActiveSettingsTab('BRANDING')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'BRANDING' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500'}`}>Branding & Amenities</button>
+                </div>
+
                 <div className="space-y-6">
                     {activeSettingsTab === 'GENERAL' && (
                         <div className="space-y-4 animate-in fade-in">
-                            <Input label="Clinic Name" value={settingsForm.name || ''} onChange={e => setSettingsForm({ ...settingsForm, name: e.target.value })} />
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Clinic Type</label>
-                                    <select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white" value={settingsForm.type} onChange={e => setSettingsForm({ ...settingsForm, type: e.target.value as ClinicType })}>
-                                        {Object.values(ClinicType).map(t => <option key={t} value={t}>{t}</option>)}
-                                    </select>
-                                </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <Input label="Clinic Name" value={settingsForm.name || ''} onChange={e => setSettingsForm({ ...settingsForm, name: e.target.value })} />
                                 <Input label="Contact Phone" value={settingsForm.contactPhone || ''} onChange={e => setSettingsForm({ ...settingsForm, contactPhone: e.target.value })} />
                             </div>
-                            <Input label="Operating Hours (e.g. 09:00 AM - 09:00 PM)" value={settingsForm.operatingHours || ''} onChange={e => setSettingsForm({ ...settingsForm, operatingHours: e.target.value })} />
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">About / Tagline</label>
-                                <textarea className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none h-20" value={settingsForm.about || ''} onChange={e => setSettingsForm({ ...settingsForm, about: e.target.value })} placeholder="Brief description of your clinic..." />
+                            <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><Clock className="h-3" /> Opens At</label>
+                                    <input type="time" className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white" value={hoursRange.start} onChange={e => setHoursRange({ ...hoursRange, start: e.target.value })} />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><Clock className="h-3" /> Closes At</label>
+                                    <input type="time" className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white" value={hoursRange.end} onChange={e => setHoursRange({ ...hoursRange, end: e.target.value })} />
+                                </div>
                             </div>
-                            <div className="space-y-3 pt-2">
-                                <label className="block text-sm font-medium text-slate-700">Operation Mode</label>
-                                <select 
-                                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                                    value={settingsForm.operationMode} 
-                                    onChange={e => setSettingsForm({ ...settingsForm, operationMode: e.target.value as ClinicOperationMode })}
-                                >
-                                    <option value={ClinicOperationMode.DIRECT_WALK_IN}>Direct Walk-in Only</option>
-                                    <option value={ClinicOperationMode.ONLINE_WALK_IN}>Online Walk-in Only</option>
-                                    <option value={ClinicOperationMode.BOTH_WALK_IN}>Direct Walk-in & Online Token</option>
-                                    <option value={ClinicOperationMode.HYBRID_DIRECT_APPT}>Hybrid: Direct Walk-in & Appointment</option>
-                                    <option value={ClinicOperationMode.HYBRID_FULL}>Hybrid: Direct, Online Token & Appointment</option>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Clinic About / Description</label>
+                                <textarea className="w-full p-3 border border-slate-300 rounded-lg text-sm min-h-[100px] outline-none focus:ring-1 focus:ring-primary-500" value={settingsForm.about || ''} onChange={e => setSettingsForm({ ...settingsForm, about: e.target.value })} placeholder="Briefly describe your clinic..." />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Operational Mode</label>
+                                <select className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white" value={settingsForm.operationMode} onChange={e => setSettingsForm({ ...settingsForm, operationMode: e.target.value as ClinicOperationMode })}>
+                                    {Object.values(ClinicOperationMode).map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}
                                 </select>
                             </div>
                         </div>
                     )}
+
                     {activeSettingsTab === 'LOCATION' && (
-                        <div className="space-y-4 animate-in fade-in">
-                            <Input label="Address Line 1" value={settingsForm.address || ''} onChange={e => setSettingsForm({ ...settingsForm, address: e.target.value })} />
-                            <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-6 animate-in fade-in">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <Input label="City" value={settingsForm.city || ''} onChange={e => setSettingsForm({ ...settingsForm, city: e.target.value })} />
                                 <Input label="Pincode" value={settingsForm.pincode || ''} onChange={e => setSettingsForm({ ...settingsForm, pincode: e.target.value })} />
                             </div>
-                            <div className="border-t border-slate-200 pt-4 mt-2">
-                                <label className="block text-sm font-bold text-slate-800 mb-2">Pin Location on Map</label>
-                                <div className="flex gap-2 mb-3">
-                                    <div className="relative flex-1">
-                                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Input label="Full Address" value={settingsForm.address || ''} onChange={e => setSettingsForm({ ...settingsForm, address: e.target.value })} />
+                            
+                            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                                        <Navigation2 className="h-4 w-4 text-primary-600" /> Precise Coordinates
+                                    </label>
+                                    <button 
+                                        onClick={handleDetectLocation} 
+                                        disabled={isDetectingLocation}
+                                        className="text-[10px] font-black uppercase tracking-widest text-primary-600 bg-white border border-primary-100 px-3 py-1.5 rounded-lg shadow-sm hover:bg-primary-50 transition-all flex items-center gap-2"
+                                    >
+                                        {isDetectingLocation ? <div className="h-3 w-3 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div> : <Crosshair className="h-3 w-3" />}
+                                        Detect My Location
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Latitude</label>
                                         <input 
-                                            type="text" 
-                                            placeholder="Search location (e.g. Anna Nagar, Chennai)" 
-                                            className="w-full pl-9 pr-3 h-10 rounded-lg border border-slate-300 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-                                            value={mapSearchQuery}
-                                            onChange={(e) => setMapSearchQuery(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && handleSearchLocation()}
+                                            type="number" 
+                                            step="0.000001"
+                                            className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none"
+                                            value={settingsForm.geoLocation?.lat || ''}
+                                            onChange={e => setSettingsForm({ ...settingsForm, geoLocation: { ...settingsForm.geoLocation!, lat: parseFloat(e.target.value) || 0 } })}
                                         />
                                     </div>
-                                    <Button onClick={handleSearchLocation} disabled={!mapSearchQuery || isSearchingLocation}>
-                                        {isSearchingLocation ? '...' : 'Search'}
-                                    </Button>
-                                </div>
-                                <div className="h-64 w-full rounded-xl overflow-hidden border border-slate-300 shadow-sm relative z-0">
-                                    <MapContainer 
-                                        center={[settingsForm.geoLocation?.lat || 13.0827, settingsForm.geoLocation?.lng || 80.2707]} 
-                                        zoom={13} 
-                                        style={{ height: '100%', width: '100%' }}
-                                    >
-                                        <TileLayer attribution='&copy; CARTO' url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
-                                        <MapUpdater center={[settingsForm.geoLocation?.lat || 13.0827, settingsForm.geoLocation?.lng || 80.2707]} />
-                                        <Marker position={[settingsForm.geoLocation?.lat || 13.0827, settingsForm.geoLocation?.lng || 80.2707]} icon={DefaultIcon} />
-                                        <MapClickHandler onLocationSelect={(lat, lng) => setSettingsForm(prev => ({ ...prev, geoLocation: { lat, lng } }))} />
-                                    </MapContainer>
-                                    <div className="absolute top-2 right-2 bg-white/90 backdrop-blur px-2 py-1 rounded text-[10px] font-bold shadow-sm z-[400] pointer-events-none">
-                                        Tap to pin
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4 mt-3">
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Lat</span>
-                                        <input type="number" className="w-full pl-10 pr-3 py-2 rounded-lg border border-slate-300 text-xs font-mono" value={settingsForm.geoLocation?.lat || ''} onChange={e => setSettingsForm(prev => ({ ...prev, geoLocation: { ...prev.geoLocation!, lat: parseFloat(e.target.value) } }))} />
-                                    </div>
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Lng</span>
-                                        <input type="number" className="w-full pl-10 pr-3 py-2 rounded-lg border border-slate-300 text-xs font-mono" value={settingsForm.geoLocation?.lng || ''} onChange={e => setSettingsForm(prev => ({ ...prev, geoLocation: { ...prev.geoLocation!, lng: parseFloat(e.target.value) } }))} />
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Longitude</label>
+                                        <input 
+                                            type="number" 
+                                            step="0.000001"
+                                            className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none"
+                                            value={settingsForm.geoLocation?.lng || ''}
+                                            onChange={e => setSettingsForm({ ...settingsForm, geoLocation: { ...settingsForm.geoLocation!, lng: parseFloat(e.target.value) || 0 } })}
+                                        />
                                     </div>
                                 </div>
                             </div>
+
+                            <div className="space-y-3">
+                                <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><Globe className="h-4" /> Pin Location on Map</label>
+                                <div className="flex gap-2 mb-2">
+                                    <div className="relative flex-1">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                        <input 
+                                            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none" 
+                                            placeholder="Search locality, street..." 
+                                            value={mapSearchQuery} 
+                                            onChange={e => setMapSearchQuery(e.target.value)} 
+                                            onKeyDown={e => e.key === 'Enter' && handleSearchLocation()} 
+                                        />
+                                    </div>
+                                    <Button size="sm" onClick={handleSearchLocation} isLoading={isSearchingLocation} variant="secondary">Search</Button>
+                                </div>
+                                <div className="h-[300px] rounded-2xl border border-slate-200 overflow-hidden relative shadow-inner">
+                                    <MapContainer center={[settingsForm.geoLocation?.lat || 13.0827, settingsForm.geoLocation?.lng || 80.2707]} zoom={14} className="h-full w-full">
+                                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                                        <MapUpdater center={[settingsForm.geoLocation?.lat || 13.0827, settingsForm.geoLocation?.lng || 80.2707]} />
+                                        <MapClickHandler onLocationSelect={(lat, lng) => setSettingsForm({ ...settingsForm, geoLocation: { lat, lng } })} />
+                                        {settingsForm.geoLocation && (
+                                            <DraggableSettingsMarker 
+                                                position={[settingsForm.geoLocation.lat, settingsForm.geoLocation.lng]} 
+                                                onDragEnd={(lat, lng) => setSettingsForm({ ...settingsForm, geoLocation: { lat, lng } })}
+                                            />
+                                        )}
+                                    </MapContainer>
+                                    <div className="absolute bottom-2 left-2 z-[400] bg-white/90 px-3 py-1.5 rounded-lg text-[10px] font-black text-slate-600 shadow-sm border border-slate-200 flex items-center gap-2">
+                                        <div className="flex flex-col">
+                                            <span>Lat: {settingsForm.geoLocation?.lat.toFixed(6)}</span>
+                                            <span>Lng: {settingsForm.geoLocation?.lng.toFixed(6)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p className="text-[10px] text-slate-400 italic">Drag the pin or click on the map to set the exact clinic entrance.</p>
+                            </div>
                         </div>
                     )}
+
                     {activeSettingsTab === 'BRANDING' && (
                         <div className="space-y-6 animate-in fade-in">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Clinic Image URL</label>
-                                <div className="flex gap-4 items-start">
-                                    <div className="w-24 h-24 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-                                        {settingsForm.imageUrl ? <img src={settingsForm.imageUrl} className="w-full h-full object-cover" /> : <ImageIcon className="h-8 w-8 text-slate-300" />}
+                            <div className="space-y-2">
+                                <label className="block text-sm font-medium text-slate-700">Clinic Image URL</label>
+                                <div className="flex gap-4 items-center">
+                                    <div className="w-24 h-24 bg-slate-100 rounded-2xl border border-dashed border-slate-300 overflow-hidden flex items-center justify-center shrink-0">
+                                        {settingsForm.imageUrl ? <img src={settingsForm.imageUrl} className="w-full h-full object-cover" /> : <ImageIcon className="h-8 text-slate-300" />}
                                     </div>
-                                    <div className="flex-1">
-                                        <Input placeholder="https://example.com/image.jpg" value={settingsForm.imageUrl || ''} onChange={e => setSettingsForm({ ...settingsForm, imageUrl: e.target.value })} />
-                                    </div>
+                                    <Input placeholder="https://image-url.com/clinic.jpg" value={settingsForm.imageUrl || ''} onChange={e => setSettingsForm({ ...settingsForm, imageUrl: e.target.value })} />
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Amenities</label>
-                                <div className="flex flex-wrap gap-2 mb-3">
-                                    {(settingsForm.amenities || []).map(amenity => (
-                                        <span key={amenity} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold border border-blue-100">
-                                            {amenity}
-                                            <button onClick={() => handleRemoveAmenity(amenity)} className="hover:text-blue-900"><X className="h-3 w-3" /></button>
+
+                            <div className="space-y-3">
+                                <label className="block text-sm font-medium text-slate-700">Amenities & Facilities</label>
+                                <div className="flex gap-2">
+                                    <Input placeholder="e.g. WiFi, Parking, Pharmacy" value={newAmenity} onChange={e => setNewAmenity(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddAmenity()} />
+                                    <Button onClick={handleAddAmenity} variant="secondary"><Plus className="h-4" /></Button>
+                                </div>
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                    {(settingsForm.amenities || []).map(a => (
+                                        <span key={a} className="bg-primary-50 text-primary-700 px-3 py-1.5 rounded-xl border border-primary-100 text-xs font-bold flex items-center gap-2 group">
+                                            {a}
+                                            <button onClick={() => handleRemoveAmenity(a)} className="text-primary-300 hover:text-primary-600 transition-colors"><X className="h-3 w-3" /></button>
                                         </span>
                                     ))}
-                                </div>
-                                <div className="flex gap-2 mb-4">
-                                    <input className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="Add amenity" value={newAmenity} onChange={e => setNewAmenity(e.target.value)} onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); handleAddAmenity(newAmenity); } }} />
-                                    <Button onClick={() => handleAddAmenity(newAmenity)} size="sm" variant="secondary"><Plus className="h-4 w-4" /></Button>
+                                    {(!settingsForm.amenities || settingsForm.amenities.length === 0) && <p className="text-xs text-slate-400 italic">No amenities added.</p>}
                                 </div>
                             </div>
                         </div>
                     )}
-                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                        <Button variant="secondary" onClick={() => setIsSettingsModalOpen(false)}>Cancel</Button>
-                        <Button onClick={handleSaveSettings}>Save Changes</Button>
-                    </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-8 mt-6 border-t border-slate-100">
+                    <Button variant="secondary" onClick={() => setIsSettingsModalOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSaveSettings} className="px-10 shadow-lg shadow-primary-200">Save Clinic Config</Button>
                 </div>
             </Modal>
 
-            <ConfirmationModal 
-                isOpen={!!doctorToDelete}
-                onClose={() => setDoctorToDelete(null)}
-                onConfirm={confirmDoctorDelete}
-                title="Remove Doctor?"
-                message={`Are you sure you want to remove Dr. ${doctorToDelete?.name}? This will also clear their schedule and room assignments in this clinic.`}
-                confirmLabel="Remove Doctor"
-                variant="danger"
-            />
-
-            <ConfirmationModal 
-                isOpen={!!patientHistoryToDelete}
-                onClose={() => setPatientHistoryToDelete(null)}
-                onConfirm={confirmPatientHistoryDelete}
-                title="Delete Patient History?"
-                message={`Are you sure you want to permanently delete all records and medical history for ${patientHistoryToDelete?.name}? This action cannot be undone.`}
-                confirmLabel="Delete Everything"
-                variant="danger"
-            />
-
+            <AddPatientModal isOpen={isPatientModalOpen} onClose={() => setIsPatientModalOpen(false)} onAdd={onAddPatient} doctors={doctors} patients={patients} addToast={addToast} />
+            <DoctorFormModal isOpen={isDoctorModalOpen} onClose={() => setIsDoctorModalOpen(false)} mode={doctorModalMode} initialData={editingDoctorData} onSave={(data) => {
+                if (doctorModalMode === 'ADD') onAddDoctor(data.name, data.specialty, data.room, data.schedule, data.mobile, data.regNo, data.masterId, data.avatarUrl, parseFloat(data.fee), parseFloat(data.consultationTime));
+                else if (editingDoctorId) onEditDoctor(editingDoctorId, { ...data, weeklySchedule: data.schedule, consultationFee: parseFloat(data.fee), consultationTime: parseFloat(data.consultationTime) });
+            }} onCheckMasterDoctor={onCheckMasterDoctor} addToast={addToast} />
+            
+            <ConfirmationModal isOpen={!!doctorToDelete} onClose={() => setDoctorToDelete(null)} onConfirm={() => { if(doctorToDelete) { onDeleteDoctor(doctorToDelete.id); setDoctorToDelete(null); } }} title="Remove Doctor?" message={`Remove Dr. ${doctorToDelete?.name}?`} confirmLabel="Remove" variant="danger" />
+            <ConfirmationModal isOpen={!!patientHistoryToDelete} onClose={() => setPatientHistoryToDelete(null)} onConfirm={() => { if(patientHistoryToDelete) { const ids = patients.filter(pat => pat.phone === patientHistoryToDelete.phone).map(pat => pat.id); onDeleteMultiplePatients(ids); setPatientHistoryToDelete(null); addToast(`History for ${patientHistoryToDelete.name} deleted`, 'info'); } }} title="Delete Patient History?" message={`Permanently delete records for ${patientHistoryToDelete?.name}?`} confirmLabel="Delete" variant="danger" />
+            
             <Modal isOpen={!!editingPatient} onClose={() => setEditingPatient(null)} title="Edit Patient Profile" maxWidth="max-w-md">
                 {editingPatient && (
-                    <form onSubmit={handleSaveEditedPatient} className="space-y-4">
-                        <Input label="Name" value={editingPatient.name} onChange={(e) => setEditingPatient({...editingPatient, name: e.target.value})} required />
+                    <form onSubmit={(e) => { e.preventDefault(); onEditPatient(editingPatient.id, { name: editingPatient.name, phone: editingPatient.phone, age: editingPatient.age, gender: editingPatient.gender }); setEditingPatient(null); addToast('Patient updated', 'success'); }} className="space-y-4">
+                        <Input label="Name" value={editingPatient.name} onChange={e => setEditingPatient({...editingPatient, name: e.target.value})} required />
                         <div className="grid grid-cols-2 gap-4">
-                            <Input label="Age" value={editingPatient.age || ''} onChange={(e) => setEditingPatient({...editingPatient, age: e.target.value})} />
-                            <div><label className="block text-sm font-medium text-slate-700 mb-1">Gender</label><select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={editingPatient.gender} onChange={(e) => setEditingPatient({...editingPatient, gender: e.target.value as any})}><option>Male</option><option>Female</option><option>Other</option></select></div>
+                            <Input label="Phone" value={editingPatient.phone} onChange={e => setEditingPatient({...editingPatient, phone: e.target.value})} required />
+                            <Input label="Age" value={editingPatient.age || ''} onChange={e => setEditingPatient({...editingPatient, age: e.target.value})} />
                         </div>
-                        <Input label="Phone" value={editingPatient.phone} onChange={(e) => setEditingPatient({...editingPatient, phone: e.target.value})} required />
-                        <div className="pt-2 flex justify-end gap-3"><Button variant="secondary" type="button" onClick={() => setEditingPatient(null)}>Cancel</Button><Button type="submit">Save</Button></div>
+                        <div className="flex justify-end gap-3 pt-2"><Button variant="secondary" onClick={() => setEditingPatient(null)}>Cancel</Button><Button type="submit">Save Changes</Button></div>
                     </form>
                 )}
             </Modal>
 
-            <Modal isOpen={!!vitalsPatient} onClose={() => setVitalsPatient(null)} title="Record Vitals" maxWidth="max-w-2xl">
+            <Modal isOpen={!!vitalsPatient} onClose={() => setVitalsPatient(null)} title="Vitals Recording" maxWidth="max-w-2xl">
                 {vitalsPatient && (
-                    <form onSubmit={handleSaveVitals} className="space-y-6">
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center"><div className="flex items-center gap-3"><div className="h-10 w-10 bg-white rounded-full flex items-center justify-center text-slate-500 font-bold border border-slate-200">{vitalsPatient.tokenNumber}</div><div><h3 className="font-bold text-slate-900">{vitalsPatient.name}</h3><p className="text-xs text-slate-500">{vitalsPatient.age} Yrs • {vitalsPatient.gender}</p></div></div></div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                            <div className="space-y-1"><label className="text-xs font-bold text-slate-400">BP (mmHg)</label><Input placeholder="120/80" value={vitalsPatient.vitals?.bp || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, bp: e.target.value}})} /></div>
-                            <div className="space-y-1"><label className="text-xs font-bold text-slate-400">Temp (°F)</label><Input placeholder="98.6" value={vitalsPatient.vitals?.temp || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, temp: e.target.value}})} /></div>
-                            <div className="space-y-1"><label className="text-xs font-bold text-slate-400">Pulse (bpm)</label><Input placeholder="72" value={vitalsPatient.vitals?.pulse || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, pulse: e.target.value}})} /></div>
-                            <div className="space-y-1"><label className="text-xs font-bold text-slate-400">Weight (kg)</label><Input placeholder="65" value={vitalsPatient.vitals?.weight || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, weight: e.target.value}})} /></div>
-                            <div className="space-y-1"><label className="text-xs font-bold text-slate-400">SpO2 (%)</label><Input placeholder="98" value={vitalsPatient.vitals?.spo2 || ''} onChange={(e) => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, spo2: e.target.value}})} /></div>
+                    <form onSubmit={(e) => { e.preventDefault(); onEditPatient(vitalsPatient.id, { vitals: vitalsPatient.vitals }); setVitalsPatient(null); addToast('Vitals recorded', 'success'); }} className="space-y-6">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                            <Input label="BP" placeholder="120/80" value={vitalsPatient.vitals?.bp || ''} onChange={e => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, bp: e.target.value}})} />
+                            <Input label="Temp (°F)" placeholder="98.6" value={vitalsPatient.vitals?.temp || ''} onChange={e => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, temp: e.target.value}})} />
+                            <Input label="Pulse (bpm)" placeholder="72" value={vitalsPatient.vitals?.pulse || ''} onChange={e => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, pulse: e.target.value}})} />
+                            <Input label="SpO2 (%)" placeholder="98" value={vitalsPatient.vitals?.spo2 || ''} onChange={e => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, spo2: e.target.value}})} />
+                            <Input label="Weight (kg)" placeholder="70" value={vitalsPatient.vitals?.weight || ''} onChange={e => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, weight: e.target.value}})} />
+                            <Input label="Height" placeholder="170cm" value={vitalsPatient.vitals?.height || ''} onChange={e => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, height: e.target.value}})} />
+                            <div className="col-span-2">
+                                <Input label="Blood Sugar (mg/dL)" placeholder="100" value={vitalsPatient.vitals?.sugar || ''} onChange={e => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, sugar: e.target.value}})} />
+                            </div>
                         </div>
-                        <div className="pt-4 flex justify-end gap-3"><Button variant="secondary" type="button" onClick={() => setVitalsPatient(null)}>Cancel</Button><Button type="submit">Save Vitals</Button></div>
+                        <div className="flex justify-end gap-3 pt-4 border-t"><Button variant="secondary" onClick={() => setVitalsPatient(null)}>Cancel</Button><Button type="submit">Update Vitals</Button></div>
                     </form>
                 )}
             </Modal>
 
-            <Modal isOpen={!!historyPatient} onClose={() => setHistoryPatient(null)} title="Patient History" maxWidth="max-w-2xl">
-                {historyPatient && (() => {
-                    const history = getPatientHistoryData(historyPatient);
-                    return (
-                        <div className="space-y-4">
-                            {history.map(visit => (
-                                <div key={visit.id} className="relative pl-6 pb-4 border-l border-slate-200 ml-2">
-                                    <div className="absolute left-[-5px] top-0 w-2.5 h-2.5 rounded-full bg-slate-300 border-2 border-white"></div>
-                                    <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
-                                        <div className="flex justify-between items-start mb-1">
-                                            <div><span className="text-xs font-bold text-slate-500">{new Date(visit.timeAdded).toLocaleDateString()}</span><h5 className="font-bold text-slate-900 text-sm">Dr. {doctors.find(d => d.id === visit.doctorId)?.name}</h5></div>
-                                            <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-bold">{visit.status}</span>
-                                        </div>
-                                        {visit.symptoms && <p className="text-xs text-slate-600"><strong>Sx:</strong> {visit.symptoms}</p>}
-                                        {visit.diagnosis && <p className="text-xs text-slate-600"><strong>Dx:</strong> {visit.diagnosis}</p>}
-                                        {visit.notes && <div className="mt-2 bg-slate-50 p-2 rounded text-[10px] text-slate-500 italic">{visit.notes}</div>}
-                                    </div>
+            <Modal isOpen={!!historyPatient} onClose={() => setHistoryPatient(null)} title="Visit History" maxWidth="max-w-2xl">
+                {historyPatient && (
+                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                        {patients.filter(p => p.phone === historyPatient.phone).sort((a,b) => b.timeAdded - a.timeAdded).map(visit => (
+                            <div key={visit.id} className="p-4 border rounded-xl bg-slate-50 border-slate-200">
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">{new Date(visit.timeAdded).toLocaleDateString()}</div>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}`}>{visit.status}</span>
                                 </div>
-                            ))}
-                            {history.length === 0 && <p className="text-center text-slate-400 py-4">No history found.</p>}
-                        </div>
-                    );
-                })()}
+                                <div className="font-bold text-slate-800 text-sm mb-1">Dr. {doctors.find(d => d.id === visit.doctorId)?.name}</div>
+                                {visit.notes && <p className="text-xs text-slate-600 italic bg-white p-2 rounded-lg border border-slate-100 mt-2">"{visit.notes}"</p>}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </Modal>
         </div>
     );

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Patient, PainPoint } from '../../../types';
 import { Button } from '../../../components/Button';
@@ -61,7 +60,9 @@ export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ cu
       temp: currentPatient.vitals?.temp || '',
       weight: currentPatient.vitals?.weight || '',
       pulse: currentPatient.vitals?.pulse || '',
-      spo2: currentPatient.vitals?.spo2 || ''
+      spo2: currentPatient.vitals?.spo2 || '',
+      height: currentPatient.vitals?.height || '',
+      sugar: currentPatient.vitals?.sugar || ''
   });
 
   const [painPoints, setPainPoints] = useState<PainPoint[]>(currentPatient.painPoints || []);
@@ -79,7 +80,9 @@ export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ cu
           temp: currentPatient.vitals?.temp || '',
           weight: currentPatient.vitals?.weight || '',
           pulse: currentPatient.vitals?.pulse || '',
-          spo2: currentPatient.vitals?.spo2 || ''
+          spo2: currentPatient.vitals?.spo2 || '',
+          height: currentPatient.vitals?.height || '',
+          sugar: currentPatient.vitals?.sugar || ''
       });
       setPainPoints(currentPatient.painPoints || []);
       setNewRx({name: '', dosage: '', duration: ''});
@@ -213,7 +216,7 @@ export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ cu
                     <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                         <Activity className="h-5 w-5 text-blue-500" /> Vitals
                     </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="space-y-1">
                             <label className="text-xs font-bold text-slate-400">BP</label>
                             <input className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 focus:ring-2 focus:ring-primary-500 outline-none" placeholder="120/80" value={vitals.bp} onChange={e => setVitals({...vitals, bp: e.target.value})} />
@@ -233,6 +236,14 @@ export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ cu
                         <div className="space-y-1">
                             <label className="text-xs font-bold text-slate-400">Weight (kg)</label>
                             <input className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 focus:ring-2 focus:ring-primary-500 outline-none" placeholder="65" value={vitals.weight} onChange={e => setVitals({...vitals, weight: e.target.value})} />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-400">Height</label>
+                            <input className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 focus:ring-2 focus:ring-primary-500 outline-none" placeholder="170cm" value={vitals.height} onChange={e => setVitals({...vitals, height: e.target.value})} />
+                        </div>
+                        <div className="space-y-1 col-span-2">
+                            <label className="text-xs font-bold text-slate-400">Sugar (mg/dL)</label>
+                            <input className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 focus:ring-2 focus:ring-primary-500 outline-none" placeholder="100" value={vitals.sugar} onChange={e => setVitals({...vitals, sugar: e.target.value})} />
                         </div>
                     </div>
                 </div>

@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { Patient, Doctor, PatientStatus } from '../../../types';
 import { Badge } from '../../../components/Badge';
-import { PlayCircle, CheckSquare, Edit2, UserCheck, Activity, AlertTriangle, ArrowUp, Calendar, User, CheckCircle, GripVertical, Clock, ChevronRight, Timer, Stethoscope, PauseCircle, Play, Phone, Zap, PhoneCall, UserX } from 'lucide-react';
+import { PlayCircle, CheckSquare, Edit2, UserCheck, Activity, AlertTriangle, ArrowUp, Calendar, User, CheckCircle, GripVertical, Clock, ChevronRight, Timer, Stethoscope, PauseCircle, Play, Phone, Zap, PhoneCall, UserX, Thermometer, Droplet, Weight, ArrowRightCircle, Wind, Sparkles, Ruler, Hourglass } from 'lucide-react';
 import { ConfirmationModal } from '../../../components/ConfirmationModal';
 
 interface QueueTableProps {
@@ -28,11 +29,12 @@ export const QueueTable: React.FC<QueueTableProps> = ({
 
   if (patients.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-            <div className="bg-white p-4 rounded-full shadow-sm mb-3">
-                <UserCheck className="h-8 w-8 text-slate-300" />
+        <div className="flex flex-col items-center justify-center py-24 text-slate-400 animate-in fade-in zoom-in-95">
+            <div className="bg-white p-6 rounded-full shadow-sm mb-4 border border-slate-100">
+                <UserCheck className="h-10 w-10 text-slate-200" />
             </div>
-            <p className="font-medium">No patients found.</p>
+            <p className="font-black text-lg tracking-tight text-slate-300 uppercase">No Patients Found</p>
+            <p className="text-sm mt-1">Try changing filters or adding a new patient.</p>
         </div>
       );
   }
@@ -48,8 +50,32 @@ export const QueueTable: React.FC<QueueTableProps> = ({
       return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const getDoctorServingToken = (doctorId: string) => {
+      const serving = patients.find(p => p.doctorId === doctorId && p.status === PatientStatus.WITH_DOCTOR);
+      return serving ? serving.tokenNumber : null;
+  };
+
+  const VitalsSummary: React.FC<{ vitals?: any }> = ({ vitals }) => {
+    if (!vitals) return null;
+    const items = [];
+    if (vitals.bp) items.push(<span key="bp" className="flex items-center gap-0.5"><Droplet className="h-2.5 w-2.5 text-rose-400" /> {vitals.bp}</span>);
+    if (vitals.temp) items.push(<span key="temp" className="flex items-center gap-0.5"><Thermometer className="h-2.5 w-2.5 text-orange-400" /> {vitals.temp}°F</span>);
+    if (vitals.pulse) items.push(<span key="pulse" className="flex items-center gap-0.5"><Activity className="h-2.5 w-2.5 text-emerald-400" /> {vitals.pulse} bpm</span>);
+    if (vitals.spo2) items.push(<span key="spo2" className="flex items-center gap-0.5"><Wind className="h-2.5 w-2.5 text-blue-400" /> {vitals.spo2}%</span>);
+    if (vitals.sugar) items.push(<span key="sugar" className="flex items-center gap-0.5"><Sparkles className="h-2.5 w-2.5 text-red-400" /> {vitals.sugar} mg/dL</span>);
+    if (vitals.weight) items.push(<span key="weight" className="flex items-center gap-0.5"><Weight className="h-2.5 w-2.5 text-slate-400" /> {vitals.weight}kg</span>);
+    if (vitals.height) items.push(<span key="height" className="flex items-center gap-0.5"><Ruler className="h-2.5 w-2.5 text-slate-400" /> {vitals.height}</span>);
+    
+    if (items.length === 0) return null;
+    return (
+        <div className="flex flex-wrap gap-x-2.5 gap-y-1 text-[9px] font-black text-slate-400 uppercase tracking-tighter mt-1">
+            {items}
+        </div>
+    );
+  };
+
   return (
-    <div className="flex-1 overflow-auto bg-slate-50/50 pb-20 sm:pb-0 h-full">
+    <div className="flex-1 overflow-auto bg-slate-50/50 pb-24 sm:pb-0 h-full scroll-smooth">
       {/* MOBILE CARD VIEW (< 768px) */}
       <div className="block md:hidden p-3 space-y-3">
           {patients.map(patient => {
@@ -61,127 +87,104 @@ export const QueueTable: React.FC<QueueTableProps> = ({
               const isOnHold = patient.status === PatientStatus.ON_HOLD;
               const isCheckedIn = patient.isCheckedIn;
               const isNextUp = nextUpPatientIds ? nextUpPatientIds.has(patient.id) : false;
+              const currentlyServingToken = getDoctorServingToken(patient.doctorId);
               
-              let cardClass = "bg-white border-slate-200";
-              if (isServing) cardClass = "bg-blue-50/30 border-blue-500 shadow-md shadow-blue-100 ring-1 ring-blue-500 z-10";
-              else if (isNextUp) cardClass = "border-indigo-500 shadow-indigo-50 ring-1 ring-indigo-500 relative";
-              else if (patient.isEmergency) cardClass = "border-red-200 bg-red-50/30";
-              else if (isOnHold) cardClass = "border-orange-200 bg-orange-50/30 opacity-90";
+              let cardClass = "bg-white border-slate-200 shadow-sm";
+              if (isServing) cardClass = "bg-blue-50/40 border-2 border-blue-600 shadow-lg shadow-blue-100 ring-4 ring-blue-500/10 z-10 scale-[1.02] transition-transform";
+              else if (isNextUp) cardClass = "border-indigo-500 shadow-md shadow-indigo-50 ring-2 ring-indigo-500/5";
+              else if (patient.isEmergency) cardClass = "border-red-300 bg-red-50/20";
+              else if (isOnHold) cardClass = "border-orange-200 bg-orange-50/10 grayscale-[0.2]";
 
               return (
-                  <div key={patient.id} className={`rounded-xl p-4 shadow-sm border relative overflow-hidden transition-all ${cardClass}`}>
-                      {isServing && <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-600"></div>}
-                      {isOnHold && <div className="absolute top-0 left-0 w-1 h-full bg-orange-400"></div>}
-                      
-                      {/* Top Right Badges */}
+                  <div key={patient.id} className={`rounded-2xl p-4 border relative overflow-hidden transition-all duration-200 ${cardClass}`}>
                       <div className="absolute top-0 right-0 flex items-start">
-                          {isServing && <div className="bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl flex items-center gap-1 shadow-sm z-10 animate-in fade-in"><Activity className="h-3 w-3 animate-pulse" /> SERVING</div>}
-                          {isNextUp && !isServing && <div className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg flex items-center gap-1 shadow-sm z-10">NEXT</div>}
-                          {patient.isEmergency && !isNextUp && !isServing && <div className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-1 rounded-bl-lg flex items-center gap-1"><Zap className="h-3 w-3 fill-current" /> URGENT</div>}
-                          {isOnHold && !patient.isEmergency && !isNextUp && <div className="bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-1 rounded-bl-lg flex items-center gap-1"><PauseCircle className="h-3 w-3" /> ON HOLD</div>}
+                          {isServing && <div className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-bl-xl flex items-center gap-1 shadow-sm z-10 animate-pulse uppercase"><Activity className="h-2.5 w-2.5" /> Consulting</div>}
+                          {isNextUp && !isServing && <div className="bg-indigo-600 text-white text-[8px] font-black px-2 py-1 rounded-bl-xl flex items-center gap-1 shadow-sm z-10 uppercase tracking-widest">Next Up</div>}
                       </div>
                       
                       <div className="flex items-start gap-4">
-                          <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 flex-shrink-0 ${isServing ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white border-blue-600 shadow-inner' : isNextUp ? 'bg-indigo-600 text-white border-indigo-600' : ''}`}>
-                              <span className="text-xl font-black">{patient.tokenNumber}</span>
+                          <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex-shrink-0 transition-all ${isServing ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white border-blue-600 shadow-lg' : isNextUp ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'shadow-sm'}`}>
+                              <span className="text-2xl font-black tracking-tighter">{patient.tokenNumber}</span>
                           </div>
                           
                           <div className="flex-1 min-w-0">
                               <div className="flex justify-between items-start">
-                                  <h3 className="font-bold text-slate-900 truncate pr-6">{patient.name}</h3>
+                                  <h3 className="font-black text-slate-900 truncate pr-16 tracking-tight text-base">{patient.name}</h3>
                               </div>
-                              <div className="text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-1">
-                                  <span>{doc?.name}</span>
-                                  {!isServing && <span>•</span>}
-                                  {!isServing && <span className={waitMins > 30 ? 'text-red-500 font-bold' : ''}>~{waitMins}m Wait</span>}
+                              <div className="text-[11px] text-slate-500 font-bold mt-0.5 flex flex-col gap-0.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-primary-600 truncate max-w-[100px]">{doc?.name}</span>
+                                      {!isServing && <span className="text-slate-300">•</span>}
+                                      {!isServing && <span className={waitMins > 30 ? 'text-rose-500 font-black' : 'font-black text-slate-700'}>~{waitMins}m Wait</span>}
+                                  </div>
+                                  {!isServing && currentlyServingToken && (
+                                      <div className="text-[9px] text-blue-600 font-black flex items-center gap-1 mt-0.5 bg-blue-50 px-2 py-0.5 rounded-lg w-fit border border-blue-100/50">
+                                          <Activity className="h-2.5 w-2.5 animate-pulse" /> Consulting: #{currentlyServingToken}
+                                      </div>
+                                  )}
+                                  <VitalsSummary vitals={patient.vitals} />
                               </div>
                               
-                              {/* Next of Kin Display (Mobile) */}
-                              {patient.nextOfKin && (
-                                  <div className="flex items-center gap-1 mt-2 text-[10px] text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100 w-fit">
-                                      <PhoneCall className="h-3 w-3 text-slate-400" />
-                                      <span className="font-bold">ICE:</span> {patient.nextOfKin.name} ({patient.nextOfKin.phone})
+                              <div className="flex items-center justify-between mt-2.5">
+                                  <div className="flex items-center gap-1.5 text-[9px] text-slate-400 font-black uppercase tracking-wider">
+                                      <Clock className="h-3 w-3" /> {formatBookedTime(patient.timeAdded)}
                                   </div>
-                              )}
-                              
-                              <div className="flex items-center gap-1 mt-2 text-[10px] text-slate-400 font-bold">
-                                  <Clock className="h-3 w-3" /> Booked: {formatBookedTime(patient.timeAdded)}
-                              </div>
-
-                              {/* Missing NOK Warning for Emergency */}
-                              {patient.isEmergency && !patient.nextOfKin && (
-                                  <div className="flex items-center gap-1 mt-2 text-[10px] text-red-600 bg-red-50 px-2 py-1 rounded border border-red-100 w-fit animate-pulse">
-                                      <AlertTriangle className="h-3 w-3" /> No Emergency Contact
-                                  </div>
-                              )}
-
-                              <div className="flex flex-wrap gap-2 mt-2">
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${patient.visitType === 'APPOINTMENT' ? 'bg-purple-50 text-purple-700 border-purple-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                                      {patient.visitType === 'APPOINTMENT' ? (
-                                          <div className="flex flex-col leading-none">
-                                              <span className="font-bold">{patient.appointmentTime}</span>
-                                              <span className="text-[9px] opacity-75">{patient.appointmentDate}</span>
-                                          </div>
-                                      ) : 'Walk-in'}
-                                  </span>
-                                  {!isCheckedIn && <span className="text-[10px] px-1.5 py-0.5 rounded border bg-orange-50 text-orange-700 border-orange-100">Not Here</span>}
+                                  {!isServing && estTimeMs && (
+                                      <div className="flex items-center gap-1 text-[9px] text-primary-600 font-black uppercase tracking-wider bg-primary-50 px-2 py-0.5 rounded-lg border border-primary-100">
+                                          <Hourglass className="h-2.5 w-2.5" /> Est: {formatBookedTime(estTimeMs)}
+                                      </div>
+                                  )}
                               </div>
                           </div>
                       </div>
 
-                      {/* Mobile Actions Toolbar */}
-                      <div className="mt-4 pt-3 border-t border-slate-100 flex gap-2 overflow-x-auto no-scrollbar">
-                          {isServing ? (
-                              <>
-                                <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.COMPLETED); }} className="flex-1 bg-green-600 text-white h-10 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform min-w-[100px]">
-                                    <CheckSquare className="h-4 w-4" /> Finish
-                                </button>
-                                <button onClick={(e) => { e.stopPropagation(); setPatientForNoShow(patient); }} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-orange-100 text-orange-500 bg-orange-50 hover:bg-orange-100" title="No Show">
-                                    <UserX className="h-4 w-4" />
-                                </button>
-                              </>
-                          ) : (
-                              (isWaiting && !isOnHold) ? (isCheckedIn ? (
-                                  <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR); }} className="flex-1 bg-blue-600 text-white h-10 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform min-w-[100px]">
-                                      <PlayCircle className="h-4 w-4" /> Call
-                                  </button>
-                              ) : (
-                                  <button onClick={(e) => { e.stopPropagation(); onManualCheckIn(patient.id); }} className="flex-1 bg-emerald-600 text-white h-10 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform min-w-[100px]">
-                                      <UserCheck className="h-4 w-4" /> Arrive
-                                  </button>
-                              )) : (
-                                  isOnHold && (
-                                    <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.WAITING); }} className="flex-1 bg-orange-500 text-white h-10 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform min-w-[100px]">
-                                      <PlayCircle className="h-4 w-4" /> Resume
+                      {/* REDESIGNED MOBILE ACTION BAR */}
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2">
+                          <div className="flex-1 flex gap-2">
+                            {isServing ? (
+                                    <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.COMPLETED); }} className="flex-1 bg-green-600 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-green-100 active:scale-95 transition-all">
+                                        <CheckCircle className="h-4 w-4" /> Finish Visit
                                     </button>
-                                  )
-                              )
-                          )}
+                            ) : (
+                                (isWaiting && !isOnHold) ? (isCheckedIn ? (
+                                    <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR); }} className="flex-1 bg-primary-600 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-primary-100 active:scale-95 transition-all">
+                                        <PlayCircle className="h-4 w-4" /> Start Visit
+                                    </button>
+                                ) : (
+                                    <button onClick={(e) => { e.stopPropagation(); onManualCheckIn(patient.id); }} className="flex-1 bg-emerald-600 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 active:scale-95 transition-all">
+                                        <UserCheck className="h-4 w-4" /> Mark Arrival
+                                    </button>
+                                )) : (
+                                    isOnHold && (
+                                        <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.WAITING); }} className="flex-1 bg-orange-500 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-100 active:scale-95 transition-all">
+                                            <Play className="h-4 w-4 fill-current" /> Resume
+                                        </button>
+                                    )
+                                )
+                            )}
+                          </div>
 
-                          {/* Quick Actions: Zap & Hold */}
-                          {(isWaiting || isOnHold) && (
-                            <>
-                                <button onClick={(e) => { e.stopPropagation(); onToggleEmergency(patient.id); }} className={`h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border ${patient.isEmergency ? 'bg-red-100 border-red-200 text-red-600' : 'bg-white border-slate-200 text-slate-400'}`}>
-                                    <Zap className={`h-4 w-4 ${patient.isEmergency ? 'fill-current' : ''}`} />
-                                </button>
-                                {isWaiting && (
-                                    <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.ON_HOLD); }} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 bg-white hover:text-orange-500">
-                                        <PauseCircle className="h-4 w-4" />
+                          <div className="flex gap-1.5 shrink-0">
+                                {isWaiting && !isOnHold && (
+                                    <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.ON_HOLD); }} className="h-11 w-11 flex items-center justify-center rounded-xl border border-orange-100 text-orange-500 bg-orange-50 hover:bg-orange-100 transition-all active:scale-95" title="Hold">
+                                        <PauseCircle className="h-5 w-5" />
                                     </button>
                                 )}
-                            </>
-                          )}
 
-                          <button onClick={(e) => { e.stopPropagation(); onEditPatient(patient); }} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 bg-white hover:bg-slate-50">
-                              <Edit2 className="h-4 w-4" />
-                          </button>
-                          {(isWaiting || isOnHold) && (
-                            <>
-                                <button onClick={(e) => { e.stopPropagation(); setPatientForNoShow(patient); }} className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-orange-100 text-orange-500 bg-orange-50 hover:bg-orange-100" title="No Show">
-                                    <UserX className="h-4 w-4" />
+                                <button onClick={(e) => { e.stopPropagation(); onVitalsClick(patient); }} className="h-11 w-11 flex items-center justify-center rounded-xl border border-slate-100 text-slate-400 bg-white hover:bg-slate-50 transition-all active:scale-95" title="Vitals">
+                                    <Activity className="h-5 w-5" />
                                 </button>
-                            </>
-                          )}
+
+                                <button onClick={(e) => { e.stopPropagation(); onToggleEmergency(patient.id); }} className={`h-11 w-11 flex items-center justify-center rounded-xl transition-all active:scale-95 border ${patient.isEmergency ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-slate-300 border-slate-100'}`} title="Emergency">
+                                    <Zap className={`h-5 w-5 ${patient.isEmergency ? 'fill-current' : ''}`} />
+                                </button>
+
+                                {(isWaiting || isOnHold) && (
+                                    <button onClick={(e) => { e.stopPropagation(); setPatientForNoShow(patient); }} className="h-11 w-11 flex items-center justify-center rounded-xl border border-rose-100 text-rose-400 bg-rose-50/50 hover:bg-rose-100 transition-all active:scale-95" title="No Show">
+                                        <UserX className="h-5 w-5" />
+                                    </button>
+                                )}
+                          </div>
                       </div>
                   </div>
               );
@@ -189,17 +192,19 @@ export const QueueTable: React.FC<QueueTableProps> = ({
       </div>
 
       {/* DESKTOP TABLE VIEW (>= 768px) */}
-      <div className="hidden md:block min-w-[1100px] px-4 py-2">
-        <table className="w-full text-sm text-left border-separate border-spacing-y-1">
-          <thead className="text-slate-400 font-bold text-[10px] uppercase tracking-wider sticky top-0 z-20">
+      <div className="hidden md:block min-w-[1200px] px-6 py-4">
+        <table className="w-full text-sm text-left border-separate border-spacing-y-2">
+          <thead className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] sticky top-0 z-20">
             <tr>
-              <th className="px-3 pb-2 w-16 text-center">Token</th>
-              <th className="px-3 pb-2">Patient Details</th>
-              <th className="px-3 pb-2">Doctor</th>
-              <th className="px-3 pb-2 w-28">Booked At</th>
-              <th className="px-3 pb-2">Status & Wait</th>
-              <th className="px-3 pb-2">Type</th>
-              <th className="px-3 pb-2 text-right">Actions</th>
+              <th className="px-5 pb-3 w-20 text-center">Token</th>
+              <th className="px-5 pb-3">Patient Details</th>
+              <th className="px-5 pb-3">Reason & Vitals</th>
+              <th className="px-5 pb-3">Doctor</th>
+              <th className="px-5 pb-3 w-28">Booked At</th>
+              <th className="px-5 pb-3 w-28">Est. Turn</th>
+              <th className="px-5 pb-3">Status</th>
+              <th className="px-5 pb-3">Type</th>
+              <th className="px-5 pb-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="align-middle">
@@ -208,210 +213,152 @@ export const QueueTable: React.FC<QueueTableProps> = ({
               const isWaiting = patient.status === PatientStatus.WAITING;
               const isServing = patient.status === PatientStatus.WITH_DOCTOR;
               const isOnHold = patient.status === PatientStatus.ON_HOLD;
+              const isCompleted = patient.status === PatientStatus.COMPLETED;
               const isNextUp = nextUpPatientIds ? nextUpPatientIds.has(patient.id) : false;
+              const currentlyServingToken = getDoctorServingToken(patient.doctorId);
               const estTimeMs = estimatedTimes[patient.id];
-              const waitMins = estTimeMs ? Math.max(0, Math.ceil((estTimeMs - Date.now()) / 60000)) : 0;
               
-              let rowStateClass = "bg-white border-slate-200 hover:border-primary-300 hover:shadow-sm";
-              if (isServing) rowStateClass = "bg-blue-50/20 border-l-4 border-l-blue-600 border-y border-y-blue-200 border-r border-r-blue-200 shadow-lg scale-[1.01] z-10 relative transition-transform";
-              else if (isNextUp) rowStateClass = "bg-white border-l-4 border-l-indigo-500 border-y-indigo-50 border-r-indigo-50 shadow-sm";
-              else if (patient.isEmergency) rowStateClass = "bg-red-50/30 border-l-4 border-l-red-500 border-red-100";
-              else if (isOnHold) rowStateClass = "bg-orange-50/30 border-l-4 border-l-orange-400 border-orange-100 opacity-80";
-              else if (draggedId === patient.id) rowStateClass = "opacity-40 border-2 border-dashed border-primary-500";
+              let rowStateClass = "bg-white border-slate-100 hover:border-primary-200 hover:shadow-xl shadow-sm";
+              if (isServing) rowStateClass = "bg-blue-50/30 border-2 border-blue-500 shadow-xl shadow-blue-100 scale-[1.01] z-10 relative ring-4 ring-blue-500/10";
+              else if (isNextUp) rowStateClass = "bg-indigo-50/10 border-indigo-300 shadow-lg shadow-indigo-50 ring-4 ring-indigo-500/5";
+              else if (isOnHold) rowStateClass = "bg-orange-50/10 border-orange-200 grayscale-[0.2]";
 
               return (
                 <tr 
                   key={patient.id} 
                   draggable={isWaiting && !isFiltered} 
-                  onDragStart={(e) => { if (!isWaiting || isFiltered) { e.preventDefault(); return; } setDraggedId(patient.id); e.dataTransfer.effectAllowed = "move"; }}
-                  onDragOver={(e) => { if (draggedId && draggedId !== patient.id && isWaiting && !isFiltered) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }}
+                  onDragStart={(e) => { if (!isWaiting || isFiltered) { e.preventDefault(); return; } setDraggedId(patient.id); }}
+                  onDragOver={(e) => { if (draggedId && draggedId !== patient.id && isWaiting && !isFiltered) { e.preventDefault(); } }}
                   onDrop={(e) => { e.preventDefault(); if (draggedId && draggedId !== patient.id && !isFiltered) { onDragDrop(draggedId, patient.id); setDraggedId(null); } }}
                   onDragEnd={() => setDraggedId(null)}
-                  className={`transition-all duration-200 rounded-lg border ${rowStateClass} group`}
+                  className={`transition-all duration-300 rounded-[1.5rem] border ${rowStateClass} group relative`}
                 >
-                  <td className="px-2 py-1 text-center rounded-l-lg">
+                  <td className="px-4 py-3 text-center rounded-l-[1.5rem]">
                     <div className="flex flex-col items-center justify-center">
-                      {isWaiting && !isFiltered && <GripVertical className="h-3 w-3 text-slate-300 cursor-move hover:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                      <div className="relative">
-                        <div className={`inline-flex items-center justify-center h-8 w-8 rounded-lg font-black text-sm shadow-sm border ${patient.isEmergency ? 'bg-red-500 text-white border-red-600' : isServing ? 'bg-blue-600 text-white border-blue-700 animate-pulse' : isNextUp ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
-                          {patient.tokenNumber}
-                        </div>
-                        {patient.isEmergency && <div className="absolute -top-1.5 -right-1.5 bg-red-100 text-red-600 p-0.5 rounded-full border border-red-200 shadow-sm z-10"><Zap className="h-2.5 w-2.5 fill-current" /></div>}
+                      <div className={`
+                        inline-flex items-center justify-center h-11 w-11 rounded-[1.1rem] font-black text-base shadow-lg border-2 transition-all
+                        ${patient.isEmergency ? 'bg-rose-500 text-white border-rose-600 shadow-rose-200' : 
+                          isServing ? 'bg-blue-600 text-white border-blue-700 animate-pulse shadow-blue-200' : 
+                          isNextUp ? 'bg-indigo-600 text-white border-indigo-700 shadow-indigo-200' : 
+                          'bg-white text-slate-700 border-slate-100'}
+                      `}>
+                        {patient.tokenNumber}
                       </div>
+                      {isNextUp && isWaiting && !isServing && (
+                          <div className="text-[7px] font-black text-indigo-600 uppercase tracking-[0.2em] mt-1.5">Next Up</div>
+                      )}
                     </div>
                   </td>
                   
-                  <td className="px-3 py-1">
+                  <td className="px-5 py-3">
                     <div className="flex flex-col">
-                      <div className={`font-bold text-sm truncate max-w-[180px] ${isServing ? 'text-blue-900' : isNextUp ? 'text-indigo-900' : 'text-slate-900'}`}>{patient.name}</div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium leading-none">
-                        <span>{patient.age}Y</span><span className="text-slate-300">•</span><span>{patient.gender}</span><span className="text-slate-300">•</span><span className="font-mono">{patient.phone}</span>
+                      <div className="font-black text-[15px] text-slate-900 flex items-center gap-2 group-hover:text-primary-700 transition-colors">
+                          {patient.name}
+                          {isNextUp && <Zap className="h-3 w-3 text-indigo-500 fill-indigo-500" />}
                       </div>
-                      
-                      <div className="mt-0.5">
-                          {patient.nextOfKin && (
-                              <div className="flex items-center gap-1 text-[9px] text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 w-fit">
-                                  <PhoneCall className="h-2.5 w-2.5 text-slate-400" />
-                                  <span className="font-semibold">ICE:</span> {patient.nextOfKin.name}
-                              </div>
-                          )}
-                          {patient.isEmergency && !patient.nextOfKin && (
-                              <div className="mt-0.5 flex items-center gap-1 text-[9px] text-red-600 font-bold animate-pulse">
-                                  <AlertTriangle className="h-2.5 w-2.5" /> No Emergency Contact
-                              </div>
-                          )}
+                      <div className="flex items-center gap-2 text-[10px] text-slate-400 font-black uppercase mt-1 leading-none">
+                        <span>{patient.age}Y</span><span className="opacity-30">•</span><span>{patient.gender}</span><span className="opacity-30">•</span><span className="font-mono text-slate-500">{patient.phone}</span>
                       </div>
-
-                      {patient.symptoms && <div className="mt-0.5 text-[9px] text-slate-600 bg-slate-50 px-1 py-0.5 rounded w-fit max-w-[180px] truncate border border-slate-100">{patient.symptoms}</div>}
+                      {!isServing && !isCompleted && currentlyServingToken && (
+                        <div className="mt-1.5 text-[9px] text-blue-600 font-black uppercase tracking-widest flex items-center gap-1.5 bg-blue-50/50 px-2 py-0.5 rounded-lg border border-blue-100/50 w-fit">
+                          <Activity className="h-2.5 w-2.5 animate-pulse" /> Consulting: #{currentlyServingToken}
+                        </div>
+                      )}
                     </div>
                   </td>
 
-                  <td className="px-3 py-1">
-                    <div className="flex items-center gap-2">
-                        {doc?.avatarUrl ? <img src={doc.avatarUrl} className="w-6 h-6 rounded-full bg-slate-200 border border-white shadow-sm object-cover" /> : <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-500">{doc?.name?.charAt(0)}</div>}
-                        <div className="min-w-0"><div className="text-slate-900 font-bold text-xs truncate max-w-[120px]">{doc?.name || 'Unknown'}</div><div className="text-[9px] text-slate-500 uppercase tracking-wide font-semibold truncate max-w-[100px]">{doc?.specialty}</div></div>
-                    </div>
+                  <td className="px-5 py-3">
+                      <div className="flex flex-col gap-1.5">
+                          <div className="text-[11px] text-slate-500 font-bold max-w-[180px] truncate leading-tight italic" title={patient.symptoms}>
+                              {patient.symptoms || <span className="text-slate-300 font-normal">No reason provided</span>}
+                          </div>
+                          <VitalsSummary vitals={patient.vitals} />
+                      </div>
                   </td>
 
-                  <td className="px-3 py-1">
-                      <div className="flex items-center gap-1 text-[10px] text-slate-600 font-black bg-slate-100/80 px-2 py-1 rounded border border-slate-200 w-fit">
-                          <Clock className="h-3 w-3 text-slate-400" /> {formatBookedTime(patient.timeAdded)}
+                  <td className="px-5 py-3">
+                    <div className="text-slate-900 font-black text-xs leading-none">{doc?.name || 'Unknown'}</div>
+                    <div className="text-[9px] text-slate-400 uppercase tracking-widest font-black mt-1.5">{doc?.specialty}</div>
+                  </td>
+
+                  <td className="px-5 py-3">
+                      <div className="flex items-center gap-2 text-[10px] text-slate-500 font-black bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-100 w-fit shadow-inner">
+                          <Clock className="h-3 w-3 text-slate-300" /> {formatBookedTime(patient.timeAdded)}
                       </div>
+                  </td>
+
+                  <td className="px-5 py-3">
+                      {isServing ? (
+                          <div className="text-[10px] text-blue-600 font-black uppercase tracking-widest flex items-center gap-1.5 bg-blue-50 px-2.5 py-1.5 rounded-xl border border-blue-100 w-fit">
+                              Now
+                          </div>
+                      ) : (isWaiting || isOnHold) && estTimeMs ? (
+                          <div className={`flex items-center gap-2 text-[10px] font-black px-2.5 py-1.5 rounded-xl border w-fit shadow-sm ${estTimeMs - Date.now() > 3600000 ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-primary-50 text-primary-700 border-primary-100'}`}>
+                              <Hourglass className="h-3 w-3 opacity-50" /> {formatBookedTime(estTimeMs)}
+                          </div>
+                      ) : (
+                          <div className="text-[10px] text-slate-300 font-black uppercase tracking-widest">--</div>
+                      )}
                   </td>
                   
-                  <td className="px-3 py-1">
+                  <td className="px-5 py-3">
                       {isServing ? (
-                          <div className="flex items-center gap-1.5 text-white bg-blue-600 px-2.5 py-1 rounded-full shadow-sm w-fit">
-                              <Activity className="h-3 w-3 animate-pulse" />
-                              <span className="text-[10px] font-bold uppercase tracking-wide">Serving</span>
+                          <div className="flex items-center gap-2 text-white bg-blue-600 px-3 py-1.5 rounded-full shadow-lg shadow-blue-100 w-fit ring-2 ring-blue-500/20">
+                              <Activity className="h-3.5 w-3.5 animate-pulse" />
+                              <span className="text-[10px] font-black uppercase tracking-widest">Consulting</span>
                           </div>
-                      ) : (isWaiting || isOnHold) ? (
-                          <div className="flex flex-col gap-0.5">
-                              {isOnHold ? (
-                                  <div className="flex items-center gap-1.5 text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100 w-fit font-bold text-[10px]"><PauseCircle className="h-3 w-3" /> ON HOLD</div>
-                              ) : isNextUp ? (
-                                  <div className="flex items-center gap-1.5 text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 w-fit font-bold text-[10px]"><Play className="h-3 w-3 fill-current" /> NEXT</div>
-                              ) : (
-                                  <div className="flex items-center gap-1.5"><Clock className="h-3 w-3 text-slate-400" /><span className="text-xs font-bold text-slate-700">~{waitMins}m</span></div>
-                              )}
-                              {patient.isCheckedIn ? <span className="text-[9px] font-bold text-green-600 flex items-center gap-0.5"><CheckCircle className="h-2.5 w-2.5 fill-current" /> Arrived</span> : <span className="text-[9px] font-bold text-slate-400 flex items-center gap-0.5"><div className="w-1.5 h-1.5 rounded-full border border-slate-300"></div> Not Here</span>}
-                          </div>
+                      ) : isNextUp && isWaiting ? (
+                        <div className="flex items-center gap-2 text-indigo-700 bg-indigo-50 border-2 border-indigo-100 px-3 py-1 rounded-full shadow-sm w-fit">
+                            <ArrowRightCircle className="h-3.5 w-3.5" />
+                            <span className="text-[10px] font-black uppercase tracking-widest">Next Ready</span>
+                        </div>
                       ) : <Badge status={patient.status} />}
                   </td>
 
-                  <td className="px-3 py-1">
-                      {patient.visitType === 'APPOINTMENT' ? (
-                          <div className="flex flex-col items-start gap-0.5">
-                              <span className="text-[9px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100 font-bold flex w-fit items-center gap-1">
-                                  <Clock className="h-2.5 w-2.5" /> {patient.appointmentTime}
-                              </span>
-                              <span className="text-[9px] text-slate-500 font-medium flex items-center gap-1 ml-0.5">
-                                  <Calendar className="h-2.5 w-2.5 text-slate-400" /> {patient.appointmentDate}
-                              </span>
-                          </div>
-                      ) : (
-                          <span className="text-[9px] text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 font-bold flex w-fit items-center gap-1">
-                              <User className="h-2.5 w-2.5" /> Walk-in
-                          </span>
-                      )}
+                  <td className="px-5 py-3">
+                      <span className={`text-[9px] px-2 py-1 rounded-lg border-2 font-black uppercase tracking-widest ${patient.visitType === 'APPOINTMENT' ? 'text-purple-700 bg-purple-50 border-purple-100' : 'text-slate-500 bg-slate-50 border-slate-100'}`}>
+                        {patient.visitType}
+                      </span>
                   </td>
 
-                  <td className="px-3 py-1 text-right rounded-r-lg relative z-20">
-                    <div className="flex justify-end gap-1 items-center">
-                      {/* Emergency Toggle */}
+                  <td className="px-5 py-3 text-right rounded-r-[1.5rem]">
+                    <div className="flex justify-end gap-2 items-center">
                       {(isWaiting || isOnHold) && (
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); onToggleEmergency(patient.id); }} 
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className={`p-1 rounded transition-colors ${patient.isEmergency ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-slate-100 text-slate-400 hover:bg-yellow-50 hover:text-yellow-600'}`} 
-                            title="Toggle Emergency"
-                          >
-                              <Zap className={`h-3.5 w-3.5 ${patient.isEmergency ? 'fill-current' : ''}`} />
-                          </button>
+                          <button onClick={() => onToggleEmergency(patient.id)} className={`p-2 rounded-xl transition-all hover:scale-110 active:scale-95 ${patient.isEmergency ? 'bg-red-50 text-red-600 shadow-inner border border-red-200' : 'bg-slate-100 text-slate-400 hover:bg-rose-50 hover:text-rose-500 border border-transparent'}`} title="Emergency"><Zap className="h-4 w-4" /></button>
                       )}
-
-                      {/* Hold Toggle */}
-                      {isWaiting && (
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.ON_HOLD); }} 
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="p-1 bg-slate-100 text-slate-400 hover:bg-orange-50 hover:text-orange-600 rounded transition-colors" 
-                            title="Put On Hold"
-                          >
-                              <PauseCircle className="h-3.5 w-3.5" />
-                          </button>
-                      )}
-                      {isOnHold && (
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.WAITING); }} 
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="p-1 bg-orange-50 text-orange-600 hover:bg-green-50 hover:text-green-600 rounded transition-colors border border-orange-100" 
-                            title="Resume"
-                          >
-                              <PlayCircle className="h-3.5 w-3.5" />
-                          </button>
-                      )}
-
-                      {/* Primary Actions */}
+                      
                       {isWaiting && !isOnHold && (patient.isCheckedIn ? 
                         <button 
-                            onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR); }} 
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded shadow-sm transition-all active:scale-95 text-[10px] font-bold"
+                            onClick={() => onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR)} 
+                            className={`px-5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center gap-2 ${isNextUp ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100' : 'bg-primary-600 hover:bg-primary-700 text-white shadow-primary-100'}`}
                         >
-                            <PlayCircle className="h-3 w-3" /> Call
+                            <PlayCircle className="h-4 w-4" /> Start
                         </button> : 
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); onManualCheckIn(patient.id); }} 
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="flex items-center gap-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded shadow-sm transition-all active:scale-95 text-[10px] font-bold"
-                        >
-                            <UserCheck className="h-3 w-3" /> Arrive
-                        </button>
+                        <button onClick={() => onManualCheckIn(patient.id)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-emerald-100 transition-all active:scale-95">Check-in</button>
                       )}
                       
                       {isServing && (
-                        <>
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); onUpdateStatus(patient.id, PatientStatus.COMPLETED); }} 
-                                onMouseDown={(e) => e.stopPropagation()}
-                                className="flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded shadow-sm transition-all active:scale-95 text-[10px] font-bold"
-                            >
-                                <CheckSquare className="h-3 w-3" /> Done
-                            </button>
-                        </>
+                        <button onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)} className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-green-100 transition-all active:scale-95 flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4" /> Done
+                        </button>
                       )}
-                      
-                      {(isWaiting || isOnHold || isServing) && (
-                        <>
-                            {(isWaiting || isOnHold) && (
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); onVitalsClick(patient); }} 
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    className={`p-1 rounded transition-colors ${patient.vitals ? 'bg-pink-50 text-pink-600 border border-pink-100' : 'bg-slate-100 text-slate-400 hover:bg-pink-50 hover:text-pink-500'}`} 
-                                    title="Vitals"
-                                >
-                                    <Activity className="h-3.5 w-3.5" />
-                                </button>
-                            )}
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); onEditPatient(patient); }} 
-                                onMouseDown={(e) => e.stopPropagation()}
-                                className="p-1 bg-slate-100 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded transition-colors" 
-                                title="Edit"
-                            >
-                                <Edit2 className="h-3.5 w-3.5" />
-                            </button>
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); setPatientForNoShow(patient); }} 
-                                onMouseDown={(e) => e.stopPropagation()}
-                                className="p-1 bg-slate-100 text-slate-400 hover:bg-orange-50 hover:text-orange-600 rounded transition-colors" 
-                                title="No Show"
-                            >
-                                <UserX className="h-3.5 w-3.5" />
-                            </button>
-                        </>
+
+                      {isWaiting && !isOnHold && (
+                          <button 
+                            onClick={() => onUpdateStatus(patient.id, PatientStatus.ON_HOLD)} 
+                            className="p-2 bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200 rounded-xl transition-all hover:scale-110" 
+                            title="Put on Hold"
+                          >
+                            <PauseCircle className="h-4 w-4" />
+                          </button>
                       )}
+
+                      {isOnHold && (
+                          <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WAITING)} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg transition-all active:scale-95">Resume</button>
+                      )}
+
+                      <button onClick={(e) => { e.stopPropagation(); onVitalsClick(patient); }} className="p-2 bg-slate-50 text-slate-400 hover:bg-blue-50 hover:text-blue-600 border border-slate-100 rounded-xl transition-all hover:scale-110" title="Vitals"><Activity className="h-4 w-4" /></button>
+                      <button onClick={() => setPatientForNoShow(patient)} className="p-2 bg-slate-50 text-slate-300 hover:bg-rose-50 hover:text-rose-500 border border-slate-100 rounded-xl transition-all hover:scale-110" title="No Show"><UserX className="h-4 w-4" /></button>
                     </div>
                   </td>
                 </tr>

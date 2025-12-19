@@ -55,6 +55,8 @@ export interface AppointmentConfig {
     maxDaysInAdvance: number;
     enableEmailNotifications: boolean;
     emailTemplate?: string;
+    lateArrivalThreshold?: number; // minutes
+    lateArrivalAction?: 'PENALTY' | 'SKIP' | 'NOTIFY';
 }
 
 export interface TimeSlot {
@@ -206,6 +208,7 @@ export interface Clinic {
   doctors: Doctor[];
   patients: Patient[];
   staff: Staff[]; // New: Staff list
+  holidays?: string[]; // New: Array of YYYY-MM-DD strings
   // Location Data
   city: string; // New: City for filtering
   address: string;

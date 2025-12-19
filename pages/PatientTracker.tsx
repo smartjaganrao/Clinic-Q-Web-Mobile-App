@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useMatch, useLocation, useSearchParams } from 'react-router-dom';
 import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode, Review, TimeSlot } from '../types';
@@ -23,7 +24,7 @@ import {
     Navigation, Timer, Building2, 
     Info, Lock, History, X, AlertCircle, Sun, Moon,
     User, Users, Plus, LogOut, Coffee, LogIn, CloudSun, List as ListIcon, Crosshair, Zap, ExternalLink, ShieldCheck,
-    CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, ChevronLeft, FileText, MoonStar, MessageSquare, Phone, RefreshCw, Map as MapIcon, Languages, MapPinIcon, ThumbsUp, ArrowUpDown, GraduationCap, Award
+    CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, ChevronLeft, FileText, MoonStar, MessageSquare, Phone, RefreshCw, Map as MapIcon, Languages, MapPinIcon, ThumbsUp, ArrowUpDown, GraduationCap, Award, Play
 } from 'lucide-react';
 
 // SEO URL Helpers
@@ -32,6 +33,15 @@ const toSlug = (text: string) => text.toLowerCase().replace(/ /g, '-').replace(/
 const createDoctorSlug = (doc: Doctor) => {
     // Format: dr-name-specialty-id
     return `${toSlug(doc.name)}-${toSlug(doc.specialty)}-${doc.id}`;
+};
+
+// getLocalToday helper function used for generating token dates
+const getLocalToday = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 };
 
 const deg2rad = (deg: number) => {
@@ -89,46 +99,6 @@ const formatTime12h = (time24: string) => {
     return `${h}:${m} ${ampm}`;
 };
 
-const getNextAvailability = (doctor: Doctor, daysToCheck: number = 14): { status: 'now' | 'future', start: Date } | null => {
-    const now = new Date();
-    if (doctor.status === DoctorStatus.AVAILABLE) { 
-         const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
-         const schedule = doctor.weeklySchedule.find((s) => s.day === dayName);
-         if (schedule && !schedule.isOff && schedule.slots) {
-             const currentMins = now.getHours() * 60 + now.getMinutes();
-             const inSlot = schedule.slots.some((slot) => {
-                 if (slot.active === false) return false;
-                 const [sh, sm] = slot.startTime.split(':').map(Number);
-                 const [eh, em] = slot.endTime.split(':').map(Number);
-                 const s = sh * 60 + sm;
-                 let e = eh * 60 + em;
-                 if (e <= s) e += 24 * 60; 
-                 return currentMins >= s && currentMins < e;
-             });
-             if (inSlot) return { status: 'now', start: now };
-         }
-    }
-    for (let i = 0; i < daysToCheck; i++) {
-        const d = new Date(now);
-        d.setDate(now.getDate() + i);
-        const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
-        const schedule = doctor.weeklySchedule.find((s) => s.day === dayName);
-        if (schedule && !schedule.isOff && schedule.slots && schedule.slots.length > 0) {
-            const slots = [...schedule.slots].sort((a, b) => a.startTime.localeCompare(b.startTime));
-            for (const slot of slots) {
-                if (slot.active === false) continue;
-                const [sh, sm] = slot.startTime.split(':').map(Number);
-                const slotStart = new Date(d);
-                slotStart.setHours(sh, sm, 0, 0);
-                if (slotStart > now) {
-                    return { status: 'future', start: slotStart };
-                }
-            }
-        }
-    }
-    return null;
-};
-
 const CATEGORIES = [
     { id: 'ALL', label: 'All', icon: LayoutGrid },
     { id: 'GENERAL', label: 'General', icon: Stethoscope },
@@ -183,10 +153,10 @@ interface UserProfile {
 }
 
 interface GroupedSlots {
-    Morning: {value: string, label: string, isBlocked?: boolean, isFull?: boolean}[];
-    Afternoon: {value: string, label: string, isBlocked?: boolean, isFull?: boolean}[];
-    Evening: {value: string, label: string, isBlocked?: boolean, isFull?: boolean}[];
-    Night: {value: string, label: string, isBlocked?: boolean, isFull?: boolean}[];
+    Morning: {value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean, reason?: string}[];
+    Afternoon: {value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean, reason?: string}[];
+    Evening: {value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean, reason?: string}[];
+    Night: {value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean, reason?: string}[];
 }
 
 interface PatientTrackerProps {
@@ -353,7 +323,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const [viewingDoctor, setViewingDoctor] = useState<Doctor | null>(null);
-  const [feedbackModal, setFeedbackModal] = useState<{ isOpen: boolean; visit: any | null; rating: number; text: string }>({ isOpen: false, visit: null, rating: 0, text: '' });
+  const [feedbackModal, setFeedbackModal] = useState<{ isOpen: boolean; visit: any | null; rating: number; text: string }>({ isOpen: false, visit: null; rating: 0, text: '' });
 
   const navigateToView = (view: 'LIST' | 'CLINIC_DETAILS' | null, clinic?: Clinic | null, doctor?: Doctor) => {
       if (view === 'LIST') navigate('/patient/find');
@@ -731,71 +701,175 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const getSmartQueueDetails = (visit: any) => { 
       const clinic = clinics.find(c => c.id === visit.clinicId); 
       const doctor = clinic?.doctors.find(d => d.id === visit.doctorId); 
-      if (!clinic || !doctor) return { peopleAhead: 0, waitTime: 0, currentToken: '-', message: 'Loading...', color: 'text-slate-500' }; 
-      
-      const peopleAhead = clinic.patients.filter(p => p.doctorId === visit.doctorId && p.status === PatientStatus.WAITING && p.timeAdded < visit.timeAdded ).length; 
-      const servingPatient = clinic.patients.find(p => p.doctorId === visit.doctorId && p.status === PatientStatus.WITH_DOCTOR); 
-      const currentToken = servingPatient ? `#${servingPatient.tokenNumber}` : 'Not Started'; 
-      
-      let baseWait = peopleAhead * 15; 
-      if (doctor.delayMinutes > 0) baseWait += doctor.delayMinutes; 
+      if (!clinic || !doctor) return { peopleAhead: 0, waitTime: 0, currentToken: '-', message: 'Loading...', color: 'text-slate-500', statusIcon: Info }; 
       
       const now = new Date(); 
-      now.setMinutes(now.getMinutes() + baseWait); 
-      const expectedTime = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }); 
+      const isToday = visit.appointmentDate === now.toISOString().split('T')[0] || visit.visitType === 'WALK_IN';
+
+      // SHIFT SPECIFIC PEOPLE AHEAD CALCULATION
+      const getPatientShiftMins = (p: Patient, doc: Doctor) => {
+          const pTimeStr = p.visitType === 'APPOINTMENT' ? p.appointmentTime : new Date(p.timeAdded).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+          if (!pTimeStr) return null;
+          const [ph, pm] = pTimeStr.split(':').map(Number);
+          const pTotalMins = ph * 60 + pm;
+          const pVisitDate = p.visitType === 'APPOINTMENT' ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
+          const dayName = new Date(pVisitDate || Date.now()).toLocaleDateString('en-US', { weekday: 'long' });
+          const schedule = doc.weeklySchedule.find(s => s.day === dayName);
+          if (!schedule) return null;
+          return schedule.slots.find(slot => {
+              const [sh, sm] = slot.startTime.split(':').map(Number);
+              const [eh, em] = slot.endTime.split(':').map(Number);
+              const sTotal = sh * 60 + sm;
+              let eTotal = eh * 60 + em;
+              if (eTotal <= sTotal) eTotal += 1440;
+              return pTotalMins >= sTotal && pTotalMins < eTotal;
+          });
+      };
+
+      const myShift = getPatientShiftMins(visit, doctor);
+      const physicalQueue = clinic.patients.filter(p => {
+          if (p.doctorId !== visit.doctorId || p.status !== PatientStatus.WAITING || p.id === visit.id) return false;
+          const pDate = p.visitType === 'APPOINTMENT' ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
+          const myDate = visit.visitType === 'APPOINTMENT' ? visit.appointmentDate : new Date(visit.timeAdded).toISOString().split('T')[0];
+          if (pDate !== myDate) return false;
+          const otherShift = getPatientShiftMins(p, doctor);
+          if (!myShift || !otherShift || otherShift.startTime !== myShift.startTime) return false;
+          return p.timeAdded < visit.timeAdded;
+      });
+
+      const peopleAhead = physicalQueue.length;
+      const servingPatient = clinic.patients.find(p => p.doctorId === visit.doctorId && p.status === PatientStatus.WITH_DOCTOR); 
+      const currentToken = servingPatient ? `#${servingPatient.tokenNumber}` : 'Not Started'; 
+      const isDoctorBusy = !!servingPatient;
       
-      let message = `~${baseWait} mins wait`; 
+      let statusIcon = Info;
+      let message = ""; 
       let color = 'text-slate-600'; 
       let bgColor = 'bg-slate-100'; 
       
       const bookedTime = new Date(visit.timeAdded).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
       const bookedDate = new Date(visit.timeAdded).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       
+      // LOGIC: Ensure estimated time is NEVER in the past. 
+      // If no one is ahead, the turn is at minimum 'Now'.
+      let waitMinutes = peopleAhead * (doctor.consultationTime || 15);
+      if (doctor.delayMinutes > 0) waitMinutes += doctor.delayMinutes;
+      // If doctor is busy, add some estimated time for current patient
+      if (isDoctorBusy) waitMinutes += Math.round((doctor.consultationTime || 15) / 2);
+      
+      const estTurnDate = new Date(now.getTime() + waitMinutes * 60000);
+      const liveEstimatedTimeStr = estTurnDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+
+      let expectedDisplayTime = '';
+      
+      const apptDateObj = visit.appointmentDate ? new Date(visit.appointmentDate) : new Date(visit.timeAdded);
+      const apptDateLabel = apptDateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      let smartSlotTime = visit.visitType === 'APPOINTMENT' 
+          ? `${apptDateLabel}, ${formatTime12h(visit.appointmentTime)}` 
+          : `Live, ${bookedDate}`;
+
       if (doctor.status === DoctorStatus.ON_BREAK) { 
-          message = "Doctor is on break"; 
+          message = "Doctor is on break. Consultations paused."; 
           color = "text-orange-700"; 
           bgColor = "bg-orange-100"; 
+          expectedDisplayTime = "Paused";
+          statusIcon = Coffee;
+          smartSlotTime = "Paused";
       } else if (doctor.delayMinutes > 0) { 
-          message = `Delayed by ${doctor.delayMinutes} mins`; 
-          color = "text-red-700"; 
-          bgColor = "bg-red-100"; 
+          message = `Doctor is running late by ${doctor.delayMinutes} mins.`; 
+          color = "text-rose-700"; 
+          bgColor = "bg-rose-50"; 
+          statusIcon = Timer;
+          expectedDisplayTime = liveEstimatedTimeStr;
+          smartSlotTime = liveEstimatedTimeStr;
+      } else if (!isToday) {
+          message = "Upcoming appointment. Arrive 10 mins early.";
+          color = "text-indigo-700";
+          bgColor = "bg-indigo-50";
+          statusIcon = Calendar;
+          expectedDisplayTime = visit.appointmentTime ? formatTime12h(visit.appointmentTime) : "--";
       } else if (visit.isCheckedIn) { 
-          if (peopleAhead === 0) { 
-              message = "You are next! Get ready."; 
+          if (peopleAhead === 0 && !isDoctorBusy) { 
+              message = "You are next! Please stay near the room."; 
               color = "text-green-700"; 
-              bgColor = "bg-green-100"; 
-          } else if (peopleAhead < 3) { 
-              message = "Almost your turn. Stay close."; 
-              color = "text-blue-700"; 
-              bgColor = "bg-blue-100"; 
+              bgColor = "bg-green-100 border-green-200"; 
+              statusIcon = CheckCircle2;
           } else { 
-              message = "Checked in. Relax in lobby."; 
-              color = "text-green-700"; 
-              bgColor = "bg-green-50"; 
+              message = isDoctorBusy ? "Doctor is busy. Queue progress adjusted." : "Checked in. Relax in the lobby."; 
+              color = "text-primary-700"; 
+              bgColor = "bg-primary-50 border-primary-100"; 
+              statusIcon = isDoctorBusy ? Activity : User;
           } 
+          expectedDisplayTime = liveEstimatedTimeStr;
+          smartSlotTime = liveEstimatedTimeStr;
       } else { 
-          if (peopleAhead < 3) { 
-              message = "Rush! Reaching your turn."; 
-              color = "text-red-700"; 
-              bgColor = "bg-red-100"; 
-          } else { 
-              message = "Start travelling to clinic."; 
-              color = "text-blue-700"; 
-              bgColor = "bg-blue-100"; 
-          } 
-      } 
+          // Today, not checked in
+          if (visit.visitType === 'APPOINTMENT' && visit.appointmentTime) {
+              const [h, m] = visit.appointmentTime.split(':').map(Number);
+              const [y, mon, day] = visit.appointmentDate.split('-').map(Number);
+              const apptDateTime = new Date(y, mon - 1, day, h, m, 0, 0);
+              
+              const diffMins = (apptDateTime.getTime() - now.getTime()) / 60000;
+
+              if (diffMins <= 0) {
+                  // Slot time has passed! Automatically adjust estimate to current time + queue
+                  message = isDoctorBusy ? "Doctor is busy. Queue progress adjusted." : "Turn approaching. Arrival expected.";
+                  expectedDisplayTime = liveEstimatedTimeStr;
+                  smartSlotTime = liveEstimatedTimeStr; // Auto move to current adjusted time
+                  color = "text-red-700";
+                  bgColor = "bg-red-50 border-red-100";
+                  statusIcon = AlertTriangle;
+              } else if (diffMins <= 15) {
+                  message = "Rush! You are reaching your turn.";
+                  color = "text-red-700";
+                  bgColor = "bg-red-50 border-red-100";
+                  statusIcon = AlertTriangle;
+                  expectedDisplayTime = formatTime12h(visit.appointmentTime);
+              } else if (diffMins <= 60) {
+                  message = "Time to start travelling to the clinic.";
+                  color = "text-blue-700";
+                  bgColor = "bg-blue-50 border-blue-100";
+                  statusIcon = MapPin;
+                  expectedDisplayTime = formatTime12h(visit.appointmentTime);
+              } else {
+                  message = "Confirmed appointment. Arrive 10m early.";
+                  color = "text-slate-600";
+                  bgColor = "bg-slate-50 border-slate-200";
+                  statusIcon = Info;
+                  expectedDisplayTime = formatTime12h(visit.appointmentTime);
+              }
+          } else {
+              // Walk-in uses live estimate
+              expectedDisplayTime = liveEstimatedTimeStr;
+              smartSlotTime = liveEstimatedTimeStr;
+              if (peopleAhead < 3) { 
+                  message = "Rush! Reaching your turn soon."; 
+                  color = "text-red-700"; 
+                  bgColor = "bg-red-50 border-red-100"; 
+                  statusIcon = Zap;
+              } else { 
+                  message = isDoctorBusy ? "Doctor is busy. Queue moving." : "Queue active. Start moving to clinic."; 
+                  color = "text-blue-700"; 
+                  bgColor = "bg-blue-50 border-blue-100"; 
+                  statusIcon = Activity;
+              } 
+          }
+      }
       
       return { 
           peopleAhead, 
-          waitTime: baseWait, 
-          expectedTime, 
+          waitTime: waitMinutes, 
+          expectedTime: expectedDisplayTime, 
+          smartSlotTime,
           currentToken, 
           message, 
           color, 
           bgColor, 
           doctorStatus: doctor.status, 
           bookedAt: `${bookedDate}, ${bookedTime}`,
-          typeLabel: visit.visitType === 'APPOINTMENT' ? 'Appointment' : 'Live Walk-in'
+          typeLabel: visit.visitType === 'APPOINTMENT' ? 'Appointment' : 'Live Walk-in',
+          isDoctorBusy,
+          statusIcon
       }; 
   };
   
@@ -815,13 +889,22 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           const isDuplicate = currentClinic.patients.some(p => {
               const isSameUser = p.phone === pPhone && p.name.toLowerCase() === pName.toLowerCase();
               if (!isSameUser) return false;
+              if (p.doctorId !== selectedDoctorId) return false;
               if (p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR || p.status === PatientStatus.ON_HOLD) return true;
               if (visitType === 'APPOINTMENT' && p.visitType === 'APPOINTMENT' && p.appointmentDate === apptDate && p.status !== PatientStatus.CANCELLED && p.status !== PatientStatus.COMPLETED) return true;
               return false;
           });
-          if (isDuplicate) { addToast(`Duplicate: ${pName} already has an active visit in this clinic.`, "error"); return; }
+          if (isDuplicate) { addToast(`Duplicate: ${pName} already has an active visit with this doctor!`, "error"); return; }
       }
-      onGetToken(pName, pPhone, selectedDoctorId!, selectedClinicId!, visitType === 'APPOINTMENT' ? apptTime : undefined, visitType === 'APPOINTMENT' ? apptDate : undefined, pAge, pGender, symptoms);
+      
+      // Determine time for walk-in if it's shift-based
+      let visitTime = visitType === 'APPOINTMENT' ? apptTime : undefined;
+      if (visitType === 'WALK_IN' && selectedWalkInShift) {
+          // For future walk-ins, we might use the shift start time as a placeholder
+          visitTime = selectedWalkInShift.startTime;
+      }
+
+      onGetToken(pName, pPhone, selectedDoctorId!, selectedClinicId!, visitTime, visitType === 'APPOINTMENT' ? apptDate : getLocalToday(), pAge, pGender, symptoms);
       
       navigate('/patient/visits');
       setSymptoms(''); 
@@ -845,7 +928,10 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       const estimatedWaitMins = waitDetails.time;
       const travelMins = parseInt(travelTime) || 0;
       
-      if (visitType === 'WALK_IN' && travelMins > estimatedWaitMins + 10) { 
+      // Check if the selected shift is the active one before warning about travel time
+      const isActiveNow = selectedWalkInShift && currentActiveShift && selectedWalkInShift.startTime === currentActiveShift.startTime;
+
+      if (visitType === 'WALK_IN' && isActiveNow && travelMins > estimatedWaitMins + 10) { 
           setShowLateWarningModal(true); 
           return; 
       }
@@ -973,7 +1059,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   
   const waitStats = selectedClinic && selectedDoctorId ? getDoctorWaitDetails(selectedClinic, selectedDoctorId) : { count: 0, time: 0 };
   
-  // CAPACITY & SHIFT LOGIC
+  // CAPACITY & SHIFT LOGIC - Updated for shift-specific walk-in checks
   const currentActiveShift = useMemo(() => {
       if (!selectedDoctor) return null;
       const now = new Date();
@@ -987,12 +1073,10 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           if (slot.active === false) return false;
           const [sh, sm] = slot.startTime.split(':').map(Number);
           const [eh, em] = slot.endTime.split(':').map(Number);
-          // Removed redundant lines that used undefined h/m and added descriptive comment.
-          // Corrected shift timing extraction logic.
-          const startTotal = sh * 60 + sm;
-          let endTotal = eh * 60 + em;
-          if (endTotal <= startTotal) endTotal += 24 * 60;
-          return currentMins >= startTotal && currentMins < endTotal;
+          const shT = sh * 60 + sm;
+          let ehT = eh * 60 + em;
+          if (ehT <= shT) ehT += 24 * 60;
+          return currentMins >= shT && currentMins < ehT;
       }) || null;
   }, [selectedDoctor]);
 
@@ -1002,21 +1086,34 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       return getShiftStats(selectedDoctor, currentActiveShift, todayStr, selectedClinic.patients);
   }, [selectedDoctor, currentActiveShift, selectedClinic]);
 
-  // Is Walk-In Allowed based on Shift, Capacity, and Time-to-closing
+  // NEW: State for Walk-in Shift selection
+  const [selectedWalkInShift, setSelectedWalkInShift] = useState<TimeSlot | null>(null);
+
+  // Auto-select current shift if Walk-in type
+  useEffect(() => {
+      if (visitType === 'WALK_IN' && currentActiveShift && !selectedWalkInShift) {
+          setSelectedWalkInShift(currentActiveShift);
+      }
+  }, [visitType, currentActiveShift, selectedWalkInShift]);
+
   const walkInBlockingReason = useMemo(() => {
       if (!selectedDoctor) return "Doctor data missing";
-      if (!currentActiveShift) return "No active shift";
-      if (!currentShiftStats) return null;
-
-      // 1. Capacity Protection
-      if (currentShiftStats.isFull) return "Shift at capacity";
-
-      // 2. Time-to-Closing Protection
-      // If estimated wait time for existing queue is more than remaining mins in shift, block new tokens
-      if (waitStats.time > currentShiftStats.remainingMins) return "Shift ending soon";
-
+      // Use selectedWalkInShift instead of currentActiveShift for global check
+      const shiftToCheck = selectedWalkInShift || currentActiveShift;
+      if (!shiftToCheck) return "No active shift";
+      
+      const todayStr = new Date().toISOString().split('T')[0];
+      const stats = selectedClinic ? getShiftStats(selectedDoctor, shiftToCheck, todayStr, selectedClinic.patients) : null;
+      
+      if (!stats) return null;
+      if (stats.isFull) return "Shift at capacity";
+      
+      // Only check "Shift ending soon" if the selected shift is actually happening right now
+      const isShiftActiveNow = currentActiveShift && shiftToCheck.startTime === currentActiveShift.startTime;
+      if (isShiftActiveNow && waitStats.time > stats.remainingMins) return "Shift ending soon";
+      
       return null;
-  }, [currentActiveShift, currentShiftStats, waitStats]);
+  }, [currentActiveShift, selectedWalkInShift, selectedDoctor, selectedClinic, waitStats]);
 
   const isWalkInAllowed = !walkInBlockingReason;
   
@@ -1024,16 +1121,16 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const isClinicOnlineWalkInAllowed = selectedClinic && [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(selectedClinic.operationMode);
   const isClinicApptAllowed = selectedClinic && [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(selectedClinic.operationMode);
 
-  // Business Rule: If Today is selected and Shift is Started, no more appointments for Today.
-  const isApptForTodayBlockedByShift = useMemo(() => {
-      if (!selectedDoctor || !apptDate) return false;
-      const todayStr = new Date().toISOString().split('T')[0];
-      if (apptDate !== todayStr) return false;
-      // If we are currently in a shift, we can't book new appointments for it
-      return !!currentActiveShift;
-  }, [selectedDoctor, apptDate, currentActiveShift]);
-
   const bookingDates = useMemo(() => { if (!selectedDoctor) return []; const days = []; const today = new Date(); for(let i=0; i<14; i++) { const d = new Date(today); d.setDate(today.getDate() + i); const dayName = d.toLocaleDateString('en-US', { weekday: 'long' }); const schedule = selectedDoctor.weeklySchedule.find(s => s.day === dayName); days.push({ date: d, dateStr: d.toISOString().split('T')[0], dayShort: d.toLocaleDateString('en-US', { weekday: 'short' }), dayNum: d.getDate(), isOff: !schedule || schedule.isOff, schedule }); } return days; }, [selectedDoctor]);
+
+  useEffect(() => {
+      if (bookingView === 'FORM' && selectedDoctor && !apptDate) {
+          const firstAvailable = bookingDates.find(d => !d.isOff);
+          if (firstAvailable) {
+              setApptDate(firstAvailable.dateStr);
+          }
+      }
+  }, [bookingView, selectedDoctor, bookingDates, apptDate]);
 
   useEffect(() => { 
       if (selectedClinic) {
@@ -1049,10 +1146,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           } else if (selectedDoctorId && !isWalkInAllowed && visitType === 'WALK_IN' && isClinicApptAllowed) {
               newType = 'APPOINTMENT'; 
           }
-          
-          if (newType !== visitType) {
-              setVisitType(newType);
-          }
+          if (newType !== visitType) setVisitType(newType);
       }
   }, [selectedClinic, selectedDoctorId, isWalkInAllowed, visitType, isClinicDirectWalkInOnly, isClinicOnlineWalkInAllowed, isClinicApptAllowed]);
 
@@ -1067,44 +1161,68 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       const now = new Date(); 
       const isToday = apptDate === now.toISOString().split('T')[0]; 
       const nowMins = now.getHours() * 60 + now.getMinutes(); 
+
+      const existingAppts = selectedClinic.patients.filter(p => 
+          p.doctorId === selectedDoctor.id && 
+          p.visitType === 'APPOINTMENT' && 
+          p.appointmentDate === apptDate &&
+          p.status !== PatientStatus.CANCELLED
+      ).map(p => p.appointmentTime);
       
+      const MIN_NOTICE_MINS = 30;
+
       selectedDayObj.schedule.slots.forEach(shiftSlot => { 
           const { startTime, endTime } = shiftSlot; 
           const [startH, startM] = startTime.split(':').map(Number); 
           const [endH, endM] = endTime.split(':').map(Number); 
           
-          let currentMins = startH * 60 + startM; 
+          let startTotalMins = startH * 60 + startM; 
           let endMins = endH * 60 + endM; 
-          if (endMins <= currentMins) endMins += 24 * 60;
+          if (endMins <= startTotalMins) endMins += 24 * 60;
 
-          // Check if this shift is already full
+          // HIDE CLOSED SHIFTS: If a shift is completely in the past, hide it.
+          const isShiftFinished = isToday && nowMins >= endMins;
+          if (isShiftFinished) return; // Skip this shift completely
+
+          // SHIFT STARTED LOGIC - THIS DETERMINES IF THE ENTIRE SHIFT IS BLOCKED FOR APPOINTMENTS
+          // We block scheduling if the shift has already started, forcing walk-ins for this specific shift.
+          const isThisSpecificShiftStarted = isToday && nowMins >= startTotalMins;
+          
+          // Capacity stats for this shift
           const stats = getShiftStats(selectedDoctor, shiftSlot, apptDate, selectedClinic.patients);
           
-          const isShiftStarted = isToday && nowMins >= currentMins;
-          const MIN_NOTICE_MINS = 30; 
-          
+          let currentMins = startTotalMins;
           while (currentMins + 15 <= endMins) { 
-              if (!isToday || currentMins > (nowMins + MIN_NOTICE_MINS)) { 
-                  let displayMins = currentMins % (24 * 60);
-                  const h = Math.floor(displayMins / 60); 
-                  const m = displayMins % 60; 
-                  const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`; 
-                  const suffix = h >= 12 ? 'PM' : 'AM'; 
-                  const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h; 
-                  const displayStr = `${displayH}:${m.toString().padStart(2, '0')} ${suffix}`; 
-                  
-                  const slotObj = { 
-                      value: timeStr, 
-                      label: displayStr, 
-                      isBlocked: isShiftStarted, 
-                      isFull: stats.isFull && !isShiftStarted // Mark future full shifts
-                  }; 
-                  
-                  if (h >= 5 && h < 12) groups.Morning.push(slotObj); 
-                  else if (h >= 12 && h < 17) groups.Afternoon.push(slotObj); 
-                  else if (h >= 17 && h < 21) groups.Evening.push(slotObj);
-                  else groups.Night.push(slotObj); 
-              } 
+              let displayMins = currentMins % (24 * 60);
+              const h = Math.floor(displayMins / 60); 
+              const m = displayMins % 60; 
+              const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`; 
+              const suffix = h >= 12 ? 'PM' : 'AM'; 
+              const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h; 
+              const displayStr = `${displayH}:${m.toString().padStart(2, '0')} ${suffix}`; 
+              
+              const isSlotPast = isToday && currentMins < nowMins;
+              const isWithinNotice = isToday && currentMins <= (nowMins + MIN_NOTICE_MINS);
+              const isBooked = existingAppts.includes(timeStr);
+
+              // REFINED BLOCKING: Shift-based logic
+              // If THIS SPECIFIC shift has started, all its slots are blocked for scheduling.
+              const isBlockedForSchedule = isThisSpecificShiftStarted || isSlotPast || isWithinNotice;
+
+              const slotObj = { 
+                  value: timeStr, 
+                  label: displayStr, 
+                  isBlocked: isBlockedForSchedule,
+                  isFull: stats.isFull && !isBlockedForSchedule, 
+                  isBooked: isBooked,
+                  reason: isThisSpecificShiftStarted ? "Use Walk-in" : isSlotPast ? "Started" : "Booking closed"
+              }; 
+              
+              if (h >= 5 && h < 12) groups.Morning.push(slotObj); 
+              else if (h >= 12 && h < 17) groups.Afternoon.push(slotObj); 
+              else if (h >= 17 && h < 21) groups.Evening.push(slotObj);
+              else groups.Night.push(slotObj); 
+              
               currentMins += 15; 
           } 
       }); 
@@ -1117,6 +1235,26 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
              groupedTimeSlots.Evening.length > 0 || 
              groupedTimeSlots.Night.length > 0; 
   }, [groupedTimeSlots]);
+
+  const availableWalkInShifts = useMemo(() => {
+      if (!selectedDoctor) return [];
+      const now = new Date();
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const today = days[now.getDay()];
+      const schedule = selectedDoctor.weeklySchedule.find(s => s.day === today);
+      
+      if (!schedule || schedule.isOff) return [];
+
+      return schedule.slots.filter(slot => {
+          if (!slot.active) return false;
+          const [eh, em] = slot.endTime.split(':').map(Number);
+          const [sh, sm] = slot.startTime.split(':').map(Number);
+          let endMins = eh * 60 + em;
+          if (endMins <= (sh * 60 + sm)) endMins += 1440;
+          return nowMins < endMins; // Shift hasn't ended yet
+      });
+  }, [selectedDoctor]);
 
   const navItems = [ { id: 'BOOK', label: 'Find Care', icon: Search }, { id: 'ACTIVE', label: 'Active Visits', icon: Ticket }, { id: 'HISTORY', label: 'History', icon: History }, { id: 'PROFILE', label: 'Profile', icon: User } ];
   const GuestLoginCard = () => ( <div className="flex flex-col items-center justify-center h-[60vh] p-8 text-center"> <div className="bg-slate-100 p-6 rounded-full mb-6"><Lock className="h-10 w-10 text-slate-400" /></div> <h3 className="text-xl font-bold text-slate-800 mb-2">Login Required</h3> <p className="text-slate-500 mb-8 max-w-xs">Please login to access your appointments and medical history.</p> <Button onClick={() => onLoginClick && onLoginClick()} size="lg" className="shadow-lg px-10">Login / Register</Button> </div> );
@@ -1135,7 +1273,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const StarRating = ({ rating, setRating, interactive = false }: { rating: number, setRating?: (r: number) => void, interactive?: boolean }) => {
     const [hover, setHover] = useState(0);
     const labels = ["", "Terrible", "Bad", "Okay", "Good", "Excellent"];
-    
     return (
         <div className="flex flex-col items-center gap-2">
             <div className="flex gap-1">
@@ -1148,13 +1285,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         onMouseEnter={() => interactive && setHover(star)}
                         onMouseLeave={() => interactive && setHover(0)}
                     >
-                        <Star 
-                            className={`h-10 w-10 ${
-                                star <= (hover || rating) 
-                                ? 'fill-amber-400 text-amber-400' 
-                                : 'text-slate-200'
-                            }`} 
-                        />
+                        <Star className={`h-10 w-10 ${star <= (hover || rating) ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} />
                     </button>
                 ))}
             </div>
@@ -1171,375 +1302,96 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                     <Logo className="h-8 w-8 flex-shrink-0" />
                     <span className={`font-bold text-xl text-slate-900 tracking-tight transition-opacity duration-200 ${isSidebarCollapsed ? 'opacity-0 w-0 hidden' : 'opacity-100'}`}>Smart<span className="text-primary-600">QFlow</span></span>
                 </div>
-                <button
-                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                    className={`absolute -right-3 top-1/2 -translate-y-1/2 bg-white border border-slate-200 rounded-full p-1 shadow-sm text-slate-400 hover:text-primary-600 z-50 ${isSidebarCollapsed ? 'rotate-180' : ''}`}
-                >
-                    <ChevronLeft className="h-3 w-3" />
-                </button>
+                <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className={`absolute -right-3 top-1/2 -translate-y-1/2 bg-white border border-slate-200 rounded-full p-1 shadow-sm text-slate-400 hover:text-primary-600 z-50 ${isSidebarCollapsed ? 'rotate-180' : ''}`}><ChevronLeft className="h-3 w-3" /></button>
             </div>
             <div className="flex-1 py-6 px-3 space-y-2"> 
                 {navItems.map(item => ( 
-                    <button 
-                        key={item.id} 
-                        onClick={() => handleTabSwitch(item.id as any)} 
-                        className={`relative group w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-4'} py-3 rounded-xl transition-all font-medium whitespace-nowrap overflow-hidden ${activeTab === item.id ? 'bg-primary-50 text-primary-700 shadow-sm ring-1 ring-primary-200' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
-                    > 
+                    <button key={item.id} onClick={() => handleTabSwitch(item.id as any)} className={`relative group w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-4'} py-3 rounded-xl transition-all font-medium whitespace-nowrap overflow-hidden ${activeTab === item.id ? 'bg-primary-50 text-primary-700 shadow-sm ring-1 ring-primary-200' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}> 
                         <item.icon className={`h-5 w-5 flex-shrink-0 ${activeTab === item.id ? 'text-primary-600' : 'text-slate-400'}`} /> 
-                        <span className={`ml-3 transition-all duration-200 overflow-hidden whitespace-nowrap ${isSidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-                            {item.label}
-                        </span>
-                        {isSidebarCollapsed && (
-                            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
-                                {item.label}
-                            </div>
-                        )}
+                        <span className={`ml-3 transition-all duration-200 overflow-hidden whitespace-nowrap ${isSidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>{item.label}</span>
+                        {isSidebarCollapsed && ( <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">{item.label}</div> )}
                     </button> 
                 ))} 
             </div> 
             <div className="p-4 border-t border-slate-100"> 
                 <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} px-0 py-2`}> 
                     <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold flex-shrink-0">{isGuest ? <User className="h-5 w-5" /> : userName.charAt(0)}</div> 
-                    {!isSidebarCollapsed && (
-                        <div className="flex-1 min-w-0 overflow-hidden">
-                            <p className="text-sm font-bold text-slate-900 truncate">{userName}</p>
-                            <p className="text-xs text-slate-500 truncate">{userPhone}</p>
-                        </div>
-                    )}
+                    {!isSidebarCollapsed && ( <div className="flex-1 min-w-0 overflow-hidden"><p className="text-sm font-bold text-slate-900 truncate">{userName}</p><p className="text-xs text-slate-500 truncate">{userPhone}</p></div> )}
                 </div> 
-                <button onClick={isGuest ? () => onLoginClick && onLoginClick() : onBack} className={`w-full mt-2 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-center gap-2'} p-2 text-sm ${isGuest ? 'bg-slate-900 text-white hover:bg-slate-800' : 'text-red-600 hover:bg-red-50'} rounded-lg transition-colors`}>
-                    {isGuest ? <LogIn className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}
-                    {!isSidebarCollapsed && <span>{isGuest ? 'Login' : 'Logout'}</span>}
-                </button>
+                <button onClick={isGuest ? () => onLoginClick && onLoginClick() : onBack} className={`w-full mt-2 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-center gap-2'} p-2 text-sm ${isGuest ? 'bg-slate-900 text-white hover:bg-slate-800' : 'text-red-600 hover:bg-red-50'} rounded-lg transition-colors`}>{isGuest ? <LogIn className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}{!isSidebarCollapsed && <span>{isGuest ? 'Login' : 'Logout'}</span>}</button>
             </div> 
         </aside>
         
         <main className="flex-1 flex flex-col h-screen overflow-hidden relative bg-slate-50 w-full">
-            {/* MOBILE & TABLET HEADER */}
             <header className="md:hidden bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-20 flex items-center justify-between shadow-sm shrink-0">
                 <div className="flex items-center gap-3">
-                    {bookingView !== 'LIST' && activeTab === 'BOOK' ? (
-                        <Button variant="ghost" size="sm" onClick={handleUIBack} className="p-0 mr-2 hover:bg-slate-100 rounded-full">
-                            <ArrowLeft className="h-5 w-5" />
-                        </Button>
-                    ) : (
-                        <Button variant="ghost" size="sm" onClick={onBack} className="p-0 mr-2 hover:bg-slate-100 rounded-full text-red-500">
-                            <LogOut className="h-5 w-5" />
-                        </Button>
-                    )}
+                    {bookingView !== 'LIST' && activeTab === 'BOOK' ? ( <Button variant="ghost" size="sm" onClick={handleUIBack} className="p-0 mr-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="h-5 w-5" /></Button> ) : ( <Button variant="ghost" size="sm" onClick={onBack} className="p-0 mr-2 hover:bg-slate-100 rounded-full text-red-500"><LogOut className="h-5 w-5" /></Button> )}
                     <div><h1 className="font-bold text-slate-900 leading-none text-lg">{activeTab === 'BOOK' && bookingView !== 'LIST' ? 'Booking' : navItems.find(n => n.id === activeTab)?.label}</h1></div>
                 </div>
                 <div className="flex gap-2"><button onClick={() => setShowQRScanner(true)} className="bg-slate-900 text-white p-2 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center gap-2"><QrCode className="h-5 w-5" /> </button></div>
             </header>
-
-            {/* DESKTOP HEADER (WITH BACK BUTTONS) */}
             <header className="hidden md:flex bg-white border-b border-slate-200 px-8 py-4 items-center justify-between shrink-0 z-10"> 
-                <div className="flex items-center gap-4">
-                    {bookingView !== 'LIST' && activeTab === 'BOOK' && (
-                        <Button variant="ghost" size="sm" onClick={handleUIBack} className="p-2 mr-2 hover:bg-slate-100 rounded-full">
-                            <ArrowLeft className="h-6 w-6 text-slate-700" />
-                        </Button>
-                    )}
-                    <h2 className="text-2xl font-bold text-slate-900">
-                        {activeTab === 'BOOK' ? (
-                            bookingView === 'FORM' ? 'Appointment Details' : 
-                            bookingView === 'CLINIC_DETAILS' ? 'Clinic Profile' : 'Find Care'
-                        ) : activeTab === 'ACTIVE' ? 'Your Active Visits' : 
-                        activeTab === 'HISTORY' ? 'Visit History' : 
-                        activeTab === 'PROFILE' ? 'My Profile' : 'Search'
-                        }
-                    </h2>
-                </div> 
-                <div className="flex items-center gap-4">
-                    <Button variant="outline" onClick={() => setShowQRScanner(true)} className="hidden md:flex">
-                        <QrCode className="h-4 w-4 mr-2" /> Scan QR Code
-                    </Button>
-                    {bookingView === 'LIST' && (
-                        <Button variant="ghost" onClick={onBack} className="text-red-500 hover:bg-red-50">
-                            <LogOut className="h-4 w-4 mr-2" /> Logout
-                        </Button>
-                    )}
-                </div> 
+                <div className="flex items-center gap-4">{bookingView !== 'LIST' && activeTab === 'BOOK' && ( <Button variant="ghost" size="sm" onClick={handleUIBack} className="p-2 mr-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="h-6 w-6 text-slate-700" /></Button> )}<h2 className="text-2xl font-bold text-slate-900">{activeTab === 'BOOK' ? ( bookingView === 'FORM' ? 'Appointment Details' : bookingView === 'CLINIC_DETAILS' ? 'Clinic Profile' : 'Find Care' ) : activeTab === 'ACTIVE' ? 'Your Active Visits' : activeTab === 'HISTORY' ? 'Visit History' : activeTab === 'PROFILE' ? 'My Profile' : 'Search'}</h2></div> 
+                <div className="flex items-center gap-4"><Button variant="outline" onClick={() => setShowQRScanner(true)} className="hidden md:flex"><QrCode className="h-4 w-4 mr-2" /> Scan QR Code</Button>{bookingView === 'LIST' && ( <Button variant="ghost" onClick={onBack} className="text-red-500 hover:bg-red-50"><LogOut className="h-4 w-4 mr-2" /> Logout</Button> )}</div> 
             </header>
 
             <div className={`flex-1 flex flex-col w-full relative ${activeTab === 'BOOK' && bookingView === 'LIST' ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden scroll-smooth pb-32 md:pb-8'}`}>
-                {activeTab === 'ACTIVE' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto"> 
-                {unratedCompletedVisit && (
-                    <div className="mb-8 p-6 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-3xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-4">
-                        <div className="flex items-center gap-5">
-                            <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-md">
-                                <ThumbsUp className="h-7 w-7 text-amber-500" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-black text-slate-900">How was your visit with Dr. {unratedCompletedVisit.doctorName}?</h3>
-                                <p className="text-sm text-slate-600">Your feedback helps others find the best care.</p>
-                            </div>
-                        </div>
-                        <Button onClick={() => setFeedbackModal({ isOpen: true, visit: unratedCompletedVisit, rating: 0, text: '' })} className="bg-slate-900 text-white shadow-xl hover:bg-slate-800 px-8 py-3 rounded-2xl font-bold">
-                            Rate Visit Now
-                        </Button>
-                    </div>
-                )}
-                {activeVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6"> {activeVisits.map(visit => { const queueStats = getSmartQueueDetails(visit); return ( <Card key={visit.id} className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"> <div className="p-5 pb-2"> <div className="flex justify-between items-start mb-2"> <div> <div className="flex items-center gap-2 mb-1"> <h3 className="font-black text-lg text-slate-900 leading-tight truncate max-w-[180px]">{visit.clinicName}</h3> </div> <p className="text-sm text-slate-500 font-bold">Dr. {visit.doctorName}</p> <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><User className="h-3 w-3" /> {visit.name}</p> </div> <div className="flex flex-col items-end gap-2"> <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${visit.visitType === 'APPOINTMENT' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-primary-50 text-primary-700 border-primary-200'}`}> {queueStats.typeLabel} </span> <Badge status={visit.status} /> </div> </div> <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-bold"> <span className="flex items-center gap-1 uppercase tracking-tighter"><Calendar className="h-3 w-3" /> Booked: {queueStats.bookedAt}</span> <span className="text-slate-300">|</span> <span className="flex items-center gap-1 uppercase tracking-tighter"><MapPin className="h-3 w-3" /> Room {visit.room}</span> </div> </div> <div className="bg-white border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center"> <div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Your Token</div><div className="text-4xl font-black text-slate-900">#{visit.tokenNumber}</div></div> <div className="border-x border-slate-100"> <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Now Serving</div> <div className={`text-4xl font-black ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-blue-600 animate-pulse' : 'text-slate-300'}`}> {visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken} </div> </div> <div> <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">People Ahead</div> <div className="text-4xl font-black text-slate-900">{queueStats.peopleAhead}</div> </div> </div> <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold border-b border-slate-100 transition-colors`}> {queueStats.doctorStatus === DoctorStatus.ON_BREAK ? <Coffee className="h-5 w-5 animate-bounce" /> : queueStats.peopleAhead < 3 && !visit.isCheckedIn ? <AlertTriangle className="h-5 w-5 animate-pulse" /> : <Timer className="h-5 w-5" />} <div className="flex-1"> <p className="leading-tight">{queueStats.message}</p> {visit.status === PatientStatus.WAITING && ( <div className="flex gap-2 mt-1"> <span className="text-[10px] opacity-70 font-black uppercase tracking-wide">Est. Time: {queueStats.expectedTime}</span> {visit.visitType === 'APPOINTMENT' && visit.appointmentTime && ( <span className="text-[10px] font-black text-indigo-700 bg-indigo-100/50 px-1 rounded">Slot: {formatTime12h(visit.appointmentTime)}</span> )} </div> )} </div> </div> <div className="p-4 flex gap-2 mt-auto bg-white"> {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && ( <Button className="flex-1 bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-100" onClick={() => setShowQRScanner(true)}> <QrCode className="h-4 w-4 mr-2" /> Check-In </Button> )} <Button variant="secondary" className={`flex-1 font-bold ${visit.isCheckedIn ? 'w-full' : ''} text-red-600 border-red-100 hover:bg-red-50`} onClick={() => setCancelModal({ isOpen: true, visit })} disabled={visit.status === PatientStatus.WITH_DOCTOR}> Cancel </Button> </div> </Card> ); })} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><Calendar className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No active visits</h3><p className="text-slate-500 mb-6 text-center max-w-sm">Book an appointment or scan a QR code at a clinic to see your live status here.</p><Button onClick={() => handleTabSwitch('BOOK')} size="lg" className="shadow-lg">Find a Doctor</Button></div> )} </div> ) )}
-                {activeTab === 'HISTORY' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto"> {historyVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4"> {historyVisits.map(visit => ( <div key={visit.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between gap-4 h-full hover:border-primary-200 transition-colors"> <div className="flex-1"> <div className="flex items-start gap-3 mb-3"> <div className={`p-3 rounded-lg flex-shrink-0 ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}> {visit.status === PatientStatus.COMPLETED ? <CheckCircle2 className="h-6 w-6" /> : <X className="h-6 w-6" />} </div> <div className="min-w-0 flex-1"> <h3 className="font-bold text-slate-900 truncate text-base">{visit.clinicName}</h3> <p className="text-sm text-slate-500 truncate">Dr. {visit.doctorName}</p> <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(visit.timeAdded).toLocaleDateString()} at {new Date(visit.timeAdded).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', hour12: true})}</p> </div> </div> <div className="space-y-2"> 
-                    {visit.rating ? (
-                        <div className="bg-amber-50 p-2 rounded-lg border border-amber-100 flex items-center gap-2">
-                            <div className="flex">
-                                {[1,2,3,4,5].map(s => (
-                                    <Star key={s} className={`h-3 w-3 ${s <= visit.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} />
-                                ))}
-                            </div>
-                            <span className="text-[10px] font-bold text-amber-700">You rated this visit</span>
-                        </div>
-                    ) : visit.status === PatientStatus.COMPLETED && (
-                        <button 
-                            onClick={() => setFeedbackModal({ isOpen: true, visit, rating: 0, text: '' })}
-                            className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-black rounded-lg border border-indigo-100 transition-all uppercase tracking-wider"
-                        >
-                            Rate Doctor
-                        </button>
-                    )}
-                    {visit.diagnosis && ( <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100"> <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Diagnosis</p> <p className="text-sm text-slate-700">{visit.diagnosis}</p> </div> )} {visit.notes && ( <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100"> <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Notes</p> <p className="text-sm text-slate-700 text-ellipsis overflow-hidden line-clamp-3">{visit.notes}</p> </div> )} </div> </div> <div className="pt-3 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400 italic">
-                     Visit records are private and secure.
-                </div> </div> ))} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><History className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No past visits</h3><p className="text-slate-500 mb-6 text-center max-w-sm">Your completed appointment history will appear here.</p></div> )} </div> ) )}
+                {activeTab === 'ACTIVE' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto"> {unratedCompletedVisit && ( <div className="mb-8 p-6 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-3xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-4"><div className="flex items-center gap-5"><div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-md"><ThumbsUp className="h-7 w-7 text-amber-500" /></div><div><h3 className="text-lg font-black text-slate-900">How was your visit with Dr. {unratedCompletedVisit.doctorName}?</h3><p className="text-sm text-slate-600">Your feedback helps others find the best care.</p></div></div><Button onClick={() => setFeedbackModal({ isOpen: true, visit: unratedCompletedVisit, rating: 0, text: '' })} className="bg-slate-900 text-white shadow-xl hover:bg-slate-800 px-8 py-3 rounded-2xl font-bold">Rate Visit Now</Button></div> )} {activeVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6"> {activeVisits.map(visit => { const queueStats = getSmartQueueDetails(visit); const StatusIcon = queueStats.statusIcon; return ( <Card key={visit.id} className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group"> <div className="p-5 pb-2"> <div className="flex justify-between items-start mb-2"> <div> <div className="flex items-center gap-2 mb-1"> <h3 className="font-black text-lg text-slate-900 leading-tight truncate max-w-[180px]">{visit.clinicName}</h3> </div> <p className="text-sm text-slate-500 font-bold">Dr. {visit.doctorName}</p> <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><User className="h-3 w-3" /> {visit.name}</p> </div> <div className="flex flex-col items-end gap-2"> <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border shadow-sm ${visit.visitType === 'APPOINTMENT' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-primary-50 text-primary-700 border-primary-200'}`}> {queueStats.typeLabel} </span> <Badge status={visit.status} /> </div> </div> <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-bold"> <span className="flex items-center gap-1 uppercase tracking-tighter"><Calendar className="h-3 w-3" /> Booked: {queueStats.bookedAt}</span> <span className="text-slate-300">|</span> <span className="flex items-center gap-1 uppercase tracking-tighter"><MapPin className="h-3 w-3" /> Room {visit.room}</span> </div> </div> <div className="bg-white border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center"> <div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Your Token</div><div className="text-4xl font-black text-slate-900">#{visit.tokenNumber}</div></div> <div className="border-x border-slate-100"> <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Now Serving</div> <div className={`text-4xl font-black ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-blue-600 animate-pulse' : 'text-slate-300'}`}> {visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken} </div> </div> <div> <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">People Ahead</div> <div className="text-4xl font-black text-slate-900">{queueStats.peopleAhead}</div> </div> </div> <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold border-b border-slate-100 transition-colors`}> <StatusIcon className={`h-5 w-5 ${queueStats.doctorStatus === DoctorStatus.ON_BREAK ? 'animate-bounce' : queueStats.peopleAhead < 3 ? 'animate-pulse' : ''}`} /> <div className="flex-1"> <p className="leading-tight text-xs sm:text-sm">{queueStats.message}</p> {visit.status === PatientStatus.WAITING && ( <div className="flex justify-between items-center mt-1.5 pt-1.5 border-t border-black/5"> <div className="flex items-center gap-2"> <span className="text-[9px] opacity-70 font-black uppercase tracking-wider">Estimated Turn:</span> <span className="text-[11px] font-black">{queueStats.expectedTime}</span> </div> <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${visit.visitType === 'APPOINTMENT' ? 'text-indigo-700 bg-indigo-100/50 border-indigo-200' : 'text-primary-700 bg-primary-100/50 border-primary-200'}`}>Slot: {queueStats.smartSlotTime}</span> </div> )} </div> </div> <div className="p-4 flex gap-2 mt-auto bg-white"> {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && ( <Button className="flex-1 bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-100" onClick={() => setShowQRScanner(true)}> <QrCode className="h-4 w-4 mr-2" /> Check-In </Button> )} <Button variant="secondary" className={`flex-1 font-bold ${visit.isCheckedIn ? 'w-full' : ''} text-red-600 border-red-100 hover:bg-red-50`} onClick={() => setCancelModal({ isOpen: true, visit })} disabled={visit.status === PatientStatus.WITH_DOCTOR}> Cancel </Button> </div> </Card> ); })} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><Calendar className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No active visits</h3><p className="text-slate-500 mb-6 text-center max-w-sm">Book an appointment or scan a QR code at a clinic to see your live status here.</p><Button onClick={() => handleTabSwitch('BOOK')} size="lg" className="shadow-lg">Find a Doctor</Button></div> )} </div> ) )}
+                {activeTab === 'HISTORY' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto"> {historyVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4"> {historyVisits.map(visit => ( <div key={visit.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between gap-4 h-full hover:border-primary-200 transition-colors"> <div className="flex-1"> <div className="flex items-start gap-3 mb-3"> <div className={`p-3 rounded-lg flex-shrink-0 ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}> {visit.status === PatientStatus.COMPLETED ? <CheckCircle2 className="h-6 w-6" /> : <X className="h-6 w-6" />} </div> <div className="min-w-0 flex-1"> <h3 className="font-bold text-slate-900 truncate text-base">{visit.clinicName}</h3> <p className="text-sm text-slate-500 truncate">Dr. {visit.doctorName}</p> <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(visit.timeAdded).toLocaleDateString()} at {new Date(visit.timeAdded).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', hour12: true})}</p> </div> </div> <div className="space-y-2"> {visit.rating ? ( <div className="bg-amber-50 p-2 rounded-lg border border-amber-100 flex items-center gap-2"><div className="flex">{[1,2,3,4,5].map(s => ( <Star key={s} className={`h-3 w-3 ${s <= visit.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} /> ))}</div><span className="text-[10px] font-bold text-amber-700">You rated this visit</span></div> ) : visit.status === PatientStatus.COMPLETED && ( <button onClick={() => setFeedbackModal({ isOpen: true, visit, rating: 0, text: '' })} className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-black rounded-lg border border-indigo-100 transition-all uppercase tracking-wider">Rate Doctor</button> )} {visit.diagnosis && ( <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100"> <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Diagnosis</p> <p className="text-sm text-slate-700">{visit.diagnosis}</p> </div> )} {visit.notes && ( <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100"> <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Notes</p> <p className="text-sm text-slate-700 text-ellipsis overflow-hidden line-clamp-3">{visit.notes}</p> </div> )} </div> </div> <div className="pt-3 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400 italic"> Visit records are private and secure. </div> </div> ))} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><History className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No past visits</h3><p className="text-slate-500 mb-6 text-center max-w-sm">Your completed appointment history will appear here.</p></div> )} </div> ) )}
                 {activeTab === 'PROFILE' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full max-w-3xl mx-auto px-4 py-8"> <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6"> <div className="bg-slate-900 p-6 text-white flex justify-between items-center"> <div className="flex items-center gap-4"> <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold backdrop-blur-sm border-2 border-white/30"> {userName.charAt(0)} </div> <div> <h2 className="text-2xl font-bold">{userName}</h2> <p className="opacity-80 font-mono">{userPhone}</p> </div> </div> <button onClick={onBack} className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-colors"> <LogOut className="h-5 w-5" /> </button> </div> <div className="p-6"> <div className="grid md:grid-cols-2 gap-6"> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Full Name</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.name}</div> </div> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Mobile Number</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.phone}</div> </div> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Age</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.age || '-'}</div> </div> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Gender</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.gender || '-'}</div> </div> </div> </div> </div> <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"> <div className="p-6 border-b border-slate-100 flex justify-between items-center"> <div> <h3 className="font-bold text-lg text-slate-900">Family Members</h3> <p className="text-sm text-slate-500">Manage profiles for your family</p> </div> <Button size="sm" onClick={() => { setNewMember({ name: '', age: '', gender: 'Male', relation: '' }); setEditingMemberIndex(null); setIsCustomRelation(false); setShowAddMember(true); }}> <Plus className="h-4 w-4 mr-2" /> Add Member </Button> </div> <div className="divide-y divide-slate-100"> {userProfile?.familyMembers && userProfile.familyMembers.length > 0 ? ( userProfile.familyMembers.map((member, idx) => ( <div key={idx} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"> <div className="flex items-center gap-4"> <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold"> {member.name.charAt(0)} </div> <div> <div className="font-bold text-slate-900">{member.name}</div> <div className="text-xs text-slate-500">{member.relation} • {member.age} Yrs • {member.gender}</div> </div> </div> <div className="flex gap-2"> <button onClick={() => handleEditMember(idx)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="h-4 w-4" /></button> <button onClick={() => setMemberToDeleteIndex(idx)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="h-4 w-4" /></button> </div> </div> )) ) : ( <div className="p-8 text-center text-slate-400 italic">No family members added.</div> )} </div> </div> </div> ) )}
 
                 {/* BOOK TAB (SEARCH & CLINIC VIEW) */}
                 {activeTab === 'BOOK' && (
                     <div className="h-full flex flex-col">
-                        {/* Search & Filter Bar */}
                         {bookingView === 'LIST' && (
                             <div className="sticky top-0 z-10 bg-white border-b border-slate-200 p-4 shadow-sm">
-                                {/* Search Inputs */}
                                 <div className="flex flex-col lg:flex-row gap-3 mb-4">
                                     <div className="flex-1 flex gap-2">
                                         <div className="relative flex-1">
                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                                            <input 
-                                                type="text" 
-                                                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary-500 outline-none transition-all shadow-sm font-medium"
-                                                placeholder={searchMode === 'CLINIC' ? "Search clinics..." : "Search doctors..."}
-                                                value={searchQuery}
-                                                onChange={(e) => setSearchQuery(e.target.value)}
-                                            />
+                                            <input type="text" className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary-500 outline-none transition-all shadow-sm font-medium" placeholder={searchMode === 'CLINIC' ? "Search clinics..." : "Search doctors..."} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                                         </div>
-                                        
-                                        {/* Integrated Mode Toggle */}
                                         <div className="bg-slate-100 p-1 rounded-xl flex gap-1 flex-shrink-0 shadow-inner">
-                                            <button 
-                                                onClick={() => setSearchMode('CLINIC')}
-                                                className={`flex items-center justify-center gap-2 px-3 rounded-lg text-sm font-black transition-all ${searchMode === 'CLINIC' ? 'bg-white text-primary-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}
-                                                title="Search Clinics"
-                                            >
-                                                <Building2 className="h-4 w-4" />
-                                                <span className="hidden sm:inline">Clinics</span>
-                                            </button>
-                                            <button 
-                                                onClick={() => setSearchMode('DOCTOR')}
-                                                className={`flex items-center justify-center gap-2 px-3 rounded-lg text-sm font-black transition-all ${searchMode === 'DOCTOR' ? 'bg-white text-primary-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}
-                                                title="Search Doctors"
-                                            >
-                                                <Stethoscope className="h-4 w-4" />
-                                                <span className="hidden sm:inline">Doctors</span>
-                                            </button>
+                                            <button onClick={() => setSearchMode('CLINIC')} className={`flex items-center justify-center gap-2 px-3 rounded-lg text-sm font-black transition-all ${searchMode === 'CLINIC' ? 'bg-white text-primary-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`} title="Search Clinics"><Building2 className="h-4 w-4" /><span className="hidden sm:inline">Clinics</span></button>
+                                            <button onClick={() => setSearchMode('DOCTOR')} className={`flex items-center justify-center gap-2 px-3 rounded-lg text-sm font-black transition-all ${searchMode === 'DOCTOR' ? 'bg-white text-primary-700 shadow-md ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`} title="Search Doctors"><Stethoscope className="h-4 w-4" /><span className="hidden sm:inline">Doctors</span></button>
                                         </div>
                                     </div>
-
                                     <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 lg:pb-0">
-                                        {/* Sort By Dropdown */}
-                                        <div className="relative flex-shrink-0">
-                                            <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                                            <select 
-                                                className="pl-9 pr-8 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-black focus:ring-2 focus:ring-primary-500 outline-none shadow-sm cursor-pointer appearance-none transition-all hover:border-slate-300"
-                                                value={sortBy}
-                                                onChange={(e) => {
-                                                    const val = e.target.value as 'NEAR' | 'WAIT' | 'FEE';
-                                                    setSortBy(val);
-                                                    if (val === 'NEAR' && !userLocation) {
-                                                        handleLocateMe();
-                                                    }
-                                                }}
-                                            >
-                                                <option value="NEAR">Nearest First</option>
-                                                <option value="WAIT">Shortest Wait</option>
-                                                <option value="FEE">Lowest Fee</option>
-                                            </select>
-                                        </div>
-
-                                        <select 
-                                            className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-black focus:ring-2 focus:ring-primary-500 outline-none shadow-sm cursor-pointer appearance-none transition-all hover:border-slate-300"
-                                            value={selectedCity}
-                                            onChange={(e) => setSelectedCity(e.target.value)}
-                                        >
-                                            {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
-                                        </select>
-
-                                        {/* Uber-like Location Display */}
-                                        {pinnedAddress ? (
-                                            <button 
-                                                onClick={handleLocateMe}
-                                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-primary-200 bg-primary-50 text-sm font-black text-primary-900 hover:bg-primary-100 transition-all shadow-md group whitespace-nowrap min-w-[140px] max-w-[220px] active:scale-95"
-                                            >
-                                                {isLocating ? <RefreshCw className="h-4 w-4 animate-spin text-primary-600" /> : <Crosshair className="h-4 w-4 text-primary-600 group-hover:scale-110 transition-transform" />}
-                                                <span className="truncate text-left">{pinnedAddress}</span>
-                                            </button>
-                                        ) : (
-                                            <button 
-                                                onClick={handleLocateMe}
-                                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-md group whitespace-nowrap active:scale-95"
-                                            >
-                                                {isLocating ? <RefreshCw className="h-4 w-4 animate-spin text-primary-600" /> : <MapPin className="h-4 w-4 text-primary-600 group-hover:scale-110 transition-transform" />}
-                                                <span className="hidden sm:inline">Pin My Location</span>
-                                            </button>
-                                        )}
-
-                                        <button 
-                                            className={`whitespace-nowrap px-5 h-11 rounded-xl font-black text-sm transition-all shadow-md active:scale-95 border ${showMap ? 'bg-primary-600 text-white border-primary-600' : 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800'}`}
-                                            onClick={() => setShowMap(!showMap)}
-                                        >
-                                            {showMap ? 'Show List' : 'Show Map'}
-                                        </button>
+                                        <div className="relative flex-shrink-0"><ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" /><select className="pl-9 pr-8 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-black focus:ring-2 focus:ring-primary-500 outline-none shadow-sm cursor-pointer appearance-none transition-all hover:border-slate-300" value={sortBy} onChange={(e) => { const val = e.target.value as 'NEAR' | 'WAIT' | 'FEE'; setSortBy(val); if (val === 'NEAR' && !userLocation) handleLocateMe(); }}><option value="NEAR">Nearest First</option><option value="WAIT">Shortest Wait</option><option value="FEE">Lowest Fee</option></select></div>
+                                        <select className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-black focus:ring-2 focus:ring-primary-500 outline-none shadow-sm cursor-pointer appearance-none transition-all hover:border-slate-300" value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)}>{uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}</select>
+                                        {pinnedAddress ? ( <button onClick={handleLocateMe} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-primary-200 bg-primary-50 text-sm font-black text-primary-900 hover:bg-primary-100 transition-all shadow-md group whitespace-nowrap min-w-[140px] max-w-[220px] active:scale-95">{isLocating ? <RefreshCw className="h-4 w-4 animate-spin text-primary-600" /> : <Crosshair className="h-4 w-4 text-primary-600 group-hover:scale-110 transition-transform" />}<span className="truncate text-left">{pinnedAddress}</span></button> ) : ( <button onClick={handleLocateMe} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-md group whitespace-nowrap active:scale-95">{isLocating ? <RefreshCw className="h-4 w-4 animate-spin text-primary-600" /> : <MapPin className="h-4 w-4 text-primary-600 group-hover:scale-110 transition-transform" />}<span className="hidden sm:inline">Pin My Location</span></button> )}
+                                        <button className={`whitespace-nowrap px-5 h-11 rounded-xl font-black text-sm transition-all shadow-md active:scale-95 border ${showMap ? 'bg-primary-600 text-white border-primary-600' : 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800'}`} onClick={() => setShowMap(!showMap)}>{showMap ? 'Show List' : 'Show Map'}</button>
                                     </div>
                                 </div>
-
-                                {/* Categories */}
-                                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                                    {CATEGORIES.map(cat => (
-                                        <button
-                                            key={cat.id}
-                                            onClick={() => setSelectedCategory(cat.id)}
-                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-black whitespace-nowrap transition-all ${selectedCategory === cat.id ? 'bg-primary-600 text-white border-primary-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}
-                                        >
-                                            <cat.icon className="h-3 w-3" /> {cat.label}
-                                        </button>
-                                    ))}
-                                </div>
+                                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">{CATEGORIES.map(cat => ( <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-black whitespace-nowrap transition-all ${selectedCategory === cat.id ? 'bg-primary-600 text-white border-primary-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}><cat.icon className="h-3 w-3" /> {cat.label}</button> ))}</div>
                             </div>
                         )}
 
-                        {/* Content Area */}
                         <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
                             <div className={`flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar ${showMap && bookingView === 'LIST' ? 'hidden md:block' : 'block'}`}>
                                 {bookingView === 'LIST' ? (
                                     searchMode === 'CLINIC' ? (
                                         <div className={`w-full ${showMap ? 'grid gap-4 grid-cols-1 xl:grid-cols-2' : 'columns-1 md:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5 gap-4'}`}>
-                                            {filteredClinics.length > 0 ? (
-                                                filteredClinics.map(clinic => {
-                                                    const waitInfo = getClinicWaitStats(clinic);
-                                                    const relevantDoctors = getRelevantDoctors(clinic);
-                                                    const feeRange = getFeeRange(clinic);
-                                                    
-                                                    let distLabel = '---';
-                                                    if (userLocation && clinic.geoLocation) {
-                                                        const dist = calculateDistance(userLocation.lat, userLocation.lng, clinic.geoLocation.lat, clinic.geoLocation.lng).toFixed(1);
-                                                        distLabel = `${dist} km`;
-                                                    }
-
-                                                    return (
-                                                        <ClinicCard
-                                                            key={clinic.id}
-                                                            clinic={clinic}
-                                                            waitInfo={waitInfo}
-                                                            feeRange={feeRange}
-                                                            distLabel={distLabel}
-                                                            gmapsLink={`https://www.google.com/maps/search/?api=1&query=${clinic.geoLocation?.lat},${clinic.geoLocation?.lng}`}
-                                                            relevantDoctors={relevantDoctors}
-                                                            isHighlighted={highlightedClinicId === clinic.id}
-                                                            isOpen={isClinicOpen(clinic.operatingHours)}
-                                                            cardRef={el => { clinicCardRefs.current[clinic.id] = el; }}
-                                                            onSelect={() => navigateToView('CLINIC_DETAILS', clinic)}
-                                                            onBook={() => navigateToView('CLINIC_DETAILS', clinic)}
-                                                            onQueue={() => navigateToView('CLINIC_DETAILS', clinic)}
-                                                            onViewDoctor={(doc) => setViewingDoctor(doc)}
-                                                        />
-                                                    );
-                                                })
-                                            ) : (
-                                                <div className="text-center py-20 text-slate-400 col-span-full">
-                                                    <Building2 className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                                                    <p>No clinics found matching your criteria.</p>
-                                                </div>
-                                            )}
+                                            {filteredClinics.length > 0 ? ( filteredClinics.map(clinic => { const waitInfo = getClinicWaitStats(clinic); const relevantDoctors = getRelevantDoctors(clinic); const feeRange = getFeeRange(clinic); let distLabel = '---'; if (userLocation && clinic.geoLocation) { const dist = calculateDistance(userLocation.lat, userLocation.lng, clinic.geoLocation.lat, clinic.geoLocation.lng).toFixed(1); distLabel = `${dist} km`; } return ( <ClinicCard key={clinic.id} clinic={clinic} waitInfo={waitInfo} feeRange={feeRange} distLabel={distLabel} gmapsLink={`https://www.google.com/maps/search/?api=1&query=${clinic.geoLocation?.lat},${clinic.geoLocation?.lng}`} relevantDoctors={relevantDoctors} isHighlighted={highlightedClinicId === clinic.id} isOpen={isClinicOpen(clinic.operatingHours)} cardRef={el => { clinicCardRefs.current[clinic.id] = el; }} onSelect={() => navigateToView('CLINIC_DETAILS', clinic)} onBook={() => navigateToView('CLINIC_DETAILS', clinic)} onQueue={() => navigateToView('CLINIC_DETAILS', clinic)} onViewDoctor={(doc) => setViewingDoctor(doc)} /> ); }) ) : ( <div className="text-center py-20 text-slate-400 col-span-full"><Building2 className="h-12 w-12 mx-auto mb-4 opacity-20" /><p>No clinics found matching your criteria.</p></div> )}
                                         </div>
                                     ) : (
-                                        /* DOCTOR SEARCH RESULTS */
                                         <div className={`w-full ${showMap ? 'grid gap-4 grid-cols-1 xl:grid-cols-2' : 'columns-1 md:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5 gap-4'}`}>
-                                            {groupedDoctors.length > 0 ? (
-                                                groupedDoctors.map(({ masterDoc, locations }) => {
-                                                    return (
-                                                        <DoctorSearchCard
-                                                            key={masterDoc.masterId}
-                                                            doctor={masterDoc}
-                                                            locations={locations}
-                                                            onBook={(clinic, doc) => navigateToView(null, clinic, doc)}
-                                                            onViewProfile={() => setViewingDoctor(masterDoc)}
-                                                        />
-                                                    );
-                                                })
-                                            ) : (
-                                                <div className="text-center py-20 text-slate-400 col-span-full">
-                                                    <Stethoscope className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                                                    <p>No doctors found matching your criteria.</p>
-                                                </div>
-                                            )}
+                                            {groupedDoctors.length > 0 ? ( groupedDoctors.map(({ masterDoc, locations }) => { return ( <DoctorSearchCard key={masterDoc.masterId} doctor={masterDoc} locations={locations} onBook={(clinic, doc) => navigateToView(null, clinic, doc)} onViewProfile={() => setViewingDoctor(masterDoc)} /> ); }) ) : ( <div className="text-center py-20 text-slate-400 col-span-full"><Stethoscope className="h-12 w-12 mx-auto mb-4 opacity-20" /><p>No doctors found matching your criteria.</p></div> )}
                                         </div>
                                     )
                                 ) : bookingView === 'CLINIC_DETAILS' && selectedClinic ? (
-                                    // CLINIC DETAIL VIEW
                                     <div className="max-w-5xl mx-auto space-y-6">
                                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                                             <div className="h-48 bg-slate-200 relative">
-                                                {selectedClinic.imageUrl ? (
-                                                    <img src={selectedClinic.imageUrl} className="w-full h-full object-cover" alt={selectedClinic.name} />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center text-slate-400 bg-slate-100">
-                                                        <Building2 className="h-16 w-16" />
-                                                    </div>
-                                                )}
+                                                {selectedClinic.imageUrl ? ( <img src={selectedClinic.imageUrl} className="w-full h-full object-cover" alt={selectedClinic.name} /> ) : ( <div className="w-full h-full flex items-center justify-center text-slate-400 bg-slate-100"><Building2 className="h-16 w-16" /></div> )}
                                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                                                <div className="absolute bottom-4 left-6 text-white">
-                                                    <h1 className="text-3xl font-black shadow-sm">{selectedClinic.name}</h1>
-                                                    <p className="text-sm opacity-90 flex items-center gap-1"><MapPin className="h-3 w-3" /> {selectedClinic.address}</p>
-                                                </div>
+                                                <div className="absolute bottom-4 left-6 text-white"><h1 className="text-3xl font-black shadow-sm">{selectedClinic.name}</h1><p className="text-sm opacity-90 flex items-center gap-1"><MapPin className="h-3 w-3" /> {selectedClinic.address}</p></div>
                                             </div>
-                                            
                                             <div className="p-6">
-                                                {isClinicDirectWalkInOnly && (
-                                                    <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-2xl flex items-start gap-4">
-                                                        <div className="p-2 bg-orange-100 rounded-full text-orange-600 shrink-0">
-                                                            <MapPinIcon className="h-5 w-5" />
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="font-bold text-orange-900 text-sm">Direct Walk-In Registration Only</h4>
-                                                            <p className="text-xs text-orange-700 leading-relaxed mt-0.5">This clinic requires physical registration at the reception counter to get a token. You can still view live wait times here before visiting.</p>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                <div className="flex flex-wrap gap-4 mb-6 text-sm text-slate-600">
-                                                    {selectedClinic.operatingHours && <div className="flex items-center gap-1 bg-slate-50 px-3 py-1 rounded-full"><Clock className="h-4 w-4" /> {selectedClinic.operatingHours}</div>}
-                                                    {selectedClinic.contactPhone && <div className="flex items-center gap-1 bg-slate-50 px-3 py-1 rounded-full"><Phone className="h-4 w-4" /> {selectedClinic.contactPhone}</div>}
-                                                    <div className="flex items-center gap-1 bg-primary-50 text-primary-700 px-3 py-1 rounded-full font-bold border border-primary-100 uppercase tracking-tight"><ShieldCheck className="h-4 w-4" /> Verified Clinic</div>
-                                                </div>
-
-                                                <div className="mb-8">
-                                                    <h3 className="font-bold text-slate-900 mb-2 text-lg">About Clinic</h3>
-                                                    <p className="text-slate-600 leading-relaxed text-sm">
-                                                        {selectedClinic.about || "A premier healthcare facility dedicated to providing comprehensive medical care."}
-                                                    </p>
-                                                </div>
-
-                                                {selectedClinic.amenities && (
-                                                    <div className="mb-8">
-                                                        <h3 className="font-bold text-slate-900 mb-3 text-sm uppercase tracking-wide">Facilities</h3>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {selectedClinic.amenities.map(a => (
-                                                                <span key={a} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-lg border border-blue-100">{a}</span>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
+                                                {isClinicDirectWalkInOnly && ( <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-2xl flex items-start gap-4"><div className="p-2 bg-orange-100 rounded-full text-orange-600 shrink-0"><MapPinIcon className="h-5 w-5" /></div><div><h4 className="font-bold text-orange-900 text-sm">Direct Walk-In Registration Only</h4><p className="text-xs text-orange-700 leading-relaxed mt-0.5">This clinic requires physical registration at the reception counter to get a token. You can still view live wait times here before visiting.</p></div></div> )}
+                                                <div className="flex flex-wrap gap-4 mb-6 text-sm text-slate-600">{selectedClinic.operatingHours && <div className="flex items-center gap-1 bg-slate-50 px-3 py-1 rounded-full"><Clock className="h-4 w-4" /> {selectedClinic.operatingHours}</div>}{selectedClinic.contactPhone && <div className="flex items-center gap-1 bg-slate-50 px-3 py-1 rounded-full"><Phone className="h-4 w-4" /> {selectedClinic.contactPhone}</div>}<div className="flex items-center gap-1 bg-primary-50 text-primary-700 px-3 py-1 rounded-full font-bold border border-primary-100 uppercase tracking-tight"><ShieldCheck className="h-4 w-4" /> Verified Clinic</div></div>
+                                                <div className="mb-8"><h3 className="font-bold text-slate-900 mb-2 text-lg">About Clinic</h3><p className="text-slate-600 leading-relaxed text-sm">{selectedClinic.about || "A premier healthcare facility dedicated to providing comprehensive medical care."}</p></div>
+                                                {selectedClinic.amenities && ( <div className="mb-8"><h3 className="font-bold text-slate-900 mb-3 text-sm uppercase tracking-wide">Facilities</h3><div className="flex flex-wrap gap-2">{selectedClinic.amenities.map(a => ( <span key={a} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-lg border border-blue-100">{a}</span> ))}</div></div> )}
                                                 <div className="border-t border-slate-100 pt-8">
                                                     <h3 className="font-bold text-slate-900 mb-4 text-xl">Available Doctors</h3>
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1548,14 +1400,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                             const canQueueOnline = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(selectedClinic.operationMode);
                                                             const todayShift = getDoctorTodayShift(doc);
                                                             const isAvailable = doc.status === DoctorStatus.AVAILABLE;
-                                                            
                                                             return (
-                                                                <div 
-                                                                    key={doc.id} 
-                                                                    className="p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row gap-5 hover:border-primary-300 hover:shadow-lg transition-all cursor-pointer bg-white group relative"
-                                                                    onClick={() => navigateToView(null, selectedClinic, doc)}
-                                                                >
-                                                                    {/* Left: Avatar & Status */}
+                                                                <div key={doc.id} className="p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row gap-5 hover:border-primary-300 hover:shadow-lg transition-all cursor-pointer bg-white group relative" onClick={() => navigateToView(null, selectedClinic, doc)}>
                                                                     <div className="flex-shrink-0 flex flex-col items-center gap-2">
                                                                         <div className="relative">
                                                                             <img src={doc.avatarUrl} className="w-20 h-20 rounded-2xl object-cover bg-slate-100 border border-slate-100 shadow-sm" />
@@ -1563,31 +1409,31 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                         </div>
                                                                         <div className="flex items-center gap-1 text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
                                                                             <Star className="h-3 w-3 fill-current" />
-                                                                            <span className="text-xs font-black">{doc.rating}</span>
+                                                                            <span className="text-xs font-black">{doc.rating?.toFixed(1)}</span>
                                                                         </div>
                                                                     </div>
-
-                                                                    {/* Center: Details */}
                                                                     <div className="flex-1 min-w-0">
                                                                         <div className="flex justify-between items-start mb-1">
-                                                                            <div>
-                                                                                <h4 className="font-bold text-slate-900 text-lg group-hover:text-primary-600 transition-colors truncate">{doc.name}</h4>
-                                                                                <p className="text-sm text-primary-600 font-bold uppercase tracking-tight">{doc.specialty}</p>
+                                                                            <div className="min-w-0">
+                                                                                <h4 className="font-bold text-slate-900 text-lg group-hover:text-primary-600 transition-colors truncate pr-2">{doc.name}</h4>
+                                                                                <p className="text-xs text-primary-600 font-bold uppercase tracking-tight">{doc.specialty}</p>
                                                                             </div>
-                                                                            <div className="text-right">
+                                                                            <div className="text-right flex-shrink-0">
                                                                                 <span className="text-lg font-black text-slate-900">₹{doc.consultationFee}</span>
                                                                                 <p className="text-[10px] text-slate-400 font-bold uppercase">Fee</p>
                                                                             </div>
                                                                         </div>
-                                                                        
-                                                                        {/* Shift & Languages */}
-                                                                        <div className="space-y-2 mt-3">
+                                                                        <div className="space-y-1.5 mt-2.5">
                                                                             <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
-                                                                                <Clock className="h-3.5 w-3.5 text-slate-400" />
+                                                                                <Clock className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
                                                                                 <span>Today: <span className="font-bold text-slate-900">{todayShift}</span></span>
                                                                             </div>
                                                                             <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
-                                                                                <Languages className="h-3.5 w-3.5 text-slate-400" />
+                                                                                <Award className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                                                                                <span>Experience: <span className="font-bold text-slate-900">{doc.experience || 5}+ Years</span></span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                                                                                <Languages className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
                                                                                 <div className="flex flex-wrap gap-1">
                                                                                     {doc.languages?.slice(0, 3).map(lang => (
                                                                                         <span key={lang} className="bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-bold text-slate-500">{lang}</span>
@@ -1595,30 +1441,25 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                                 </div>
                                                                             </div>
                                                                         </div>
-
-                                                                        {/* Wait Info */}
-                                                                        <div className="mt-4 flex items-center justify-between">
-                                                                            <div className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-2 ${docWait.time < 30 ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-orange-50 text-orange-700 border border-orange-100'}`}>
-                                                                                <div className={`w-2 h-2 rounded-full ${docWait.time < 30 ? 'bg-green-500' : 'bg-orange-500'} animate-pulse`} />
-                                                                                {isClinicDirectWalkInOnly ? `Live Queue: ${docWait.count} waiting` : `~${docWait.time}m wait (${docWait.count} ahead)`}
+                                                                        
+                                                                        {/* Improved Alignment for Bottom Row */}
+                                                                        <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-50">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className={`px-2.5 py-1 rounded-lg text-[11px] font-black flex items-center gap-2 ${docWait.time < 30 ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-orange-50 text-orange-700 border border-orange-100'}`}>
+                                                                                    <div className={`w-1.5 h-1.5 rounded-full ${docWait.time < 30 ? 'bg-green-500' : 'bg-orange-500'} animate-pulse`} />
+                                                                                    {isClinicDirectWalkInOnly ? `Live Queue: ${docWait.count} waiting` : `~${docWait.time}m wait (${docWait.count} ahead)`}
+                                                                                </div>
+                                                                                <button 
+                                                                                    onClick={(e) => { e.stopPropagation(); setViewingDoctor(doc); }} 
+                                                                                    className="text-primary-600 hover:text-primary-700 text-[11px] font-bold flex items-center gap-0.5 group/bio"
+                                                                                >
+                                                                                    Bio <ChevronRight className="h-3 w-3 group-hover/bio:translate-x-0.5 transition-transform" />
+                                                                                </button>
                                                                             </div>
-
-                                                                            <button 
-                                                                                onClick={(e) => { e.stopPropagation(); setViewingDoctor(doc); }}
-                                                                                className="text-primary-600 hover:text-primary-700 text-xs font-bold flex items-center gap-0.5"
-                                                                            >
-                                                                                Bio <ChevronRight className="h-3 w-3" />
+                                                                            <button className={`w-full sm:w-auto h-10 px-6 rounded-xl font-black shadow-lg transform hover:scale-105 transition-all text-xs ${canQueueOnline ? 'bg-primary-600 text-white shadow-primary-100' : isClinicDirectWalkInOnly ? 'bg-white border border-slate-200 text-slate-500' : 'bg-indigo-600 text-white shadow-indigo-100'}`}>
+                                                                                {canQueueOnline ? 'Get Token' : isClinicDirectWalkInOnly ? 'Walk-In Only' : 'Book Visit'}
                                                                             </button>
                                                                         </div>
-                                                                    </div>
-
-                                                                    {/* Action Button */}
-                                                                    <div className="sm:absolute sm:bottom-5 sm:right-5 mt-2 sm:mt-0">
-                                                                        <button 
-                                                                            className={`w-full sm:w-auto h-11 px-6 rounded-xl font-black shadow-lg transform group-hover:scale-105 transition-all text-sm ${canQueueOnline ? 'bg-primary-600 text-white shadow-primary-100' : isClinicDirectWalkInOnly ? 'bg-white border border-slate-200 text-slate-500' : 'bg-indigo-600 text-white shadow-indigo-100'}`}
-                                                                        >
-                                                                            {canQueueOnline ? 'Get Token' : isClinicDirectWalkInOnly ? 'Walk-In Only' : 'Book Visit'}
-                                                                        </button>
                                                                     </div>
                                                                 </div>
                                                             );
@@ -1629,224 +1470,104 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                         </div>
                                     </div>
                                 ) : bookingView === 'FORM' && selectedDoctor ? (
-                                    // ENHANCED BOOKING FORM WITH DOCTOR DETAILS
                                     <div className="max-w-2xl mx-auto space-y-6 pb-20">
-                                        {/* Doctor Profile Card */}
                                         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
-                                            {/* Header with Background Gradient */}
-                                            <div className="h-24 bg-gradient-to-r from-primary-600 to-indigo-600 relative">
-                                                <div className="absolute -bottom-10 left-6">
-                                                    <img src={selectedDoctor.avatarUrl} className="w-24 h-24 rounded-3xl object-cover border-4 border-white shadow-lg bg-white" />
-                                                </div>
-                                            </div>
-                                            
+                                            <div className="h-24 bg-gradient-to-r from-primary-600 to-indigo-600 relative"><div className="absolute -bottom-10 left-6"><img src={selectedDoctor.avatarUrl} className="w-24 h-24 rounded-3xl object-cover border-4 border-white shadow-lg bg-white" /></div></div>
                                             <div className="pt-12 px-6 pb-6">
-                                                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                                                    <div>
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <h2 className="text-2xl font-black text-slate-900">{selectedDoctor.name}</h2>
-                                                            <div className="bg-amber-50 text-amber-600 px-2 py-0.5 rounded-lg flex items-center gap-1 border border-amber-100">
-                                                                <Star className="h-3 w-3 fill-current" />
-                                                                <span className="text-xs font-black">{selectedDoctor.rating}</span>
-                                                            </div>
-                                                        </div>
-                                                        <p className="text-primary-600 font-bold uppercase tracking-tight flex items-center gap-2">
-                                                            <Stethoscope className="h-4 w-4" /> {selectedDoctor.specialty}
-                                                        </p>
-                                                        <p className="text-sm text-slate-500 mt-2 flex items-center gap-1.5 font-medium">
-                                                            <Building2 className="h-4 w-4 text-slate-400" /> {selectedClinic?.name} • Room {selectedDoctor.roomNumber}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                {/* Highlights Strip */}
-                                                <div className="flex flex-wrap gap-3 mt-6">
-                                                    <div className="bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 flex items-center gap-2">
-                                                        <Award className="h-4 w-4 text-primary-600" />
-                                                        <div>
-                                                            <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Experience</p>
-                                                            <p className="text-xs font-black text-slate-700 leading-none">{selectedDoctor.experience || 5}+ Years</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 flex items-center gap-2">
-                                                        <IndianRupeeIcon className="h-4 w-4 text-primary-600" />
-                                                        <div>
-                                                            <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Consultation</p>
-                                                            <p className="text-xs font-black text-slate-700 leading-none">₹{selectedDoctor.consultationFee}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 flex items-center gap-2">
-                                                        <MessageSquare className="h-4 w-4 text-primary-600" />
-                                                        <div>
-                                                            <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Feedback</p>
-                                                            <p className="text-xs font-black text-slate-700 leading-none">{selectedDoctor.reviewCount || 0} Reviews</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Professional Summary */}
-                                                {selectedDoctor.bio && (
-                                                    <div className="mt-6 pt-6 border-t border-slate-100">
-                                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Professional Summary</h4>
-                                                        <p className="text-sm text-slate-600 leading-relaxed italic line-clamp-3">"{selectedDoctor.bio}"</p>
-                                                    </div>
-                                                )}
-
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-slate-100">
-                                                    {/* Qualifications */}
-                                                    {selectedDoctor.education && selectedDoctor.education.length > 0 && (
-                                                        <div>
-                                                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                                                                <GraduationCap className="h-3 w-3" /> Qualifications
-                                                            </h4>
-                                                            <div className="space-y-2">
-                                                                {selectedDoctor.education.map((edu, idx) => (
-                                                                    <div key={idx} className="flex items-start gap-2">
-                                                                        <div className="w-1 h-1 rounded-full bg-primary-400 mt-1.5"></div>
-                                                                        <span className="text-xs text-slate-700 font-medium leading-tight">{edu}</span>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Communication */}
-                                                    {selectedDoctor.languages && selectedDoctor.languages.length > 0 && (
-                                                        <div>
-                                                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                                                                <Languages className="h-3 w-3" /> Communication
-                                                            </h4>
-                                                            <div className="flex flex-wrap gap-1.5">
-                                                                {selectedDoctor.languages.map((lang, idx) => (
-                                                                    <span key={idx} className="bg-primary-50 text-primary-700 border border-primary-100 px-2.5 py-1 rounded-lg text-[10px] font-bold">
-                                                                        {lang}
-                                                                    </span>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4"><div><div className="flex items-center gap-2 mb-1"><h2 className="text-2xl font-black text-slate-900">{selectedDoctor.name}</h2><div className="bg-amber-50 text-amber-600 px-2 py-0.5 rounded-lg flex items-center gap-1 border border-amber-100"><Star className="h-3 w-3 fill-current" /><span className="text-xs font-black">{selectedDoctor.rating?.toFixed(1)}</span></div></div><p className="text-primary-600 font-bold uppercase tracking-tight flex items-center gap-2"><Stethoscope className="h-4 w-4" /> {selectedDoctor.specialty}</p><p className="text-sm text-slate-500 mt-2 flex items-center gap-1.5 font-medium"><Building2 className="h-4 w-4 text-slate-400" /> {selectedClinic?.name} • Room {selectedDoctor.roomNumber}</p></div></div>
+                                                <div className="flex flex-wrap gap-3 mt-6"><div className="bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 flex items-center gap-2"><Award className="h-4 w-4 text-primary-600" /><div><p className="text-[8px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Experience</p><p className="text-xs font-black text-slate-700 leading-none">{selectedDoctor.experience || 5}+ Years</p></div></div><div className="bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 flex items-center gap-2"><IndianRupeeIcon className="h-4 w-4 text-primary-600" /><div><p className="text-[8px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Consultation</p><p className="text-xs font-black text-slate-700 leading-none">₹{selectedDoctor.consultationFee}</p></div></div><div className="bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 flex items-center gap-2"><MessageSquare className="h-4 w-4 text-primary-600" /><div><p className="text-[8px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Feedback</p><p className="text-xs font-black text-slate-700 leading-none">{selectedDoctor.reviewCount || 0} Reviews</p></div></div></div>
+                                                {selectedDoctor.bio && ( <div className="mt-6 pt-6 border-t border-slate-100"><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Professional Summary</h4><p className="text-sm text-slate-600 leading-relaxed italic line-clamp-3">"{selectedDoctor.bio}"</p></div> )}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-slate-100">{selectedDoctor.education && selectedDoctor.education.length > 0 && ( <div><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><GraduationCap className="h-3 w-3" /> Qualifications</h4><div className="space-y-2">{selectedDoctor.education.map((edu, idx) => ( <div key={idx} className="flex items-start gap-2"><div className="w-1 h-1 rounded-full bg-primary-400 mt-1.5"></div><span className="text-xs text-slate-700 font-medium leading-tight">{edu}</span></div> ))}</div></div> )}{selectedDoctor.languages && selectedDoctor.languages.length > 0 && ( <div><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Languages className="h-3 w-3" /> Communication</h4><div className="flex flex-wrap gap-1.5">{selectedDoctor.languages.map((lang, idx) => ( <span key={idx} className="bg-primary-50 text-primary-700 border border-primary-100 px-2.5 py-1 rounded-lg text-[10px] font-bold">{lang}</span> ))}</div></div> )}</div>
                                             </div>
                                         </div>
 
-                                        {isClinicDirectWalkInOnly && (
-                                            <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100 text-center">
-                                                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
-                                                    <MapPinIcon className="h-6 w-6 text-orange-600" />
-                                                </div>
-                                                <h3 className="text-lg font-bold text-orange-900">Visit Clinic to Join Queue</h3>
-                                                <p className="text-sm text-orange-700 mt-1 mb-4">Dr. {selectedDoctor.name} accepts tokens only at the reception counter. You can see the live position below.</p>
-                                                <div className="bg-white px-4 py-3 rounded-xl inline-flex items-center gap-3 border border-orange-200">
-                                                    <div className="text-center">
-                                                        <div className="text-2xl font-black text-slate-900">{waitStats.count}</div>
-                                                        <div className="text-[10px] font-bold text-slate-400 uppercase">Waiting</div>
-                                                    </div>
-                                                    <div className="w-px h-8 bg-slate-100"></div>
-                                                    <div className="text-center">
-                                                        <div className="text-2xl font-black text-slate-900">~{waitStats.time}m</div>
-                                                        <div className="text-[10px] font-bold text-slate-400 uppercase">Est. Wait</div>
-                                                    </div>
-                                                </div>
-                                                <div className="mt-6">
-                                                    <button className="w-full h-12 bg-orange-600 text-white rounded-xl font-bold shadow-lg hover:bg-orange-700 transition-colors" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${selectedClinic?.geoLocation?.lat},${selectedClinic?.geoLocation?.lng}`)}>Get Directions</button>
-                                                </div>
-                                            </div>
-                                        )}
+                                        {isClinicDirectWalkInOnly && ( <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100 text-center"><div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm"><MapPinIcon className="h-6 w-6 text-orange-600" /></div><h3 className="text-lg font-bold text-orange-900">Visit Clinic to Join Queue</h3><p className="text-sm text-orange-700 mt-1 mb-4">Dr. {selectedDoctor.name} accepts tokens only at the reception counter. You can see the live position below.</p><div className="bg-white px-4 py-3 rounded-xl inline-flex items-center gap-3 border border-orange-200"><div className="text-center"><div className="text-2xl font-black text-slate-900">{waitStats.count}</div><div className="text-[10px] font-bold text-slate-400 uppercase">Waiting</div></div><div className="w-px h-8 bg-slate-100"></div><div className="text-center"><div className="text-2xl font-black text-slate-900">~{waitStats.time}m</div><div className="text-[10px] font-bold text-slate-400 uppercase">Est. Wait</div></div></div><div className="mt-6"><button className="w-full h-12 bg-orange-600 text-white rounded-xl font-bold shadow-lg hover:bg-orange-700 transition-colors" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${selectedClinic?.geoLocation?.lat},${selectedClinic?.geoLocation?.lng}`)}>Get Directions</button></div></div> )}
 
                                         {!isClinicDirectWalkInOnly && (
                                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
-                                                {/* Patient Selector */}
                                                 <div>
                                                     <label className="block text-sm font-bold text-slate-700 mb-3">Who is this for?</label>
                                                     <div className="flex flex-wrap gap-3">
-                                                        <button 
-                                                            onClick={() => setBookingFor('MYSELF')}
-                                                            className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all flex items-center gap-2 ${bookingFor === 'MYSELF' ? 'bg-primary-600 text-white border-primary-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}
-                                                        >
-                                                            <User className="h-4 w-4" /> Myself
-                                                        </button>
-                                                        {userProfile?.familyMembers?.map(m => (
-                                                            <button 
-                                                                key={m.name}
-                                                                onClick={() => setBookingFor(m.name)}
-                                                                className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all flex items-center gap-2 ${bookingFor === m.name ? 'bg-primary-600 text-white border-primary-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}
-                                                            >
-                                                                <Users className="h-4 w-4" /> {m.name}
-                                                            </button>
-                                                        ))}
-                                                        <button onClick={() => { setNewMember({ name: '', age: '', gender: 'Male', relation: '' }); setEditingMemberIndex(null); setIsCustomRelation(false); setShowAddMember(true); }} className="px-4 py-2 rounded-xl text-sm font-bold border border-dashed border-slate-300 text-slate-500 hover:text-primary-600 hover:border-primary-300 hover:bg-primary-50 transition-all flex items-center gap-2">
-                                                            <Plus className="h-4 w-4" /> New
-                                                        </button>
+                                                        <button onClick={() => setBookingFor('MYSELF')} className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all flex items-center gap-2 ${bookingFor === 'MYSELF' ? 'bg-primary-600 text-white border-primary-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}><User className="h-4 w-4" /> Myself</button>
+                                                        {userProfile?.familyMembers?.map(m => ( <button key={m.name} onClick={() => setBookingFor(m.name)} className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all flex items-center gap-2 ${bookingFor === m.name ? 'bg-primary-600 text-white border-primary-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}><Users className="h-4 w-4" /> {m.name}</button> ))}
+                                                        <button onClick={() => { setNewMember({ name: '', age: '', gender: 'Male', relation: '' }); setEditingMemberIndex(null); setIsCustomRelation(false); setShowAddMember(true); }} className="px-4 py-2 rounded-xl text-sm font-bold border border-dashed border-slate-300 text-slate-500 hover:text-primary-600 hover:border-primary-300 hover:bg-primary-50 transition-all flex items-center gap-2"><Plus className="h-4 w-4" /> New</button>
                                                     </div>
                                                 </div>
 
-                                                {/* Visit Type (Walk-in vs Appointment) */}
                                                 <div>
                                                     <label className="block text-sm font-bold text-slate-700 mb-3">Visit Type</label>
                                                     <div className="grid grid-cols-2 gap-4">
-                                                        <div 
-                                                            onClick={() => {
-                                                                if (!isClinicOnlineWalkInAllowed || !isWalkInAllowed) return; 
-                                                                setVisitType('WALK_IN');
-                                                            }}
-                                                            className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all ${visitType === 'WALK_IN' ? 'border-primary-600 bg-primary-50 ring-2 ring-primary-100' : (isClinicOnlineWalkInAllowed && isWalkInAllowed) ? 'border-slate-200 hover:border-slate-300' : 'border-slate-100 opacity-50 cursor-not-allowed'}`}
-                                                        >
-                                                            <div className="flex justify-between items-start mb-1">
-                                                                <span className={`font-bold ${visitType === 'WALK_IN' ? 'text-primary-800' : 'text-slate-700'}`}>Walk-In Now</span>
-                                                                {visitType === 'WALK_IN' && <CheckCircle2 className="h-5 w-5 text-primary-600" />}
-                                                            </div>
+                                                        <div onClick={() => { if (!isClinicOnlineWalkInAllowed || !isWalkInAllowed) return; setVisitType('WALK_IN'); }} className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all ${visitType === 'WALK_IN' ? 'border-primary-600 bg-primary-50 ring-2 ring-primary-100' : (isClinicOnlineWalkInAllowed && isWalkInAllowed) ? 'border-slate-200 hover:border-slate-300' : 'border-slate-100 opacity-50 cursor-not-allowed'}`}>
+                                                            <div className="flex justify-between items-start mb-1"><span className={`font-bold ${visitType === 'WALK_IN' ? 'text-primary-800' : 'text-slate-700'}`}>Walk-In Now</span>{visitType === 'WALK_IN' && <CheckCircle2 className="h-5 w-5 text-primary-600" />}</div>
                                                             <p className="text-xs text-slate-500">Join the live queue immediately.</p>
-                                                            <div className={`mt-3 text-xs font-bold ${waitStats.time < 30 ? 'text-green-600' : 'text-orange-600'}`}>
-                                                                ~{waitStats.time} mins wait • {waitStats.count} ahead
-                                                            </div>
-                                                            {(!isClinicOnlineWalkInAllowed || !isWalkInAllowed) && (
-                                                                <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center backdrop-blur-[1px] rounded-xl text-center p-2">
-                                                                    <span className="bg-red-50 text-red-700 px-2 py-1 rounded text-[9px] font-black shadow-sm border border-red-100 uppercase tracking-tighter">
-                                                                        {walkInBlockingReason || "Not Available"}
-                                                                    </span>
-                                                                    {currentShiftStats?.load !== undefined && currentShiftStats.isFull && (
-                                                                        <p className="text-[8px] text-red-600 mt-1 font-bold">Doctor already has {currentShiftStats.load} patients this shift.</p>
-                                                                    )}
-                                                                </div>
-                                                            )}
+                                                            <div className={`mt-3 text-xs font-bold ${waitStats.time < 30 ? 'text-green-600' : 'text-orange-600'}`}>~{waitStats.time} mins wait • {waitStats.count} ahead</div>
+                                                            {(!isClinicOnlineWalkInAllowed || !isWalkInAllowed) && ( <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center backdrop-blur-[1px] rounded-xl text-center p-2"><span className="bg-red-50 text-red-700 px-2 py-1 rounded text-[9px] font-black shadow-sm border border-red-100 uppercase tracking-tighter">{walkInBlockingReason || "Not Available"}</span>{currentShiftStats?.load !== undefined && currentShiftStats.isFull && ( <p className="text-[8px] text-red-600 mt-1 font-bold">Doctor already has {currentShiftStats.load} patients this shift.</p> )}</div> )}
                                                         </div>
-
-                                                        <div 
-                                                            onClick={() => {
-                                                                if (!isClinicApptAllowed) return; 
-                                                                setVisitType('APPOINTMENT'); 
-                                                            }}
-                                                            className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all ${visitType === 'APPOINTMENT' ? 'border-indigo-600 bg-indigo-50 ring-2 ring-indigo-100' : isClinicApptAllowed ? 'border-slate-200 hover:border-slate-300' : 'border-slate-100 opacity-50 cursor-not-allowed'}`}
-                                                        >
-                                                            <div className="flex justify-between items-start mb-1">
-                                                                <span className={`font-bold ${visitType === 'APPOINTMENT' ? 'text-indigo-800' : 'text-slate-700'}`}>Schedule for Later</span>
-                                                                {visitType === 'APPOINTMENT' && <CheckCircle2 className="h-5 w-5 text-indigo-600" />}
-                                                            </div>
+                                                        <div onClick={() => { if (!isClinicApptAllowed) return; setVisitType('APPOINTMENT'); }} className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all ${visitType === 'APPOINTMENT' ? 'border-indigo-600 bg-indigo-50 ring-2 ring-indigo-100' : isClinicApptAllowed ? 'border-slate-200 hover:border-slate-300' : 'border-slate-100 opacity-50 cursor-not-allowed'}`}>
+                                                            <div className="flex justify-between items-start mb-1"><span className={`font-bold ${visitType === 'APPOINTMENT' ? 'text-indigo-800' : 'text-slate-700'}`}>Schedule for Later</span>{visitType === 'APPOINTMENT' && <CheckCircle2 className="h-5 w-5 text-indigo-600" />}</div>
                                                             <p className="text-xs text-slate-500">Book a specific time slot.</p>
-                                                            {!isClinicApptAllowed && (
-                                                                <div className="absolute inset-0 bg-white/60 flex items-center justify-center backdrop-blur-[1px] rounded-xl">
-                                                                    <span className="bg-white px-2 py-1 rounded text-[10px] font-bold shadow-sm text-slate-500 border">Not Available</span>
-                                                                </div>
-                                                            )}
+                                                            {!isClinicApptAllowed && ( <div className="absolute inset-0 bg-white/60 flex items-center justify-center backdrop-blur-[1px] rounded-xl"><span className="bg-white px-2 py-1 rounded text-[10px] font-bold shadow-sm text-slate-500 border">Not Available</span></div> )}
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 {visitType === 'WALK_IN' && (
-                                                    <div className="space-y-3 animate-in fade-in">
-                                                        <label className="block text-sm font-bold text-slate-700">How long will it take you to reach?</label>
-                                                        <div className="flex gap-2 flex-wrap">
-                                                            {['5', '10', '15', '20', '30', '45', '60'].map(m => (
-                                                                <button 
-                                                                    key={m}
-                                                                    onClick={() => setTravelTime(m)}
-                                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${travelTime === m ? 'bg-primary-600 text-white border-primary-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}
-                                                                >
-                                                                    {m} min
-                                                                </button>
-                                                            ))}
+                                                    <div className="space-y-5 animate-in fade-in">
+                                                        <div>
+                                                            <label className="block text-sm font-bold text-slate-700 mb-3">Join Walk-in Token for Shift</label>
+                                                            <div className="grid grid-cols-2 gap-3">
+                                                                {availableWalkInShifts.map(shift => {
+                                                                    const isActiveNow = currentActiveShift && shift.startTime === currentActiveShift.startTime;
+                                                                    const todayStr = new Date().toISOString().split('T')[0];
+                                                                    const stats = selectedDoctor && selectedClinic ? getShiftStats(selectedDoctor, shift, todayStr, selectedClinic.patients) : null;
+                                                                    
+                                                                    const [h] = shift.startTime.split(':').map(Number);
+                                                                    let Icon = MoonStar;
+                                                                    if (h >= 5 && h < 12) Icon = Sun;
+                                                                    else if (h >= 12 && h < 17) Icon = CloudSun;
+                                                                    else if (h >= 17 && h < 21) Icon = Moon;
+
+                                                                    return (
+                                                                        <div 
+                                                                            key={shift.startTime}
+                                                                            onClick={() => setSelectedWalkInShift(shift)}
+                                                                            className={`p-3 rounded-2xl border-2 cursor-pointer transition-all ${selectedWalkInShift?.startTime === shift.startTime ? 'border-primary-600 bg-primary-50 ring-2 ring-primary-100 shadow-sm' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                                                                        >
+                                                                            <div className="flex justify-between items-start mb-2">
+                                                                                <div className={`p-1.5 rounded-lg ${isActiveNow ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
+                                                                                    <Icon className="h-4 w-4" />
+                                                                                </div>
+                                                                                {isActiveNow && <span className="bg-emerald-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm">Active Now</span>}
+                                                                            </div>
+                                                                            <div className="font-bold text-slate-900 text-sm">{shift.label || 'Regular Shift'}</div>
+                                                                            <div className="text-[10px] text-slate-500 font-bold uppercase">{formatTime12h(shift.startTime)} - {formatTime12h(shift.endTime)}</div>
+                                                                            {stats && (
+                                                                                <div className="mt-2 flex items-center gap-1.5">
+                                                                                    <div className="h-1 flex-1 bg-slate-100 rounded-full overflow-hidden">
+                                                                                        <div className={`h-full ${stats.load / stats.capacity > 0.8 ? 'bg-rose-500' : 'bg-primary-500'}`} style={{ width: `${Math.min(100, (stats.load / stats.capacity) * 100)}%` }}></div>
+                                                                                    </div>
+                                                                                    <span className="text-[9px] font-black text-slate-400 uppercase">{stats.load}/{stats.capacity}</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                            {availableWalkInShifts.length === 0 && (
+                                                                <div className="p-6 text-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl">
+                                                                    <AlertTriangle className="h-6 w-6 text-slate-300 mx-auto mb-2" />
+                                                                    <p className="text-xs font-bold text-slate-500">All shifts for today are closed.</p>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        <p className="text-xs text-slate-400">We use this to estimate your arrival and hold your spot if needed.</p>
+
+                                                        {selectedWalkInShift && currentActiveShift && selectedWalkInShift.startTime === currentActiveShift.startTime && (
+                                                            <div className="space-y-3 animate-in fade-in">
+                                                                <label className="block text-sm font-bold text-slate-700">How long will it take you to reach?</label>
+                                                                <div className="flex gap-2 flex-wrap">{['5', '10', '15', '20', '30', '45', '60'].map(m => ( <button key={m} onClick={() => setTravelTime(m)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${travelTime === m ? 'bg-primary-600 text-white border-primary-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}>{m} min</button> ))}</div>
+                                                                <p className="text-xs text-slate-400">We use this to estimate your arrival and hold your spot if needed.</p>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
 
@@ -1854,52 +1575,24 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                     <div className="space-y-4 animate-in fade-in">
                                                         <div>
                                                             <label className="block text-sm font-bold text-slate-700 mb-2">Select Date</label>
-                                                            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-                                                                {bookingDates.map(day => (
-                                                                    <button
-                                                                        key={day.dateStr}
-                                                                        disabled={day.isOff}
-                                                                        onClick={() => { setApptDate(day.dateStr); setApptTime(''); }}
-                                                                        className={`flex-shrink-0 w-14 h-20 rounded-xl border flex flex-col items-center justify-center transition-all ${apptDate === day.dateStr ? 'bg-indigo-600 text-white border-indigo-600 shadow-md scale-105' : day.isOff ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}
-                                                                    >
-                                                                        <span className="text-[10px] font-bold uppercase">{day.dayShort}</span>
-                                                                        <span className="text-xl font-bold">{day.dayNum}</span>
-                                                                    </button>
-                                                                ))}
-                                                            </div>
+                                                            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">{bookingDates.map(day => ( <button key={day.dateStr} disabled={day.isOff} onClick={() => { setApptDate(day.dateStr); setApptTime(''); }} className={`flex-shrink-0 w-14 h-20 rounded-xl border flex flex-col items-center justify-center transition-all ${apptDate === day.dateStr ? 'bg-indigo-600 text-white border-indigo-600 shadow-md scale-105' : day.isOff ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}><span className="text-[10px] font-bold uppercase">{day.dayShort}</span><span className="text-xl font-bold">{day.dayNum}</span></button> ))}</div>
                                                         </div>
-
                                                         {apptDate && (
                                                             <div>
                                                                 <label className="block text-sm font-bold text-slate-700 mb-2">Select Time</label>
-                                                                {!hasAnySlots ? (
-                                                                    <div className="p-4 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-100 text-sm">No slots available for this date.</div>
-                                                                ) : (
+                                                                {!hasAnySlots ? ( <div className="p-4 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-100 text-sm">No slots available for this date.</div> ) : (
                                                                     <div className="space-y-4">
-                                                                        {(Object.entries(groupedTimeSlots) as [string, {value: string, label: string, isBlocked?: boolean, isFull?: boolean}[]][]).map(([period, slots]) => slots.length > 0 && (
+                                                                        {(Object.entries(groupedTimeSlots) as [string, {value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean, reason?: string}[]][]).map(([period, slots]) => slots.length > 0 && (
                                                                             <div key={period}>
                                                                                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{period}</h4>
-                                                                                <div className="grid grid-cols-4 gap-2">
+                                                                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
                                                                                     {slots.map(slot => (
-                                                                                        <button
-                                                                                            key={slot.value}
-                                                                                            disabled={slot.isBlocked || slot.isFull}
-                                                                                            onClick={() => !slot.isBlocked && !slot.isFull && setApptTime(slot.value)}
-                                                                                            className={`
-                                                                                                relative py-2 rounded-lg text-xs font-bold border transition-all
-                                                                                                ${slot.isBlocked || slot.isFull
-                                                                                                    ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed grayscale' 
-                                                                                                    : apptTime === slot.value 
-                                                                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md scale-105' 
-                                                                                                        : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
-                                                                                                }
-                                                                                            `}
-                                                                                        >
-                                                                                            {slot.label}
-                                                                                            {(slot.isBlocked || slot.isFull) && (
+                                                                                        <button key={slot.value} disabled={slot.isBlocked || slot.isFull || slot.isBooked} onClick={() => !slot.isBlocked && !slot.isFull && !slot.isBooked && setApptTime(slot.value)} className={`relative py-2.5 px-1 rounded-xl text-xs font-black border transition-all ${slot.isBlocked || slot.isFull || slot.isBooked ? 'bg-slate-100 text-slate-300 border-slate-100 cursor-not-allowed grayscale' : apptTime === slot.value ? 'bg-indigo-600 text-white border-indigo-600 shadow-md scale-105' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>
+                                                                                            {formatTime12h(slot.value)}
+                                                                                            {(slot.isBlocked || slot.isFull || slot.isBooked) && (
                                                                                                 <div className="absolute inset-0 bg-white/40 flex items-center justify-center backdrop-blur-[1px] rounded-lg">
                                                                                                     <span className="text-[7px] font-black uppercase text-slate-500 bg-white px-1 py-0.5 rounded border border-slate-200 leading-none">
-                                                                                                        {slot.isFull ? "Full" : "Started"}
+                                                                                                        {slot.isBooked ? "Booked" : slot.isFull ? "Full" : slot.reason || "Started"}
                                                                                                     </span>
                                                                                                 </div>
                                                                                             )}
@@ -1914,200 +1607,37 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                         )}
                                                     </div>
                                                 )}
-
-                                                <div>
-                                                    <label className="block text-sm font-bold text-slate-700 mb-2">Reason for Visit (Optional)</label>
-                                                    <textarea 
-                                                        className="w-full p-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none h-20"
-                                                        placeholder="e.g. Fever since last night, Stomach ache..."
-                                                        value={symptoms}
-                                                        onChange={e => setSymptoms(e.target.value)}
-                                                    />
-                                                </div>
-
-                                                <button 
-                                                    className={`w-full h-14 text-lg font-black rounded-xl shadow-xl transform active:scale-[0.98] transition-all text-white disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none disabled:grayscale-[0.5] ${visitType === 'APPOINTMENT' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-primary-600 hover:bg-primary-700 shadow-primary-200'}`}
-                                                    disabled={(visitType === 'APPOINTMENT' && (!apptDate || !apptTime)) || (visitType === 'WALK_IN' && !isWalkInAllowed)}
-                                                    onClick={handleBookToken}
-                                                >
-                                                    {visitType === 'APPOINTMENT' ? 'Confirm Appointment' : 'Join Queue Now'}
-                                                </button>
+                                                <div><label className="block text-sm font-bold text-slate-700 mb-2">Reason for Visit (Optional)</label><textarea className="w-full p-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none h-20" placeholder="e.g. Fever since last night, Stomach ache..." value={symptoms} onChange={e => setSymptoms(e.target.value)} /></div>
+                                                <button className={`w-full h-14 text-lg font-black rounded-xl shadow-xl transform active:scale-[0.98] transition-all text-white disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none disabled:grayscale-[0.5] ${visitType === 'APPOINTMENT' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-primary-600 hover:bg-primary-700 shadow-primary-200'}`} disabled={(visitType === 'APPOINTMENT' && (!apptDate || !apptTime)) || (visitType === 'WALK_IN' && (!isWalkInAllowed || !selectedWalkInShift))} onClick={handleBookToken}>{visitType === 'APPOINTMENT' ? 'Confirm Appointment' : 'Join Queue Now'}</button>
                                             </div>
                                         )}
                                     </div>
                                 ) : null}
                             </div>
-
-                            {/* Map Panel */}
-                            {showMap && bookingView !== 'LIST' && (
-                                <MapPanel
-                                    key={`map-${showMap}`}
-                                    clinics={filteredClinics}
-                                    userLocation={userLocation}
-                                    mapCenter={mapCenter}
-                                    isPickingLocation={isPickingLocation}
-                                    isLocating={isLocating}
-                                    showMap={showMap}
-                                    getClinicWaitStats={getClinicWaitStats}
-                                    onLocationSelect={handleMapSelection}
-                                    onMarkerDragEnd={handleMarkerDragEnd}
-                                    onLocateMe={handleLocateMe}
-                                    onMarkerClick={scrollToClinic}
-                                    onBookClick={(id) => {
-                                        const c = clinics.find(x => x.id === id);
-                                        if (c) navigateToView('CLINIC_DETAILS', c);
-                                    }}
-                                    onClosePickingLocation={() => setIsPickingLocation(false)}
-                                />
-                            )}
+                            {showMap && bookingView === 'LIST' && ( <MapPanel key={`map-${showMap}`} clinics={filteredClinics} userLocation={userLocation} mapCenter={mapCenter} isPickingLocation={isPickingLocation} isLocating={isLocating} showMap={showMap} getClinicWaitStats={getClinicWaitStats} onLocationSelect={handleMapSelection} onMarkerDragEnd={handleMarkerDragEnd} onLocateMe={handleLocateMe} onMarkerClick={scrollToClinic} onBookClick={(id) => { const c = clinics.find(x => x.id === id); if (c) navigateToView('CLINIC_DETAILS', c); }} onClosePickingLocation={() => setIsPickingLocation(false)} /> )}
                         </div>
                     </div>
                 )}
             </div>
-
-            {/* MOBILE BOTTOM NAVIGATION */}
-            <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 pb-safe shadow-[0_-4px_12px_rgba(0,0,0,0.1)]">
-                <div className="flex justify-around items-center h-20">
-                    {navItems.map(item => {
-                        const isActive = activeTab === item.id;
-                        return (
-                            <button
-                                key={item.id}
-                                onClick={() => handleTabSwitch(item.id as any)}
-                                className={`flex flex-col items-center justify-center w-full h-full space-y-1.5 transition-all ${isActive ? 'text-primary-600 scale-110' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                                <item.icon className={`h-6 w-6 ${isActive ? 'fill-current' : ''}`} strokeWidth={isActive ? 2.5 : 2} />
-                                <span className={`text-[10px] font-bold tracking-tight ${isActive ? 'opacity-100' : 'opacity-80'}`}>{item.label}</span>
-                            </button>
-                        )
-                    })}
-                </div>
-            </nav>
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 pb-safe shadow-[0_-4px_12px_rgba(0,0,0,0.1)]"><div className="flex justify-around items-center h-20">{navItems.map(item => { const isActive = activeTab === item.id; return ( <button key={item.id} onClick={() => handleTabSwitch(item.id as any)} className={`flex flex-col items-center justify-center w-full h-full space-y-1.5 transition-all ${isActive ? 'text-primary-600 scale-110' : 'text-slate-400 hover:text-slate-600'}`}><item.icon className={`h-6 w-6 ${isActive ? 'fill-current' : ''}`} strokeWidth={isActive ? 2.5 : 2} /><span className={`text-[10px] font-bold tracking-tight ${isActive ? 'opacity-100' : 'opacity-80'}`}>{item.label}</span></button> ) })}</div></nav>
         </main>
 
-        {/* MODALS */}
         <Modal isOpen={showAddMember} onClose={() => setShowAddMember(false)} title={editingMemberIndex !== null ? "Edit Family Member" : "Add Family Member"} maxWidth="max-w-md">
-            <div className="space-y-4 pt-2">
-                <Input label="Name" value={newMember.name} onChange={e => setNewMember({ ...newMember, name: e.target.value })} required />
-                <div className="grid grid-cols-2 gap-4">
-                    <Input label="Age" type="number" value={newMember.age} onChange={e => setNewMember({ ...newMember, age: e.target.value })} required />
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
-                        <select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900" value={newMember.gender} onChange={e => setNewMember({ ...newMember, gender: e.target.value })}>
-                            <option>Male</option><option>Female</option><option>Other</option>
-                        </select>
-                    </div>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Relationship</label>
-                    {!isCustomRelation ? (
-                        <select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 mb-2" value={newMember.relation} onChange={e => { if (e.target.value === 'Other') setIsCustomRelation(true); else setNewMember({ ...newMember, relation: e.target.value }); }}>
-                            <option value="">Select...</option>
-                            {RELATIONSHIP_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                            <option value="Other">Other (Type custom)</option>
-                        </select>
-                    ) : (
-                        <div className="flex gap-2">
-                            <Input placeholder="e.g. Uncle" value={newMember.relation} onChange={e => setNewMember({ ...newMember, relation: e.target.value })} className="flex-1" autoFocus />
-                            <Button variant="secondary" onClick={() => setIsCustomRelation(false)}>List</Button>
-                        </div>
-                    )}
-                </div>
-                <div className="flex justify-end gap-3 pt-4">
-                    <Button variant="secondary" onClick={() => setShowAddMember(false)}>Cancel</Button>
-                    <Button onClick={handleAddMember}>Save Member</Button>
-                </div>
-            </div>
+            <div className="space-y-4 pt-2"><Input label="Name" value={newMember.name} onChange={e => setNewMember({ ...newMember, name: e.target.value })} required /><div className="grid grid-cols-2 gap-4"><Input label="Age" type="number" value={newMember.age} onChange={e => setNewMember({ ...newMember, age: e.target.value })} required /><div><label className="block text-sm font-medium text-slate-700 mb-1">Gender</label><select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900" value={newMember.gender} onChange={e => setNewMember({ ...newMember, gender: e.target.value })}><option>Male</option><option>Female</option><option>Other</option></select></div></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Relationship</label>{!isCustomRelation ? ( <select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 mb-2" value={newMember.relation} onChange={e => { if (e.target.value === 'Other') setIsCustomRelation(true); else setNewMember({ ...newMember, relation: e.target.value }); }}><option value="">Select...</option>{RELATIONSHIP_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}<option value="Other">Other (Type custom)</option></select> ) : ( <div className="flex gap-2"><Input placeholder="e.g. Uncle" value={newMember.relation} onChange={e => setNewMember({ ...newMember, relation: e.target.value })} className="flex-1" autoFocus /><Button variant="secondary" onClick={() => setIsCustomRelation(false)}>List</Button></div> )}</div><div className="flex justify-end gap-3 pt-4"><Button variant="secondary" onClick={() => setShowAddMember(false)}>Cancel</Button><Button onClick={handleAddMember}>Save Member</Button></div></div>
         </Modal>
 
-        {/* FEEDBACK MODAL */}
         <Modal isOpen={feedbackModal.isOpen} onClose={() => setFeedbackModal({...feedbackModal, isOpen: false})} title="Submit Visit Feedback" maxWidth="max-w-md">
-            <div className="text-center py-4 flex flex-col gap-6">
-                <div>
-                    <p className="text-slate-500 mb-4">How was your experience with <strong>Dr. {feedbackModal.visit?.doctorName}</strong>?</p>
-                    <StarRating rating={feedbackModal.rating} setRating={(r) => setFeedbackModal({...feedbackModal, rating: r})} interactive={true} />
-                </div>
-                
-                <textarea 
-                    className="w-full p-4 border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none bg-slate-50"
-                    rows={4}
-                    placeholder="Describe your visit experience (optional)..."
-                    value={feedbackModal.text}
-                    onChange={(e) => setFeedbackModal({...feedbackModal, text: e.target.value})}
-                />
-                
-                <div className="flex flex-col gap-2">
-                    <Button onClick={handleSubmitFeedback} className="w-full h-14 text-lg font-black rounded-2xl shadow-xl shadow-primary-100">
-                        Submit Feedback
-                    </Button>
-                    <button onClick={() => setFeedbackModal({...feedbackModal, isOpen: false})} className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors py-2">
-                        Maybe later
-                    </button>
-                </div>
-            </div>
+            <div className="text-center py-4 flex flex-col gap-6"><div><p className="text-slate-500 mb-4">How was your experience with <strong>Dr. {feedbackModal.visit?.doctorName}</strong>?</p><StarRating rating={feedbackModal.rating} setRating={(r) => setFeedbackModal({...feedbackModal, rating: r})} interactive={true} /></div><textarea className="w-full p-4 border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none bg-slate-50" rows={4} placeholder="Describe your visit experience (optional)..." value={feedbackModal.text} onChange={(e) => setFeedbackModal({...feedbackModal, text: e.target.value})} /><div className="flex flex-col gap-2"><Button onClick={handleSubmitFeedback} className="w-full h-14 text-lg font-black rounded-2xl shadow-xl shadow-primary-100">Submit Feedback</Button><button onClick={() => setFeedbackModal({...feedbackModal, isOpen: false})} className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors py-2">Maybe later</button></div></div>
         </Modal>
 
-        {/* LATE WARNING MODAL */}
         <Modal isOpen={showLateWarningModal} onClose={() => setShowLateWarningModal(false)} title="Late Arrival Warning" maxWidth="max-w-sm">
-            <div className="text-center">
-                <div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <AlertTriangle className="h-8 w-8 text-orange-600" />
-                </div>
-                <p className="text-slate-600 mb-6">
-                    Your travel time ({travelTime} mins) is longer than the current estimated wait time.
-                    You might arrive late and lose your spot.
-                </p>
-                <div className="flex flex-col gap-3">
-                    <Button onClick={() => submitBooking()} className="bg-orange-600 hover:bg-orange-700 text-white w-full">
-                        Book Anyway (I'll Rush)
-                    </Button>
-                    <Button variant="secondary" onClick={() => setShowLateWarningModal(false)} className="w-full">
-                        Cancel
-                    </Button>
-                </div>
-            </div>
+            <div className="text-center"><div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><AlertTriangle className="h-8 w-8 text-orange-600" /></div><p className="text-slate-600 mb-6">Your travel time ({travelTime} mins) is longer than the current estimated wait time. You might arrive late and lose your spot.</p><div className="flex flex-col gap-3"><Button onClick={() => submitBooking()} className="bg-orange-600 hover:bg-orange-700 text-white w-full">Book Anyway (I'll Rush)</Button><Button variant="secondary" onClick={() => setShowLateWarningModal(false)} className="w-full">Cancel</Button></div></div>
         </Modal>
 
-        <AuthModal 
-            isOpen={showAuthModal} 
-            onClose={() => setShowAuthModal(false)} 
-            onSuccess={handleAuthSuccess}
-            initialName={guestName}
-            initialAge={guestAge}
-            initialGender={guestGender}
-            addToast={addToast}
-        />
-
-        <DoctorProfileModal 
-            isOpen={!!viewingDoctor} 
-            onClose={() => setViewingDoctor(null)} 
-            doctor={viewingDoctor} 
-            operationMode={viewingDoctorClinic?.operationMode}
-            onBook={handleBookFromProfile}
-        />
-        
-        {/* Cancel Confirmation Modal */}
-        {cancelModal.isOpen && (
-            <Modal isOpen={true} onClose={() => setCancelModal({ isOpen: false, visit: null })} title="Cancel Visit?" maxWidth="max-w-sm">
-                <div className="text-center">
-                    <p className="text-slate-600 mb-6">Are you sure you want to cancel your visit? This action cannot be undone.</p>
-                    <div className="flex gap-3 justify-center">
-                        <Button variant="secondary" onClick={() => setCancelModal({ isOpen: false, visit: null })}>Keep Visit</Button>
-                        <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={confirmCancel}>Yes, Cancel</Button>
-                    </div>
-                </div>
-            </Modal>
-        )}
-
-        <ConfirmationModal 
-            isOpen={memberToDeleteIndex !== null}
-            onClose={() => setMemberToDeleteIndex(null)}
-            onConfirm={handleDeleteMember}
-            title="Remove Family Member?"
-            message={`Are you sure you want to remove this family member from your profile?`}
-            confirmLabel="Remove Member"
-            variant="danger"
-        />
+        <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onSuccess={handleAuthSuccess} initialName={guestName} initialAge={guestAge} initialGender={guestGender} addToast={addToast} />
+        <DoctorProfileModal isOpen={!!viewingDoctor} onClose={() => setViewingDoctor(null)} doctor={viewingDoctor} operationMode={viewingDoctorClinic?.operationMode} onBook={handleBookFromProfile} />
+        {cancelModal.isOpen && ( <Modal isOpen={true} onClose={() => setCancelModal({ isOpen: false, visit: null })} title="Cancel Visit?" maxWidth="max-w-sm"><div className="text-center"><p className="text-slate-600 mb-6">Are you sure you want to cancel your visit? This action cannot be undone.</p><div className="flex gap-3 justify-center"><Button variant="secondary" onClick={() => setCancelModal({ isOpen: false, visit: null })}>Keep Visit</Button><Button className="bg-red-600 hover:bg-red-700 text-white" onClick={confirmCancel}>Yes, Cancel</Button></div></div></Modal> )}
+        <ConfirmationModal isOpen={memberToDeleteIndex !== null} onClose={() => setMemberToDeleteIndex(null)} onConfirm={handleDeleteMember} title="Remove Family Member?" message={`Are you sure you want to remove this family member from your profile?`} confirmLabel="Remove Member" variant="danger" />
     </div>
   );
 };
