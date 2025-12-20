@@ -7,7 +7,9 @@ import { Crosshair, MapPin, X } from 'lucide-react';
 const MapInvalidator = ({ showMap }: { showMap: boolean }) => {
   const map = useMap();
   useEffect(() => {
-    // Aggressive invalidation for mobile
+    if (!map) return;
+    
+    // Aggressive invalidation for mobile and hidden containers
     const invalidate = () => {
         map.invalidateSize();
     };
@@ -16,8 +18,7 @@ const MapInvalidator = ({ showMap }: { showMap: boolean }) => {
     const timers = [
         setTimeout(invalidate, 100),
         setTimeout(invalidate, 300),
-        setTimeout(invalidate, 600),
-        setTimeout(invalidate, 1000)
+        setTimeout(invalidate, 600)
     ];
     
     window.addEventListener('resize', invalidate);
@@ -32,22 +33,55 @@ const MapInvalidator = ({ showMap }: { showMap: boolean }) => {
 
 const MapUpdater: React.FC<{ center: [number, number], zoom: number }> = ({ center, zoom }) => {
     const map = useMap();
-    useEffect(() => { map.flyTo(center, zoom); }, [center, zoom, map]);
+    useEffect(() => { 
+        if (!map) return;
+        // Validation to prevent internal Leaflet errors with invalid coordinates
+        if (center && !isNaN(center[0]) && !isNaN(center[1])) {
+            // Using setView instead of flyTo for reactive updates to avoid _leaflet_pos 
+            // errors caused by animation frame collisions during rapid UI re-renders
+            map.setView(center, zoom, { animate: false }); 
+        }
+    }, [center, zoom, map]);
     return null;
 };
 
 const MapClickHandler = ({ isActive, onLocationSelect }: { isActive: boolean, onLocationSelect: (latlng: L.LatLng) => void }) => {
-    useMapEvents({ click(e) { if (isActive) { onLocationSelect(e.latlng); } }, });
+    useMapEvents({ 
+        click(e) { 
+            if (isActive) { 
+                onLocationSelect(e.latlng); 
+            } 
+        }, 
+    });
     return null;
 };
 
 const DraggableUserMarker = ({ position, onDragEnd, icon }: { position: L.LatLngExpression, onDragEnd: (latlng: L.LatLng) => void, icon: L.DivIcon }) => {
     const markerRef = useRef<L.Marker>(null);
-    const eventHandlers = useMemo(() => ({ dragend() { const marker = markerRef.current; if (marker != null) { onDragEnd(marker.getLatLng()); } }, }), [onDragEnd]);
+    const eventHandlers = useMemo(() => ({ 
+        dragend() { 
+            const marker = markerRef.current; 
+            if (marker != null) { 
+                onDragEnd(marker.getLatLng()); 
+            } 
+        }, 
+    }), [onDragEnd]);
+    
+    // Keying by position to force recreation if jump is large, helping avoid internal position state desync
     return (
-        <Marker draggable={true} eventHandlers={eventHandlers} position={position} icon={icon} ref={markerRef} zIndexOffset={1000}>
+        <Marker 
+            draggable={true} 
+            eventHandlers={eventHandlers} 
+            position={position} 
+            icon={icon} 
+            ref={markerRef} 
+            zIndexOffset={1000}
+        >
             <Popup minWidth={90}>
-                <div className="text-center"><div className="font-bold text-slate-800">Your Location</div><div className="text-xs text-slate-500">Drag to adjust</div></div>
+                <div className="text-center">
+                    <div className="font-bold text-slate-800">Your Location</div>
+                    <div className="text-xs text-slate-500">Drag to adjust</div>
+                </div>
             </Popup>
         </Marker>
     );
@@ -61,7 +95,9 @@ const createCustomIcon = (colorClass: string, waitTime: string, name: string) =>
                 <div class="px-3 py-1.5 bg-white rounded-lg shadow-md border-2 border-white max-w-[140px] text-center"><div class="text-[10px] font-bold text-slate-800 whitespace-nowrap truncate leading-tight">${name}</div></div>
                 <div class="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-white -mt-[1px]"></div>
             </div>`,
-        iconSize: [0, 0], iconAnchor: [0, 0], popupAnchor: [0, -35]
+        iconSize: [1, 1], // Changed from [0,0] to help with internal hit detection
+        iconAnchor: [0, 0], 
+        popupAnchor: [0, -35]
     });
 };
 
@@ -91,11 +127,17 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     clinics, userLocation, mapCenter, isPickingLocation, isLocating, showMap,
     getClinicWaitStats, onLocationSelect, onMarkerDragEnd, onLocateMe, onMarkerClick, onBookClick, onClosePickingLocation
 }) => {
+    // Valid initial center to prevent MapContainer crash
+    const initialCenter: [number, number] = useMemo(() => {
+        if (mapCenter && !isNaN(mapCenter[0]) && !isNaN(mapCenter[1])) return mapCenter;
+        return [13.0850, 80.2100];
+    }, [mapCenter]);
+
     return (
         <div className={`w-full md:w-[35%] flex-1 md:flex-none h-full min-h-[400px] md:min-h-0 bg-slate-200 border-l border-slate-200 relative z-0 md:static`}>
             <div className="absolute inset-0 md:relative md:h-full md:w-full">
                 <MapContainer 
-                    center={mapCenter} 
+                    center={initialCenter} 
                     zoom={13} 
                     scrollWheelZoom={true} 
                     className={isPickingLocation ? 'cursor-crosshair h-full w-full' : 'h-full w-full'}
@@ -105,13 +147,24 @@ export const MapPanel: React.FC<MapPanelProps> = ({
                     <TileLayer attribution='&copy; CARTO' url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
                     <MapUpdater center={mapCenter} zoom={13} />
                     <MapClickHandler isActive={isPickingLocation} onLocationSelect={onLocationSelect} />
-                    {userLocation && <DraggableUserMarker position={[userLocation.lat, userLocation.lng]} icon={userIcon} onDragEnd={onMarkerDragEnd} />}
+                    {userLocation && !isNaN(userLocation.lat) && !isNaN(userLocation.lng) && (
+                        <DraggableUserMarker 
+                            position={[userLocation.lat, userLocation.lng]} 
+                            icon={userIcon} 
+                            onDragEnd={onMarkerDragEnd} 
+                        />
+                    )}
                     {clinics.map(clinic => {
-                        if (!clinic.geoLocation) return null;
+                        if (!clinic.geoLocation || isNaN(clinic.geoLocation.lat) || isNaN(clinic.geoLocation.lng)) return null;
                         const waitInfo = getClinicWaitStats(clinic);
                         const icon = createCustomIcon(waitInfo.mapColor, waitInfo.raw, clinic.name);
                         return (
-                            <Marker key={clinic.id} position={[clinic.geoLocation.lat, clinic.geoLocation.lng]} icon={icon} eventHandlers={{ click: () => onMarkerClick(clinic.id), }}>
+                            <Marker 
+                                key={clinic.id} 
+                                position={[clinic.geoLocation.lat, clinic.geoLocation.lng]} 
+                                icon={icon} 
+                                eventHandlers={{ click: () => onMarkerClick(clinic.id), }}
+                            >
                                 <Popup className="custom-popup">
                                     <div className="p-1 min-w-[180px]">
                                         <h3 className="font-bold text-sm mb-1">{clinic.name}</h3>
@@ -133,7 +186,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
                 {isLocating ? <span className="animate-spin block h-5 w-5 border-2 border-slate-400 border-t-transparent rounded-full"></span> : <Crosshair className="h-5 w-5" />}
             </button>
             
-            {/* Legend - Moved from left-4 to right-4 */}
+            {/* Legend */}
             <div className="absolute bottom-24 md:bottom-4 right-4 bg-white/90 backdrop-blur p-2 rounded-lg shadow-md text-[10px] space-y-1 z-[400]">
                 <div className="font-bold mb-1">Live Wait Time</div>
                 <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500"></span> Fast (0-20m)</div>

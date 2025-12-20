@@ -1,12 +1,12 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
-import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff, ClinicOperationMode, Clinic, AppointmentConfig, TimeSlot } from '../types';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff, ClinicOperationMode, Clinic, AppointmentConfig } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
 import { Card } from '../components/Card';
 import { 
-    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin, Settings, Footprints, CalendarClock, Shuffle, Building2, ImageIcon, Plus, X, Globe, Crosshair, Trash2, Info, LayoutGrid, Zap, Mail, Shield, Save, Calendar, CheckCircle2, PauseCircle, Timer, Bell, MessageSquare, ShieldCheck, Repeat, Clock3, AlertCircle, CalendarX, Menu, UserX, Navigation, Navigation2
+    Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin, Settings, Footprints, CalendarClock, Shuffle, Building2, ImageIcon, Plus, X, Globe, Crosshair, Trash2, Info, LayoutGrid, Zap, Mail, Shield, Save, Calendar, UserX, CheckCircle2, PauseCircle, LogOut, Upload, Image as LucideImage, Map as LucideMap, Navigation, ArrowRight, Target, LocateFixed, MapPinIcon, Layout, MessageSquare, Sparkles, CalendarDays,
+    Edit2, ChevronLeft, LayoutPanelTop
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -17,8 +17,18 @@ import { StaffManager } from '../features/reception/components/StaffManager';
 import { ReceptionStats } from '../features/reception/components/ReceptionStats';
 import { AddPatientModal } from '../features/reception/components/AddPatientModal';
 import { DoctorFormModal } from '../features/reception/components/DoctorFormModal';
+import { PatientHistoryModal } from '../features/reception/components/PatientHistoryModal';
+import { VitalsModal } from '../features/reception/components/VitalsModal';
 import { ConfirmationModal } from '../components/ConfirmationModal';
-import { Logo } from '../components/Logo';
+
+// Leaflet icon fix
+const DefaultIcon = L.icon({
+    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41]
+});
+L.Marker.prototype.options.icon = DefaultIcon;
 
 // --- HELPERS ---
 const getLocalToday = () => {
@@ -45,79 +55,46 @@ const format12h = (time24: string) => {
     const m = mStr.padStart(2, '0');
     const ampm = h >= 12 ? 'PM' : 'AM';
     h = h % 12;
-    h = h ? h : 12; // the hour '0' should be '12'
-    return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
+    h = h ? h : 12; 
+    return `${h}:${m} ${ampm}`;
 };
 
-const parse12hTo24h = (time12: string) => {
-    if (!time12 || typeof time12 !== 'string') return "09:00";
-    const cleanTime = time12.trim().toUpperCase();
-    if (cleanTime === '24 HOURS') return "00:00";
-    
-    const parts = cleanTime.split(/\s+/);
-    if (parts.length < 2) return "09:00";
-    
-    const [time, modifier] = parts;
-    const timeParts = time.split(':');
-    if (timeParts.length < 2) return "09:00";
-    
-    let hours = parseInt(timeParts[0]);
-    const minutes = timeParts[1].padStart(2, '0');
-    
-    if (modifier === 'PM' && hours !== 12) hours += 12;
-    if (modifier === 'AM' && hours === 12) hours = 0;
-    
-    return `${hours.toString().padStart(2, '0')}:${minutes}`;
+const parseTo24h = (time12h: string) => {
+    const match = time12h.trim().match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (!match) return "09:00";
+    let [_, hours, minutes, modifier] = match;
+    let h = parseInt(hours);
+    if (modifier.toUpperCase() === 'PM' && h < 12) h += 12;
+    if (modifier.toUpperCase() === 'AM' && h === 12) h = 0;
+    return `${h.toString().padStart(2, '0')}:${minutes.padStart(2, '0')}`;
 };
 
-// --- MAP COMPONENTS FOR SETTINGS ---
-const SettingsPinIcon = L.divIcon({
-    className: 'settings-pin',
-    html: `<div style="background-color: #0d9488; width: 1.5rem; height: 1.5rem; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);"></div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-});
-
-const MapClickHandler = ({ onLocationSelect }: { onLocationSelect: (lat: number, lng: number) => void }) => {
+// Map components
+const MapClickHandler = ({ onSelect }: { onSelect: (latlng: L.LatLng) => void }) => {
     useMapEvents({
         click(e) {
-            onLocationSelect(e.latlng.lat, e.latlng.lng);
+            onSelect(e.latlng);
         },
     });
     return null;
 };
 
-const MapUpdater = ({ center }: { center: [number, number] }) => {
+const MapManager = ({ center, isTabActive }: { center: [number, number], isTabActive: boolean }) => {
     const map = useMap();
     useEffect(() => {
-        map.flyTo(center, 14);
-    }, [center, map]);
+        if (isTabActive) {
+            setTimeout(() => {
+                map.invalidateSize();
+                if (!isNaN(center[0]) && !isNaN(center[1])) {
+                    map.setView(center, map.getZoom());
+                }
+            }, 100);
+        }
+    }, [isTabActive, center, map]);
     return null;
 };
 
-// Helper for draggable marker to update coordinates
-const DraggableSettingsMarker = ({ position, onDragEnd }: { position: [number, number], onDragEnd: (lat: number, lng: number) => void }) => {
-    const markerRef = React.useRef<L.Marker>(null);
-    const eventHandlers = useMemo(() => ({
-        dragend() {
-            const marker = markerRef.current;
-            if (marker != null) {
-                const { lat, lng } = marker.getLatLng();
-                onDragEnd(lat, lng);
-            }
-        },
-    }), [onDragEnd]);
-
-    return (
-        <Marker 
-            draggable={true} 
-            eventHandlers={eventHandlers} 
-            position={position} 
-            icon={SettingsPinIcon} 
-            ref={markerRef} 
-        />
-    );
-};
+const COMMON_AMENITIES = ["Pharmacy", "Blood Lab", "X-Ray", "Ultra Sound", "WiFi", "Parking", "Emergency", "Cafeteria"];
 
 interface ReceptionDashboardProps {
     doctors: Doctor[];
@@ -151,37 +128,16 @@ interface ReceptionDashboardProps {
 
 const OperationModeBadge: React.FC<{ mode: ClinicOperationMode }> = ({ mode }) => {
     const config = {
-        [ClinicOperationMode.DIRECT_WALK_IN]: {
-            label: 'Walk-In Only',
-            styles: 'bg-orange-50 text-orange-700 border-orange-200',
-            icon: Footprints
-        },
-        [ClinicOperationMode.ONLINE_WALK_IN]: {
-            label: 'Online Token Only',
-            styles: 'bg-blue-50 text-blue-700 border-blue-200',
-            icon: Zap
-        },
-        [ClinicOperationMode.BOTH_WALK_IN]: {
-            label: 'Walk-In & Online Token',
-            styles: 'bg-green-50 text-green-700 border-green-200',
-            icon: Shuffle
-        },
-        [ClinicOperationMode.HYBRID_DIRECT_APPT]: {
-            label: 'Walk-In & Appointment',
-            styles: 'bg-purple-50 text-purple-700 border-purple-200',
-            icon: CalendarClock
-        },
-        [ClinicOperationMode.HYBRID_FULL]: {
-            label: 'Hybrid Full Access',
-            styles: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-            icon: LayoutGrid
-        }
+        [ClinicOperationMode.DIRECT_WALK_IN]: { label: 'Walk-In Only', styles: 'bg-orange-50 text-orange-700 border-orange-200' },
+        [ClinicOperationMode.ONLINE_WALK_IN]: { label: 'Online Token Only', styles: 'bg-blue-50 text-blue-700 border-blue-200' },
+        [ClinicOperationMode.BOTH_WALK_IN]: { label: 'Direct & Online', styles: 'bg-green-50 text-green-700 border-green-200' },
+        [ClinicOperationMode.HYBRID_DIRECT_APPT]: { label: 'Walk-In & Appt', styles: 'bg-purple-50 text-purple-700 border-purple-200' },
+        [ClinicOperationMode.HYBRID_FULL]: { label: 'HYBRID FULL ACCESS', styles: 'bg-indigo-50 text-indigo-700 border-indigo-200' }
     };
-    const { label, styles, icon: Icon } = config[mode] || { label: mode, styles: 'bg-slate-50 text-slate-700 border-slate-200', icon: Info };
+    const { label, styles } = config[mode] || { label: mode, styles: 'bg-slate-50 text-slate-700 border-slate-200' };
     return (
-        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-tight shadow-sm ${styles}`}>
-            <Icon className="h-2 w-2" />
-            <span className="truncate">{label}</span>
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[9px] font-black uppercase tracking-tight shadow-sm ${styles}`}>
+            {label}
         </span>
     );
 };
@@ -189,153 +145,81 @@ const OperationModeBadge: React.FC<{ mode: ClinicOperationMode }> = ({ mode }) =
 export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     doctors, patients, staff = [], clinicName, clinicType, operationMode = ClinicOperationMode.HYBRID_FULL, clinicData,
     onAddPatient, onEditPatient, onDeletePatient, onDeleteMultiplePatients, 
-    onAddDoctor, onCheckMasterDoctor, onEditDoctor, onDeleteDoctor, onUpdateStatus, onUpdateClinicSettings, 
+    onAddDoctor, onCheckMasterDoctor, onEditDoctor, onDeleteDoctor, onUpdateStatus, onCancelPatient, onUpdateClinicSettings, 
     onToggleEmergency, onManualReorder, onDragDrop, onManualCheckIn, onBulkUpdateStatus, 
     onAddStaff, onUpdateStaff, onDeleteStaff, addToast
 }) => {
-    const [activeTab, setActiveTab] = useState<'QUEUE' | 'DATABASE' | 'DOCTORS' | 'STAFF' | 'REPORTS' | 'APPOINTMENTS'>('QUEUE');
+    type DashboardTab = 'QUEUE' | 'DATABASE' | 'DOCTORS' | 'APPOINTMENTS' | 'REPORTS';
+    const [activeTab, setActiveTab] = useState<DashboardTab>('QUEUE');
+    const [queueSubTab, setQueueSubTab] = useState<'LIVE' | 'HOLD' | 'DONE' | 'ABSENT'>('LIVE');
+    
+    // Appointment View States
+    const [appointmentViewMode, setAppointmentViewMode] = useState<'LIST' | 'CALENDAR'>('LIST');
+    const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
+    const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+    const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null);
+
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDoctorId, setFilterDoctorId] = useState<string>('ALL');
-    const [queueSubTab, setQueueSubTab] = useState<'ACTIVE' | 'HOLD' | 'COMPLETED' | 'SKIPPED'>('ACTIVE');
     const [filterDate, setFilterDate] = useState<string>(getLocalToday());
+
     const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false); 
-
-    // Feature Specific Modals
-    const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
-    const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
-    const [newHolidayDate, setNewHolidayDate] = useState('');
+    const [settingsTab, setSettingsTab] = useState<'GENERAL' | 'PROFILE' | 'LOCATION'>('GENERAL');
     
-    // Doctor Modal State
     const [isDoctorModalOpen, setIsDoctorModalOpen] = useState(false);
     const [doctorModalMode, setDoctorModalMode] = useState<'ADD' | 'EDIT'>('ADD');
     const [editingDoctorData, setEditingDoctorData] = useState<Doctor | undefined>(undefined);
     const [editingDoctorId, setEditingDoctorId] = useState<string | null>(null);
     const [doctorToDelete, setDoctorToDelete] = useState<Doctor | null>(null);
-
-    // Patient History Deletion State
     const [patientHistoryToDelete, setPatientHistoryToDelete] = useState<Patient | null>(null);
     const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
     const [vitalsPatient, setVitalsPatient] = useState<Patient | null>(null);
     const [historyPatient, setHistoryPatient] = useState<Patient | null>(null);
-
-    // Settings State
-    const [activeSettingsTab, setActiveSettingsTab] = useState<'GENERAL' | 'LOCATION' | 'BRANDING'>('GENERAL');
+    
+    // Settings Form State
     const [settingsForm, setSettingsForm] = useState<Partial<Clinic>>({});
-    const [hoursRange, setHoursRange] = useState({ start: '09:00', end: '21:00' });
     const [newAmenity, setNewAmenity] = useState('');
-    const [mapSearchQuery, setMapSearchQuery] = useState('');
-    const [isSearchingLocation, setIsSearchingLocation] = useState(false);
-    const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+    const [operatingSlots, setOperatingSlots] = useState<{ start: string, end: string }[]>([{ start: '09:00', end: '21:00' }]);
+    const [isFetchingLocation, setIsFetchingLocation] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Appointment Config State
-    const [apptConfig, setApptConfig] = useState<AppointmentConfig>({
-        slotDuration: 15,
-        bufferTime: 5,
-        maxDaysInAdvance: 14,
-        enableEmailNotifications: true,
-        emailTemplate: 'Your appointment at {clinic_name} with {doctor_name} is confirmed for {date} at {time}.',
-        lateArrivalThreshold: 10,
-        lateArrivalAction: 'PENALTY'
-    });
-
-    useEffect(() => {
-        if (clinicData?.appointmentConfig) {
-            setApptConfig(prev => ({
-                ...prev,
-                ...clinicData.appointmentConfig
-            }));
-        }
-    }, [clinicData]);
-
+    const [isDeckExpanded, setIsDeckExpanded] = useState(false);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
     const [currentTime, setCurrentTime] = useState(new Date());
+
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
 
-    // Sync settings state when modal opens
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 640);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     useEffect(() => {
         if (isSettingsModalOpen && clinicData) {
-            const h = clinicData.operatingHours || '09:00 AM - 09:00 PM';
-            let startVal = '09:00';
-            let endVal = '21:00';
-            
-            if (h.toUpperCase() !== '24 HOURS' && h.includes(' - ')) {
-                const [startPart, endPart] = h.split(' - ');
-                startVal = parse12hTo24h(startPart);
-                endVal = parse12hTo24h(endPart);
-            } else if (h.toUpperCase() === '24 HOURS') {
-                startVal = '00:00';
-                endVal = '23:59';
-            }
-
             setSettingsForm({
-                name: clinicName,
-                operationMode: clinicData.operationMode || operationMode,
-                type: clinicData.type,
-                about: clinicData.about || '',
-                contactPhone: clinicData.contactPhone || '',
-                address: clinicData.address || '',
-                city: clinicData.city || '',
-                pincode: clinicData.pincode || '',
-                imageUrl: clinicData.imageUrl || '',
-                amenities: clinicData.amenities || [],
-                operatingHours: h,
-                geoLocation: clinicData.geoLocation || { lat: 13.0827, lng: 80.2707 } 
+                ...clinicData,
+                amenities: [...(clinicData.amenities || [])],
+                geoLocation: clinicData.geoLocation || { lat: 13.0850, lng: 80.2100 }
             });
-            setHoursRange({
-                start: startVal,
-                end: endVal
-            });
-            setActiveSettingsTab('GENERAL');
-            setMapSearchQuery('');
-        }
-    }, [isSettingsModalOpen, clinicName, operationMode, clinicData, clinicType]);
 
-    const handleSearchLocation = async () => {
-        if (!mapSearchQuery) return;
-        setIsSearchingLocation(true);
-        try {
-            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(mapSearchQuery)}`);
-            const data = await response.json();
-            if (data && data.length > 0) {
-                const lat = parseFloat(data[0].lat);
-                const lon = parseFloat(data[0].lon);
-                setSettingsForm(prev => ({ ...prev, geoLocation: { lat, lng: lon } }));
-                addToast("Location found!", "success");
-            } else {
-                addToast("Location not found", "error");
+            if (clinicData.operatingHours) {
+                const ranges = clinicData.operatingHours.split(',').map(r => r.trim());
+                const parsedSlots = ranges.map(range => {
+                    const parts = range.split('-').map(p => p.trim());
+                    if (parts.length === 2) {
+                        return { start: parseTo24h(parts[0]), end: parseTo24h(parts[1]) };
+                    }
+                    return { start: '09:00', end: '21:00' };
+                });
+                setOperatingSlots(parsedSlots);
             }
-        } catch (e) {
-            addToast("Error searching location", "error");
-        } finally {
-            setIsSearchingLocation(false);
         }
-    };
-
-    const handleDetectLocation = () => {
-        if (!navigator.geolocation) {
-            addToast("Geolocation not supported", "error");
-            return;
-        }
-        setIsDetectingLocation(true);
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                setSettingsForm(prev => ({ 
-                    ...prev, 
-                    geoLocation: { lat: pos.coords.latitude, lng: pos.coords.longitude } 
-                }));
-                setIsDetectingLocation(false);
-                addToast("Current location detected!", "success");
-            },
-            (err) => {
-                setIsDetectingLocation(false);
-                addToast("Could not detect location. Please check permissions.", "error");
-            },
-            { enableHighAccuracy: true }
-        );
-    };
+    }, [isSettingsModalOpen, clinicData]);
 
     const estimatedTimes = useMemo(() => {
         const times: Record<string, number> = {};
@@ -343,15 +227,9 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             const docQueue = patients
                 .filter(p => p.doctorId === doc.id && p.status === PatientStatus.WAITING)
                 .sort((a, b) => a.timeAdded - b.timeAdded); 
-            
             let currentTime = Date.now();
-            if (doc.status === DoctorStatus.ON_BREAK && doc.delayMinutes) {
-                currentTime += doc.delayMinutes * 60000;
-            }
-            if (doc.delayMinutes && doc.status === DoctorStatus.AVAILABLE) {
-                currentTime += doc.delayMinutes * 60000;
-            }
-
+            if (doc.status === DoctorStatus.ON_BREAK && doc.delayMinutes) currentTime += doc.delayMinutes * 60000;
+            if (doc.delayMinutes && doc.status === DoctorStatus.AVAILABLE) currentTime += doc.delayMinutes * 60000;
             docQueue.forEach((p, index) => {
                 times[p.id] = currentTime + (index * (doc.consultationTime || 15) * 60000);
             });
@@ -359,108 +237,48 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         return times;
     }, [patients, doctors]);
 
-    const sortPatients = (list: Patient[]) => {
-        return list.sort((a, b) => {
-            if (a.queueOrder !== undefined || b.queueOrder !== undefined) {
-                const orderA = a.queueOrder ?? Number.MAX_SAFE_INTEGER;
-                const orderB = b.queueOrder ?? Number.MAX_SAFE_INTEGER;
-                if (orderA !== orderB) return orderA - orderB;
-            }
-            if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
-            const checkInA = a.isCheckedIn ? 1 : 0;
-            const checkInB = b.isCheckedIn ? 1 : 0;
-            if (checkInA !== checkInB) return checkInB - checkInA;
-            return a.timeAdded - b.timeAdded;
+    const queueTabCounts = useMemo(() => {
+        const list = patients.filter(p => {
+            const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
+            const dateMatch = pDate === filterDate;
+            const docMatch = filterDoctorId === 'ALL' || p.doctorId === filterDoctorId;
+            return dateMatch && docMatch;
         });
-    };
+        return {
+            LIVE: list.filter(p => p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR).length,
+            HOLD: list.filter(p => p.status === PatientStatus.ON_HOLD).length,
+            DONE: list.filter(p => p.status === PatientStatus.COMPLETED).length,
+            ABSENT: list.filter(p => p.status === PatientStatus.SKIPPED).length
+        };
+    }, [patients, filterDate, filterDoctorId]);
 
     const filteredPatients = useMemo(() => {
         let list = patients.filter(p => {
-            const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate 
-                ? p.appointmentDate 
-                : new Date(p.timeAdded).toISOString().split('T')[0];
+            const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
             return pDate === filterDate;
         });
-
-        if (queueSubTab === 'ACTIVE') {
-            list = list.filter(p => p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR);
-        } else if (queueSubTab === 'HOLD') {
-            list = list.filter(p => p.status === PatientStatus.ON_HOLD);
-        } else if (queueSubTab === 'COMPLETED') {
-            list = list.filter(p => p.status === PatientStatus.COMPLETED);
-        } else if (queueSubTab === 'SKIPPED') {
-            list = list.filter(p => p.status === PatientStatus.SKIPPED);
-        }
-
-        if (filterDoctorId !== 'ALL') {
-            list = list.filter(p => p.doctorId === filterDoctorId);
+        if (filterDoctorId !== 'ALL') list = list.filter(p => p.doctorId === filterDoctorId);
+        if (activeTab === 'QUEUE') {
+            if (queueSubTab === 'LIVE') list = list.filter(p => p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR);
+            else if (queueSubTab === 'HOLD') list = list.filter(p => p.status === PatientStatus.ON_HOLD);
+            else if (queueSubTab === 'DONE') list = list.filter(p => p.status === PatientStatus.COMPLETED);
+            else if (queueSubTab === 'ABSENT') list = list.filter(p => p.status === PatientStatus.SKIPPED);
         }
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
             list = list.filter(p => p.name.toLowerCase().includes(q) || p.phone.includes(q) || p.tokenNumber.toString().includes(q));
         }
-        return sortPatients([...list]);
-    }, [patients, queueSubTab, filterDoctorId, searchQuery, filterDate]);
-
-    const subTabCounts = useMemo(() => {
-        const dateFiltered = patients.filter(p => {
-            const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate 
-                ? p.appointmentDate 
-                : new Date(p.timeAdded).toISOString().split('T')[0];
-            return pDate === filterDate;
-        });
-        const docFiltered = filterDoctorId === 'ALL' ? dateFiltered : dateFiltered.filter(p => p.doctorId === filterDoctorId);
-        return {
-            ACTIVE: docFiltered.filter(p => p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR).length,
-            HOLD: docFiltered.filter(p => p.status === PatientStatus.ON_HOLD).length,
-            COMPLETED: docFiltered.filter(p => p.status === PatientStatus.COMPLETED).length,
-            SKIPPED: docFiltered.filter(p => p.status === PatientStatus.SKIPPED).length
-        };
-    }, [patients, filterDate, filterDoctorId]);
-
-    const uniquePatients = useMemo(() => {
-        const unique = new Map<string, Patient>();
-        patients.forEach(p => {
-            const key = `${p.phone}_${p.name.toLowerCase()}`;
-            if (!unique.has(key)) unique.set(key, p);
-            else if (p.timeAdded > unique.get(key)!.timeAdded) unique.set(key, p);
-        });
-        let list = Array.from(unique.values());
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase();
-            list = list.filter(p => p.name.toLowerCase().includes(q) || p.phone.includes(q));
-        }
-        return list;
-    }, [patients, searchQuery]);
-
-    const isDoctorOnShift = (doc: Doctor, targetDate: string) => {
-        const dayName = new Date(targetDate).toLocaleDateString('en-US', { weekday: 'long' });
-        const schedule = doc.weeklySchedule.find(s => s.day === dayName);
-        if (!schedule || schedule.isOff || !schedule.slots?.length) return false;
-        if (targetDate === getLocalToday()) {
-            const now = new Date();
-            const currentMins = now.getHours() * 60 + now.getMinutes();
-            return schedule.slots.some(slot => {
-                const [sh, sm] = slot.startTime.split(':').map(Number);
-                const [eh, em] = slot.endTime.split(':').map(Number);
-                const sTotal = sh * 60 + sm;
-                let eTotal = eh * 60 + em;
-                if (eTotal <= sTotal) eTotal += 1440;
-                return currentMins >= sTotal && currentMins < eTotal;
-            });
-        }
-        return true; 
-    };
+        return list.sort((a, b) => a.timeAdded - b.timeAdded);
+    }, [patients, activeTab, queueSubTab, filterDoctorId, searchQuery, filterDate]);
 
     const doctorQueueStats = useMemo(() => {
-        const activeDocs = doctors.filter(doc => isDoctorOnShift(doc, filterDate));
-        return activeDocs.map(doc => {
+        return doctors.map(doc => {
             const queue = patients.filter(p => {
                 const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
                 return p.doctorId === doc.id && (p.status === PatientStatus.WAITING || p.status === PatientStatus.ON_HOLD) && pDate === filterDate;
             });
             const current = patients.find(p => p.doctorId === doc.id && p.status === PatientStatus.WITH_DOCTOR);
-            const next = sortPatients([...queue])[0] || null;
+            const next = queue.length > 0 ? queue[0] : null;
             const dayName = new Date(filterDate).toLocaleDateString('en-US', { weekday: 'long' });
             const schedule = doc.weeklySchedule.find(s => s.day === dayName);
             const shiftTiming = schedule && !schedule.isOff && schedule.slots.length > 0 
@@ -470,171 +288,248 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         });
     }, [doctors, patients, filterDate]);
 
-    const handleSaveSettings = () => {
-        const hString = `${format12h(hoursRange.start)} - ${format12h(hoursRange.end)}`;
-        onUpdateClinicSettings({ ...settingsForm, operatingHours: hString });
+    const handleSaveSettings = (e: React.FormEvent) => {
+        e.preventDefault();
+        const formattedHours = operatingSlots
+            .map(s => `${format12h(s.start)} - ${format12h(s.end)}`)
+            .join(', ');
+        const finalUpdates = { ...settingsForm, operatingHours: formattedHours };
+        onUpdateClinicSettings(finalUpdates);
         setIsSettingsModalOpen(false);
-        addToast("Settings Updated", "success");
+        addToast('Clinic settings updated!', 'success');
     };
 
-    const handleUpdateApptConfig = (updates: Partial<AppointmentConfig>) => {
-        const newConfig = { ...apptConfig, ...updates };
-        setApptConfig(newConfig);
-        onUpdateClinicSettings({ appointmentConfig: newConfig });
-        addToast("Appointment Settings Updated", "success");
+    const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setSettingsForm(prev => ({ ...prev, imageUrl: reader.result as string }));
+            };
+            reader.readAsDataURL(file);
+        }
     };
 
-    const handleAddAmenity = () => {
-        if (!newAmenity || (settingsForm.amenities || []).includes(newAmenity)) return;
-        setSettingsForm({ ...settingsForm, amenities: [...(settingsForm.amenities || []), newAmenity] });
-        setNewAmenity('');
+    const handleAddAmenity = (name?: string) => {
+        const value = name || newAmenity;
+        if (value.trim()) {
+            setSettingsForm(prev => ({
+                ...prev,
+                amenities: Array.from(new Set([...(prev.amenities || []), value.trim()]))
+            }));
+            setNewAmenity('');
+        }
     };
 
-    const handleRemoveAmenity = (name: string) => {
-        setSettingsForm({ ...settingsForm, amenities: (settingsForm.amenities || []).filter(a => a !== name) });
+    const updateOperatingSlot = (index: number, field: 'start' | 'end', value: string) => {
+        const newSlots = [...operatingSlots];
+        newSlots[index] = { ...newSlots[index], [field]: value };
+        setOperatingSlots(newSlots);
     };
 
-    const handleAddHoliday = () => {
-        if (!newHolidayDate) return;
-        const currentHolidays = clinicData?.holidays || [];
-        if (currentHolidays.includes(newHolidayDate)) {
-            addToast("Date already blocked", "warning");
+    const addOperatingSlot = () => {
+        setOperatingSlots([...operatingSlots, { start: '17:00', end: '21:00' }]);
+    };
+
+    const removeOperatingSlot = (index: number) => {
+        if (operatingSlots.length > 1) {
+            setOperatingSlots(operatingSlots.filter((_, i) => i !== index));
+        }
+    };
+
+    const handleMapClick = (latlng: L.LatLng) => {
+        setSettingsForm(prev => ({
+            ...prev,
+            geoLocation: { lat: latlng.lat, lng: latlng.lng }
+        }));
+    };
+
+    const handleManualCoordChange = (field: 'lat' | 'lng', value: string) => {
+        if (value === '' || value === '-' || value === '.') return;
+        const num = parseFloat(value);
+        if (isNaN(num)) return;
+        setSettingsForm(prev => ({
+            ...prev,
+            geoLocation: {
+                lat: field === 'lat' ? num : (prev.geoLocation?.lat || 0),
+                lng: field === 'lng' ? num : (prev.geoLocation?.lng || 0)
+            }
+        }));
+    };
+
+    const fetchCurrentGPSLocation = () => {
+        if (!navigator.geolocation) {
+            addToast("Geolocation is not supported by your browser", "error");
             return;
         }
-        onUpdateClinicSettings({ holidays: [...currentHolidays, newHolidayDate] });
-        setNewHolidayDate('');
-        addToast("Holiday added to calendar", "success");
+        setIsFetchingLocation(true);
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                setSettingsForm(prev => ({
+                    ...prev,
+                    geoLocation: { lat: latitude, lng: longitude }
+                }));
+                setIsFetchingLocation(false);
+                addToast("Current location pinned!", "success");
+            },
+            (error) => {
+                setIsFetchingLocation(false);
+                addToast("Could not get location: " + error.message, "error");
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
     };
 
-    const handleRemoveHoliday = (date: string) => {
-        const currentHolidays = clinicData?.holidays || [];
-        onUpdateClinicSettings({ holidays: currentHolidays.filter(h => h !== date) });
-        addToast("Date removed from holidays", "info");
+    const upcomingAppointments = useMemo(() => {
+        return patients
+            .filter(p => p.visitType === 'APPOINTMENT' && p.appointmentDate && p.status !== PatientStatus.CANCELLED && p.status !== PatientStatus.COMPLETED)
+            .sort((a, b) => {
+                const dateA = new Date(`${a.appointmentDate}T${a.appointmentTime || '00:00'}`);
+                const dateB = new Date(`${b.appointmentDate}T${b.appointmentTime || '00:00'}`);
+                return dateA.getTime() - dateB.getTime();
+            });
+    }, [patients]);
+
+    // Calendar Helper Components & Logic
+    const calendarDays = useMemo(() => {
+        const firstDayOfMonth = new Date(calendarYear, calendarMonth, 1);
+        const lastDayOfMonth = new Date(calendarYear, calendarMonth + 1, 0);
+        const startingDayOfWeek = firstDayOfMonth.getDay();
+        const daysInMonth = lastDayOfMonth.getDate();
+        
+        const days = [];
+        // Pad previous month
+        for (let i = 0; i < startingDayOfWeek; i++) {
+            days.push(null);
+        }
+        // Current month days
+        for (let i = 1; i <= daysInMonth; i++) {
+            const dateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+            days.push({
+                day: i,
+                dateStr,
+                appointments: patients.filter(p => p.visitType === 'APPOINTMENT' && p.appointmentDate === dateStr && p.status !== PatientStatus.CANCELLED)
+            });
+        }
+        return days;
+    }, [calendarMonth, calendarYear, patients]);
+
+    const changeMonth = (offset: number) => {
+        let newMonth = calendarMonth + offset;
+        let newYear = calendarYear;
+        if (newMonth < 0) { newMonth = 11; newYear -= 1; }
+        else if (newMonth > 11) { newMonth = 0; newYear += 1; }
+        setCalendarMonth(newMonth);
+        setCalendarYear(newYear);
     };
 
-    // Mobile Navigation Configuration
-    const mobileNavItems = [
-        { id: 'QUEUE', label: 'Queue', icon: List },
-        { id: 'DATABASE', label: 'Patients', icon: Database },
-        { id: 'DOCTORS', label: 'Doctors', icon: Stethoscope },
-        { id: 'APPOINTMENTS', label: 'Appts', icon: CalendarClock },
-        { id: 'REPORTS', label: 'Reports', icon: BarChart3 }
-    ];
+    const tabConfig: Record<DashboardTab, { label: string; icon: React.ElementType }> = {
+        QUEUE: { label: 'Queue', icon: List },
+        DATABASE: { label: 'Database', icon: Database },
+        DOCTORS: { label: 'Doctors', icon: Stethoscope },
+        APPOINTMENTS: { label: 'Appts', icon: CalendarDays },
+        REPORTS: { label: 'Reports', icon: BarChart3 },
+    };
 
     return (
         <div className="h-full flex flex-col bg-slate-50 w-full max-w-[100vw] overflow-hidden">
-            {/* COMPACT TOP HEADER */}
-            <div className="flex flex-col flex-shrink-0 bg-white shadow-sm z-30 w-full border-b border-slate-100">
-                <div className="px-4 sm:px-6 py-1.5 sm:py-2 flex justify-between items-center">
-                    <div className="min-w-0 flex-1 flex items-center gap-3">
-                        <div className="lg:hidden">
-                            <Logo className="h-7 w-7" />
-                        </div>
-                        <div className="min-w-0">
+            <div className="flex flex-col flex-shrink-0 bg-white border-b border-slate-200 z-30 w-full shadow-sm">
+                <header className="px-6 py-3 flex items-center justify-between bg-white">
+                    <div className="flex items-center gap-4">
+                        <div className="flex flex-col">
                             <div className="flex items-center gap-2">
-                                <h1 className="text-sm sm:text-base font-black text-slate-900 truncate tracking-tight">{clinicName}</h1>
-                                <button onClick={() => setIsSettingsModalOpen(true)} className="text-slate-300 hover:text-slate-600 p-1 transition-all"><Settings className="h-3 w-3" /></button>
+                                <h1 className="text-xl font-black text-slate-900 tracking-tight leading-none">{clinicName}</h1>
+                                <button onClick={() => { setSettingsTab('GENERAL'); setIsSettingsModalOpen(true); }} className="text-slate-400 hover:text-primary-600 p-1.5 rounded-lg hover:bg-primary-50 transition-all">
+                                    <Settings className="h-4 w-4" />
+                                </button>
                             </div>
-                            <div className="hidden sm:flex flex-wrap gap-1.5 mt-0.5 text-[8px] text-slate-400 items-center font-bold uppercase tracking-wider">
-                                <span className="text-slate-900 bg-slate-100 px-1 py-0.5 rounded flex items-center gap-1 flex-shrink-0 font-mono">
-                                    {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                                {clinicData?.operatingHours && (
-                                    <span className="text-slate-500 bg-slate-50 px-1 py-0.5 rounded flex items-center gap-1 flex-shrink-0 border border-slate-100">
-                                        <Clock className="h-2 w-2" /> {clinicData.operatingHours}
-                                    </span>
-                                )}
+                            <div className="flex items-center gap-2 mt-2">
+                                <span className="text-[10px] font-black text-slate-700 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 shadow-inner">{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                 <OperationModeBadge mode={clinicData?.operationMode || operationMode} />
                             </div>
                         </div>
                     </div>
                     
-                    <div className="flex items-center gap-2 shrink-0">
-                        <Button onClick={() => setIsPatientModalOpen(true)} size="sm" className="bg-primary-600 hover:bg-primary-700 text-white font-black shadow-md shadow-primary-100 flex items-center gap-1.5 px-3 sm:px-4 h-7 rounded-lg text-[10px]">
-                            <Plus className="h-3 w-3" /> <span className="hidden xs:inline">Add Patient</span><span className="xs:hidden">Add</span>
-                        </Button>
-                        
-                        {/* Desktop Tab Bar */}
-                        <div className="hidden lg:flex gap-1 bg-slate-100 p-1 rounded-xl ml-4">
-                            {mobileNavItems.map(item => (
-                                <button 
-                                    key={item.id}
-                                    onClick={() => setActiveTab(item.id as any)} 
-                                    className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1.5 ${activeTab === item.id ? 'bg-white shadow-sm text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    <item.icon className="h-2.5" /> {item.label}
-                                </button>
-                            ))}
+                    <div className="flex items-center gap-3">
+                        <div className="hidden lg:flex items-center bg-slate-100 border border-slate-200 rounded-2xl h-11 px-4 focus-within:bg-white focus-within:ring-2 focus-within:ring-primary-500/10 focus-within:border-primary-400 transition-all">
+                            <Search className="h-4 w-4 text-slate-400 mr-3" />
+                            <input 
+                                type="text" 
+                                placeholder="Global Search..." 
+                                value={searchQuery} 
+                                onChange={(e) => setSearchQuery(e.target.value)} 
+                                className="bg-transparent border-none text-sm font-bold text-slate-700 focus:ring-0 outline-none w-48 placeholder:text-slate-400" 
+                            />
                         </div>
+                        <Button 
+                            onClick={() => { setEditingPatient(null); setIsPatientModalOpen(true); }} 
+                            className="bg-primary-600 hover:bg-primary-700 text-white font-black px-5 rounded-2xl h-11 text-xs flex items-center gap-2 uppercase tracking-widest shadow-lg shadow-primary-200 active:scale-95 transition-all"
+                        >
+                            <Plus className="h-4 w-4" /> <span>Add Patient</span>
+                        </Button>
                     </div>
+                </header>
+
+                <div className="flex px-4 py-2 gap-2 overflow-x-auto no-scrollbar bg-white">
+                    {(Object.keys(tabConfig) as DashboardTab[]).map(tab => {
+                        const Icon = tabConfig[tab].icon;
+                        const isActive = activeTab === tab;
+                        return (
+                            <button 
+                                key={tab} 
+                                onClick={() => setActiveTab(tab)} 
+                                className={`
+                                    flex items-center gap-2 px-6 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.1em] transition-all whitespace-nowrap
+                                    ${isActive 
+                                        ? 'bg-primary-600 text-white shadow-xl shadow-primary-200 scale-105 z-10' 
+                                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80'}
+                                `}
+                            >
+                                <Icon className={`h-4 w-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                                {tabConfig[tab].label}
+                            </button>
+                        );
+                    })}
                 </div>
 
-                {/* Sub-header for Date selection in Queue tab */}
                 {activeTab === 'QUEUE' && (
-                    <div className="bg-white border-t border-slate-100 w-full">
-                        <div className="px-4 sm:px-6 py-1 bg-slate-50/30 flex items-center gap-3 overflow-x-auto no-scrollbar">
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex-shrink-0">Viewing:</span>
-                            <div className="flex bg-white p-0.5 rounded-lg border border-slate-200 shadow-sm flex-shrink-0">
-                                <button onClick={() => setFilterDate(getLocalToday())} className={`px-3 py-0.5 rounded-md text-[9px] font-black transition-all ${filterDate === getLocalToday() ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}`}>Today</button>
-                                <button onClick={() => setFilterDate(getLocalTomorrow())} className={`px-3 py-0.5 rounded-md text-[9px] font-black transition-all ${filterDate === getLocalTomorrow() ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}`}>Tomorrow</button>
-                            </div>
-                            <div className="relative flex-shrink-0">
-                                <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 h-2.5 text-slate-400" />
-                                <input 
-                                    type="date" 
-                                    value={filterDate} 
-                                    onChange={(e) => setFilterDate(e.target.value)} 
-                                    className="pl-6 pr-2 py-0.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black focus:ring-2 focus:ring-primary-500 outline-none w-28 shadow-sm" 
-                                />
-                            </div>
-                        </div>
-
-                        {/* Doctor Quick Cards - More Compact */}
-                        <div className="flex gap-2 p-2 overflow-x-auto no-scrollbar bg-white snap-x snap-mandatory scroll-smooth border-b border-slate-100 shadow-inner">
-                            <button 
-                                onClick={() => setFilterDoctorId('ALL')} 
-                                className={`p-2 rounded-xl border transition-all text-left flex flex-col justify-between h-14 min-w-[100px] flex-shrink-0 snap-center ${filterDoctorId === 'ALL' ? 'bg-slate-900 border-slate-900 text-white shadow-md ring-2 ring-slate-900/10' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-900 hover:shadow-sm'}`}
-                            >
-                                <div>
-                                    <div className="font-black text-[8px] uppercase tracking-tighter leading-none">All Doctors</div>
-                                </div>
-                                <div className="mt-auto flex justify-between items-end">
-                                    <div className="text-xl font-black tracking-tighter leading-none">{patients.filter(p => p.status === PatientStatus.WAITING && (p.appointmentDate === filterDate || (p.visitType === 'WALK_IN' && filterDate === getLocalToday()))).length}</div>
-                                    <div className="text-[7px] uppercase font-black tracking-widest mb-0.5 opacity-60">Wait</div>
+                    <div className="bg-slate-50 border-t border-slate-200 w-full">
+                        <div className="flex gap-2 p-2 overflow-x-auto no-scrollbar">
+                            <button onClick={() => setFilterDoctorId('ALL')} className={`flex-shrink-0 w-28 p-3 rounded-2xl border transition-all text-left flex flex-col justify-between h-[72px] ${filterDoctorId === 'ALL' ? 'bg-slate-900 border-slate-900 text-white shadow-lg' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                                <div className="font-black text-[9px] uppercase tracking-widest opacity-80">All Doctors</div>
+                                <div className="mt-auto">
+                                    <div className="text-2xl font-black tracking-tighter leading-none">{doctorQueueStats.reduce((acc, d) => acc + d.count, 0)}</div>
+                                    <div className={`text-[8px] uppercase font-bold tracking-widest ${filterDoctorId === 'ALL' ? 'text-slate-400' : 'text-slate-500'}`}>Total Wait</div>
                                 </div>
                             </button>
-                            
+
                             {doctorQueueStats.map(({ doc, current, next, count, shiftTiming }) => {
                                 const isSelected = filterDoctorId === doc.id;
                                 return (
-                                    <button 
-                                        key={doc.id} 
-                                        onClick={() => setFilterDoctorId(isSelected ? 'ALL' : doc.id)} 
-                                        className={`p-2 rounded-xl border transition-all text-left relative flex flex-col h-14 min-w-[140px] flex-shrink-0 justify-between snap-center ${isSelected ? 'bg-white border-primary-500 ring-2 ring-primary-500/10 shadow-md z-10' : 'bg-white border-slate-200 hover:border-slate-300'}`}
-                                    >
-                                        <div className="flex items-start gap-1.5">
+                                    <button key={doc.id} onClick={() => setFilterDoctorId(isSelected ? 'ALL' : doc.id)} className={`flex-shrink-0 w-44 p-3 rounded-2xl border transition-all text-left flex flex-col h-[72px] justify-between ${isSelected ? 'bg-white border-primary-500 ring-2 ring-primary-500/10 shadow-lg' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                                        <div className="flex items-center gap-2 w-full min-w-0">
                                             <div className="relative flex-shrink-0">
-                                                <img src={doc.avatarUrl} className="w-5 h-5 rounded-lg object-cover border border-slate-100" />
-                                                <div className={`absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 border-[1px] border-white rounded-full ${doc.status === DoctorStatus.AVAILABLE ? 'bg-green-500' : doc.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-300'}`}></div>
+                                                <img src={doc.avatarUrl} className="w-6 h-6 rounded-full object-cover border border-slate-100 shadow-sm" />
+                                                <div className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 border border-white rounded-full ${doc.status === DoctorStatus.AVAILABLE ? 'bg-green-500' : 'bg-slate-300'}`}></div>
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="font-black text-slate-900 text-[9px] truncate leading-tight">{doc.name.split(' ').pop()}</div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="font-bold text-slate-900 text-[10px] truncate leading-tight">{doc.name}</div>
+                                                <div className="text-[8px] text-slate-400 truncate font-black uppercase tracking-tighter">{shiftTiming}</div>
                                             </div>
                                         </div>
-                                        <div className="mt-auto">
-                                            <div className="grid grid-cols-3 gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200/50">
-                                                <div className="bg-white rounded-md p-0.5 flex flex-col items-center">
-                                                    <div className="text-[5px] font-black text-slate-300 uppercase leading-none">Now</div>
-                                                    <div className={`text-[8px] font-black ${current ? 'text-blue-600' : 'text-slate-200'}`}>{current ? `#${current.tokenNumber}` : '--'}</div>
-                                                </div>
-                                                <div className="bg-white rounded-md p-0.5 flex flex-col items-center">
-                                                    <div className="text-[5px] font-black text-slate-300 uppercase leading-none">Next</div>
-                                                    <div className={`text-[8px] font-black ${next ? 'text-indigo-600' : 'text-slate-200'}`}>{next ? `#${next.tokenNumber}` : '--'}</div>
-                                                </div>
-                                                <div className={`rounded-md p-0.5 flex flex-col items-center ${count > 0 ? 'bg-primary-600' : 'bg-slate-200'}`}>
-                                                    <div className={`text-[5px] font-black uppercase leading-none ${count > 0 ? 'text-primary-200' : 'text-slate-400'}`}>Q</div>
-                                                    <div className={`text-[8px] font-black ${count > 0 ? 'text-white' : 'text-slate-400'}`}>{count}</div>
-                                                </div>
+                                        <div className="grid grid-cols-3 gap-1 bg-slate-50 rounded-xl p-1 border border-slate-100 mt-1.5 shadow-inner">
+                                            <div className="flex flex-col items-center">
+                                                <span className="text-[7px] text-slate-400 font-black uppercase">Now</span>
+                                                <span className={`text-[10px] font-black ${current && filterDate === getLocalToday() ? 'text-blue-600' : 'text-slate-300'}`}>{filterDate === getLocalToday() ? (current ? `#${current.tokenNumber}` : '--') : (doc.consultationTime || 15) + 'm'}</span>
+                                            </div>
+                                            <div className="flex flex-col items-center border-x border-slate-200">
+                                                <span className="text-[7px] text-slate-400 font-black uppercase">Next</span>
+                                                <span className={`text-[10px] font-black ${next ? 'text-indigo-600' : 'text-slate-300'}`}>{next ? `#${next.tokenNumber}` : '--'}</span>
+                                            </div>
+                                            <div className="flex flex-col items-center">
+                                                <span className="text-[7px] text-slate-400 font-black uppercase">Queue</span>
+                                                <span className="text-[10px] font-black text-slate-700">{count}</span>
                                             </div>
                                         </div>
                                     </button>
@@ -645,533 +540,380 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 )}
             </div>
 
-            {/* MAIN CONTENT AREA */}
-            <div className="flex-1 overflow-hidden relative bg-slate-100 pb-20 lg:pb-0 flex flex-col">
+            <div className="flex-1 overflow-hidden relative bg-slate-100 flex flex-col pb-[104px] sm:pb-0">
                 {activeTab === 'QUEUE' && (
                     <>
-                        <div className="px-4 sm:px-6 py-0.5 bg-white border-b border-slate-200 flex items-center justify-between shadow-sm z-10 gap-4 overflow-x-auto no-scrollbar">
-                            <div className="flex items-center gap-4 sm:gap-6 flex-shrink-0">
-                                <button onClick={() => setQueueSubTab('ACTIVE')} className={`px-1 py-2 text-[9px] sm:text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 border-b-2 transition-all whitespace-nowrap ${queueSubTab === 'ACTIVE' ? 'border-primary-600 text-primary-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><Activity className="h-3" /> Live ({subTabCounts.ACTIVE})</button>
-                                <button onClick={() => setQueueSubTab('HOLD')} className={`px-1 py-2 text-[9px] sm:text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 border-b-2 transition-all whitespace-nowrap ${queueSubTab === 'HOLD' ? 'border-orange-500 text-orange-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><PauseCircle className="h-3" /> Hold ({subTabCounts.HOLD})</button>
-                                <button onClick={() => setQueueSubTab('COMPLETED')} className={`px-1 py-2 text-[9px] sm:text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 border-b-2 transition-all whitespace-nowrap ${queueSubTab === 'COMPLETED' ? 'border-green-600 text-green-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><CheckCircle2 className="h-3" /> Done ({subTabCounts.COMPLETED})</button>
-                                <button onClick={() => setQueueSubTab('SKIPPED')} className={`px-1 py-2 text-[9px] sm:text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 border-b-2 transition-all whitespace-nowrap ${queueSubTab === 'SKIPPED' ? 'border-rose-500 text-rose-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}><UserX className="h-3" /> Absent ({subTabCounts.SKIPPED})</button>
+                        <div className="hidden sm:flex px-4 py-2 bg-white border-b border-slate-200 items-center justify-between flex-shrink-0 z-10 gap-4">
+                            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                                <button onClick={() => setQueueSubTab('LIVE')} className={`flex items-center gap-2 h-10 px-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${queueSubTab === 'LIVE' ? 'bg-primary-600 text-white shadow-lg shadow-primary-200' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                    <Activity className={`h-4 w-4 ${queueSubTab === 'LIVE' ? 'animate-pulse' : ''}`} />
+                                    Live <span className={`ml-1 px-2 py-0.5 rounded-lg text-[9px] ${queueSubTab === 'LIVE' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{queueTabCounts.LIVE}</span>
+                                </button>
+                                <button onClick={() => setQueueSubTab('HOLD')} className={`flex items-center gap-2 h-10 px-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${queueSubTab === 'HOLD' ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                    <PauseCircle className="h-4 w-4" />
+                                    Hold <span className={`ml-1 px-2 py-0.5 rounded-lg text-[9px] ${queueSubTab === 'HOLD' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{queueTabCounts.HOLD}</span>
+                                </button>
+                                <button onClick={() => setQueueSubTab('DONE')} className={`flex items-center gap-2 h-10 px-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${queueSubTab === 'DONE' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                    <CheckCircle2 className="h-4 w-4" />
+                                    Done <span className={`ml-1 px-2 py-0.5 rounded-lg text-[9px] ${queueSubTab === 'DONE' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{queueTabCounts.DONE}</span>
+                                </button>
+                                <button onClick={() => setQueueSubTab('ABSENT')} className={`flex items-center gap-2 h-10 px-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${queueSubTab === 'ABSENT' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                    <UserX className="h-4 w-4" />
+                                    Absent <span className={`ml-1 px-2 py-0.5 rounded-lg text-[9px] ${queueSubTab === 'ABSENT' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{queueTabCounts.ABSENT}</span>
+                                </button>
                             </div>
-                            <div className="relative group w-40 sm:w-48 hidden xs:block"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 text-slate-300" /><input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-8 pr-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold outline-none w-full transition-all focus:bg-white" /></div>
+
+                            <div className="flex items-center gap-2 w-[350px] bg-slate-100 p-1 rounded-2xl border border-slate-200 shadow-inner">
+                                <button onClick={() => setFilterDate(getLocalToday())} className={`flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center ${filterDate === getLocalToday() ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-900'}`}>Today</button>
+                                <button onClick={() => setFilterDate(getLocalTomorrow())} className={`flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center ${filterDate === getLocalTomorrow() ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-900'}`}>Tmrw</button>
+                                <div className="relative flex-[1.5] flex items-center group">
+                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-primary-600 transition-colors pointer-events-none z-10" />
+                                    <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full pl-10 pr-3 h-9 bg-white border border-slate-200 rounded-xl text-[10px] font-black focus:ring-2 focus:ring-primary-500/10 focus:border-primary-400 outline-none shadow-sm appearance-none" />
+                                </div>
+                            </div>
                         </div>
-                        <QueueTable patients={filteredPatients} doctors={doctors} estimatedTimes={estimatedTimes} isFiltered={searchQuery !== '' || filterDoctorId !== 'ALL'} nextUpPatientIds={new Set(doctorQueueStats.map(s => s.next?.id).filter(Boolean) as string[])} onUpdateStatus={onUpdateStatus} onManualReorder={onManualReorder} onDragDrop={onDragDrop} onManualCheckIn={onManualCheckIn} onEditPatient={setEditingPatient} onVitalsClick={setVitalsPatient} onToggleEmergency={onToggleEmergency} onNoShowPatient={(id) => onUpdateStatus(id, PatientStatus.SKIPPED)} />
+
+                        <QueueTable 
+                            patients={filteredPatients} doctors={doctors} estimatedTimes={estimatedTimes} isFiltered={searchQuery !== '' || filterDoctorId !== 'ALL'}
+                            onUpdateStatus={onUpdateStatus} onManualReorder={onManualReorder} onDragDrop={onDragDrop} onManualCheckIn={onManualCheckIn}
+                            onEditPatient={(p) => setEditingPatient(p)} onVitalsClick={(p) => setVitalsPatient(p)} onToggleEmergency={onToggleEmergency}
+                            onNoShowPatient={(id) => onUpdateStatus(id, PatientStatus.SKIPPED)}
+                        />
+
+                        {/* MOBILE STICKY BOTTOM MENU */}
+                        <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 p-2 bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-[0_-4px_24px_rgba(0,0,0,0.1)] flex flex-col gap-2">
+                            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar -mx-2 px-2">
+                                <button onClick={() => setQueueSubTab('LIVE')} className={`flex-1 flex flex-col items-center justify-center min-w-[72px] h-[48px] rounded-2xl transition-all ${queueSubTab === 'LIVE' ? 'bg-primary-600 text-white shadow-lg shadow-primary-200' : 'bg-slate-100 text-slate-500'}`}>
+                                    <Activity className={`h-4 w-4 mb-0.5 ${queueSubTab === 'LIVE' ? 'animate-pulse' : ''}`} />
+                                    <span className="text-[8px] font-black uppercase">Live ({queueTabCounts.LIVE})</span>
+                                </button>
+                                <button onClick={() => setQueueSubTab('HOLD')} className={`flex-1 flex flex-col items-center justify-center min-w-[72px] h-[48px] rounded-2xl transition-all ${queueSubTab === 'HOLD' ? 'bg-orange-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}>
+                                    <PauseCircle className="h-4 w-4 mb-0.5" />
+                                    <span className="text-[8px] font-black uppercase">Hold ({queueTabCounts.HOLD})</span>
+                                </button>
+                                <button onClick={() => setQueueSubTab('DONE')} className={`flex-1 flex flex-col items-center justify-center min-w-[72px] h-[48px] rounded-2xl transition-all ${queueSubTab === 'DONE' ? 'bg-green-600 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}>
+                                    <CheckCircle2 className="h-4 w-4 mb-0.5" />
+                                    <span className="text-[8px] font-black uppercase">Done ({queueTabCounts.DONE})</span>
+                                </button>
+                                <button onClick={() => setQueueSubTab('ABSENT')} className={`flex-1 flex flex-col items-center justify-center min-w-[72px] h-[48px] rounded-2xl transition-all ${queueSubTab === 'ABSENT' ? 'bg-slate-800 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}>
+                                    <UserX className="h-4 w-4 mb-0.5" />
+                                    <span className="text-[8px] font-black uppercase">Absent ({queueTabCounts.ABSENT})</span>
+                                </button>
+                            </div>
+                            
+                            <div className="flex items-center gap-1.5 h-11 bg-slate-900 rounded-2xl p-1 shadow-lg">
+                                <button onClick={() => setFilterDate(getLocalToday())} className={`flex-1 h-full rounded-xl text-[9px] font-black uppercase tracking-wider transition-all ${filterDate === getLocalToday() ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}>Today</button>
+                                <button onClick={() => setFilterDate(getLocalTomorrow())} className={`flex-1 h-full rounded-xl text-[9px] font-black uppercase tracking-wider transition-all ${filterDate === getLocalTomorrow() ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}>Tmrw</button>
+                                <div className="flex-[1.5] h-full relative group">
+                                    <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full h-full bg-slate-800 rounded-xl text-[9px] font-black text-white px-8 outline-none border border-slate-700 focus:ring-1 focus:ring-primary-500" />
+                                    <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500 pointer-events-none" />
+                                </div>
+                            </div>
+                        </div>
                     </>
                 )}
-                {activeTab === 'DATABASE' && <PatientDatabaseTable patients={uniquePatients} doctors={doctors} onHistoryClick={setHistoryPatient} onEditClick={setEditingPatient} onDeleteClick={setPatientHistoryToDelete} />}
-                {activeTab === 'DOCTORS' && <DoctorManager doctors={doctors} onAddDoctor={() => { setDoctorModalMode('ADD'); setEditingDoctorData(undefined); setIsDoctorModalOpen(true); }} onEditDoctor={(doc) => { setDoctorModalMode('EDIT'); setEditingDoctorId(doc.id); setEditingDoctorData(doc); setIsDoctorModalOpen(true); }} onDeleteDoctor={onDeleteDoctor} onAddPresetSlot={() => {}} onStatusChange={(id, status) => onEditDoctor(id, { status })} />}
-                {activeTab === 'STAFF' && onAddStaff && onUpdateStaff && onDeleteStaff && <StaffManager staff={staff} onAddStaff={onAddStaff} onUpdateStaff={onUpdateStaff} onDeleteStaff={onDeleteStaff} />}
-                {activeTab === 'REPORTS' && <ReceptionStats patients={patients} doctors={doctors} />}
+                
                 {activeTab === 'APPOINTMENTS' && (
-                    <div className="p-4 sm:p-8 overflow-y-auto h-full custom-scrollbar animate-in fade-in pb-32">
-                        <div className="max-w-4xl mx-auto">
-                            <div className="mb-8">
-                                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                                    Appointment Settings <CalendarClock className="h-6 sm:h-8 w-6 sm:w-8 text-primary-600" />
-                                </h2>
-                                <p className="text-slate-500 font-medium mt-1 text-sm">Configure slot logic and automated patient alerts.</p>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* CARD: Scheduling Parameters */}
-                                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-                                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                        <Clock3 className="h-4 w-4" /> Scheduling Logic
-                                    </h3>
-                                    
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-sm font-bold text-slate-700 mb-2">Default Slot Duration</label>
-                                            <div className="grid grid-cols-4 gap-2">
-                                                {[10, 15, 20, 30].map(mins => (
-                                                    <button 
-                                                        key={mins}
-                                                        onClick={() => handleUpdateApptConfig({ slotDuration: mins })}
-                                                        className={`py-2 rounded-xl text-xs font-black transition-all border ${apptConfig.slotDuration === mins ? 'bg-primary-600 text-white border-primary-600 shadow-lg' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300'}`}
-                                                    >
-                                                        {mins}m
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Buffer Time (m)</label>
-                                                <input 
-                                                    type="number" 
-                                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none"
-                                                    value={apptConfig.bufferTime}
-                                                    onChange={e => handleUpdateApptConfig({ bufferTime: parseInt(e.target.value) || 0 })}
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Lead Time (Days)</label>
-                                                <input 
-                                                    type="number" 
-                                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none"
-                                                    value={apptConfig.maxDaysInAdvance}
-                                                    onChange={e => handleUpdateApptConfig({ maxDaysInAdvance: parseInt(e.target.value) || 0 })}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="p-4 bg-primary-50 rounded-2xl border border-primary-100 flex gap-3">
-                                        <Info className="h-5 w-5 text-primary-600 flex-shrink-0" />
-                                        <p className="text-[11px] text-primary-800 leading-relaxed font-medium">
-                                            These settings apply globally to all new appointments. Doctors can still override individual consultation times in their dashboard.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* CARD: Communication & Alerts */}
-                                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-                                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                        <Bell className="h-4 w-4" /> Automation & Alerts
-                                    </h3>
-
-                                    <div className="space-y-4">
-                                        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-900">Email Notifications</p>
-                                                <p className="text-[10px] text-slate-500">Auto-send confirmation and reminders</p>
-                                            </div>
-                                            <button 
-                                                onClick={() => handleUpdateApptConfig({ enableEmailNotifications: !apptConfig.enableEmailNotifications })}
-                                                className={`w-12 h-6 rounded-full transition-all relative ${apptConfig.enableEmailNotifications ? 'bg-primary-600' : 'bg-slate-300'}`}
-                                            >
-                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${apptConfig.enableEmailNotifications ? 'left-7' : 'left-1'}`} />
-                                            </button>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                                                <MessageSquare className="h-3 w-3" /> Confirmation Template
-                                            </label>
-                                            <textarea 
-                                                className="w-full h-32 p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-600 focus:ring-2 focus:ring-primary-500 outline-none resize-none leading-relaxed"
-                                                value={apptConfig.emailTemplate}
-                                                onChange={e => handleUpdateApptConfig({ emailTemplate: e.target.value })}
-                                                placeholder="Enter message template..."
-                                            />
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {['{patient_name}', '{doctor_name}', '{date}', '{time}'].map(tag => (
-                                                    <span key={tag} className="text-[9px] bg-white border border-slate-200 text-slate-400 px-1.5 py-0.5 rounded-lg cursor-default hover:text-primary-600 transition-colors">{tag}</span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* CARD: SaaS Value Add - No Show Policy */}
-                                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-                                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                        <ShieldCheck className="h-4 w-4" /> Late Arrival Policy
-                                    </h3>
-                                    <p className="text-xs text-slate-500 leading-relaxed">Automate how the queue treats patients who arrive late for their confirmed slots.</p>
-                                    
-                                    <div className="flex gap-4">
-                                        <div className="flex-1 p-3 bg-slate-50 rounded-2xl border border-slate-100 text-center">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Threshold</p>
-                                            <p className="text-xl font-black text-slate-900">{apptConfig.lateArrivalThreshold}m</p>
-                                        </div>
-                                        <div className="flex-1 p-3 bg-slate-50 rounded-2xl border border-slate-100 text-center">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Action</p>
-                                            <p className="text-xs font-black text-primary-600 uppercase">
-                                                {apptConfig.lateArrivalAction === 'PENALTY' ? 'Penalty Pos.' : apptConfig.lateArrivalAction === 'SKIP' ? 'Auto-Skip' : 'Notify only'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="pt-2">
-                                        <button 
-                                            onClick={() => setIsPolicyModalOpen(true)}
-                                            className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:bg-slate-800 transition-all"
-                                        >
-                                            Customize Policy
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* CARD: Holiday Sync */}
-                                <div className="bg-gradient-to-br from-indigo-600 to-primary-600 p-6 rounded-[2.5rem] text-white shadow-xl shadow-indigo-100 flex flex-col justify-between">
-                                    <div>
-                                        <h3 className="text-sm font-black opacity-60 uppercase tracking-widest mb-4">Integrations</h3>
-                                        <h4 className="text-xl font-bold mb-2">Clinic Holiday Sync</h4>
-                                        <p className="text-xs opacity-80 leading-relaxed">Bulk block all doctor slots for public holidays or clinic maintenance events with one tap.</p>
-                                    </div>
-                                    <div className="mt-8">
-                                        <button 
-                                            onClick={() => setIsHolidayModalOpen(true)}
-                                            className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all"
-                                        >
-                                            <Calendar className="h-4 w-4" /> Manage Calendar
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* STICKY BOTTOM NAVIGATION FOR MOBILE/TABLET */}
-            <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-[40] shadow-[0_-4px_12px_rgba(0,0,0,0.05)] pb-safe">
-                <div className="flex justify-around items-center h-16 sm:h-20">
-                    {mobileNavItems.map(item => {
-                        const isActive = activeTab === item.id;
-                        return (
-                            <button 
-                                key={item.id} 
-                                onClick={() => setActiveTab(item.id as any)} 
-                                className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-all ${isActive ? 'text-primary-600' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                                <item.icon className={`h-5 w-5 sm:h-6 sm:w-6 ${isActive ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-                                <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-tight ${isActive ? 'opacity-100' : 'opacity-70'}`}>
-                                    {item.label}
-                                </span>
-                            </button>
-                        );
-                    })}
-                    <button 
-                        onClick={() => setIsSettingsModalOpen(true)}
-                        className={`flex flex-col items-center justify-center w-full h-full space-y-1 text-slate-400 hover:text-slate-600`}
-                    >
-                        <Settings className="h-5 w-5 sm:h-6 sm:w-6" />
-                        <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-tight opacity-70">Admin</span>
-                    </button>
-                </div>
-            </div>
-
-            {/* Late Arrival Policy Modal */}
-            <Modal isOpen={isPolicyModalOpen} onClose={() => setIsPolicyModalOpen(false)} title="Late Arrival Logic" maxWidth="max-w-md">
-                <div className="space-y-6">
-                    <p className="text-sm text-slate-500">Configure how the automated queue system handles patients who arrive after their scheduled time slot.</p>
-                    
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">Late Threshold (Minutes)</label>
-                            <input 
-                                type="number" 
-                                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none"
-                                value={apptConfig.lateArrivalThreshold}
-                                onChange={e => setApptConfig({ ...apptConfig, lateArrivalThreshold: parseInt(e.target.value) || 0 })}
-                            />
-                            <p className="text-[10px] text-slate-400 mt-1.5 italic">Example: If threshold is 10m, a 10:00 AM patient becomes "Late" at 10:11 AM.</p>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">Automated Action</label>
-                            <div className="space-y-2">
-                                {[
-                                    { id: 'PENALTY', label: 'Penalty Position', desc: 'Move patient 5 spots back in the queue.' },
-                                    { id: 'SKIP', label: 'Auto-Skip', desc: 'Mark patient as No-Show and remove from queue.' },
-                                    { id: 'NOTIFY', label: 'Notify Only', desc: 'Just highlight the patient on dashboard.' }
-                                ].map(action => (
-                                    <button 
-                                        key={action.id}
-                                        onClick={() => setApptConfig({ ...apptConfig, lateArrivalAction: action.id as any })}
-                                        className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center gap-4 ${apptConfig.lateArrivalAction === action.id ? 'bg-primary-50 border-primary-500 ring-1 ring-primary-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'}`}
-                                    >
-                                        <div className={`p-2 rounded-full ${apptConfig.lateArrivalAction === action.id ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                                            {apptConfig.lateArrivalAction === action.id ? <CheckCircle2 className="h-4 w-4" /> : <div className="h-4 w-4" />}
-                                        </div>
-                                        <div>
-                                            <div className={`text-sm font-bold ${apptConfig.lateArrivalAction === action.id ? 'text-primary-900' : 'text-slate-800'}`}>{action.label}</div>
-                                            <div className="text-[10px] text-slate-500">{action.desc}</div>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
-                        <Button variant="secondary" onClick={() => setIsPolicyModalOpen(false)}>Cancel</Button>
-                        <Button onClick={() => { handleUpdateApptConfig(apptConfig); setIsPolicyModalOpen(false); }}>Save Policy</Button>
-                    </div>
-                </div>
-            </Modal>
-
-            {/* Holiday Sync Modal */}
-            <Modal isOpen={isHolidayModalOpen} onClose={() => setIsHolidayModalOpen(false)} title="Clinic Holiday Calendar" maxWidth="max-w-md">
-                <div className="space-y-6">
-                    <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex gap-3">
-                        <Info className="h-5 w-5 text-indigo-600 flex-shrink-0" />
-                        <p className="text-xs text-indigo-800 leading-relaxed">
-                            Blocking a date will automatically cancel all existing appointments and disable slot booking for all doctors in this clinic for that day.
-                        </p>
-                    </div>
-
-                    <div className="space-y-4">
-                        <div className="flex gap-2">
-                            <input 
-                                type="date" 
-                                className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none"
-                                value={newHolidayDate}
-                                min={getLocalToday()}
-                                onChange={e => setNewHolidayDate(e.target.value)}
-                            />
-                            <Button onClick={handleAddHoliday} disabled={!newHolidayDate}>
-                                <Plus className="h-4 w-4 mr-1.5" /> Block Date
-                            </Button>
-                        </div>
-
-                        <div>
-                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Upcoming Holidays / Closures</h4>
-                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                                {(clinicData?.holidays || []).length > 0 ? (
-                                    clinicData?.holidays?.sort().map(h => (
-                                        <div key={h} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl group hover:border-indigo-300 transition-colors">
-                                            <div className="flex items-center gap-3">
-                                                <CalendarX className="h-4 w-4 text-rose-500" />
-                                                <span className="text-sm font-bold text-slate-700">
-                                                    {new Date(h).toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })}
-                                                </span>
-                                            </div>
-                                            <button 
-                                                onClick={() => handleRemoveHoliday(h)}
-                                                className="text-slate-300 hover:text-rose-500 transition-colors p-1"
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="py-8 text-center text-slate-400 italic text-xs bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                                        No holidays scheduled.
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-slate-100 flex justify-end">
-                        <Button variant="secondary" onClick={() => setIsHolidayModalOpen(false)}>Close Calendar</Button>
-                    </div>
-                </div>
-            </Modal>
-
-            <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} title="Clinic Configuration" maxWidth="max-w-4xl">
-                <div className="flex border-b border-slate-200 mb-6 sticky top-0 bg-white z-10">
-                    <button onClick={() => setActiveSettingsTab('GENERAL')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'GENERAL' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500'}`}>General Info</button>
-                    <button onClick={() => setActiveSettingsTab('LOCATION')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'LOCATION' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500'}`}>Location & Map</button>
-                    <button onClick={() => setActiveSettingsTab('BRANDING')} className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${activeSettingsTab === 'BRANDING' ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500'}`}>Branding & Amenities</button>
-                </div>
-
-                <div className="space-y-6">
-                    {activeSettingsTab === 'GENERAL' && (
-                        <div className="space-y-4 animate-in fade-in">
-                            <div className="grid grid-cols-2 gap-4">
-                                <Input label="Clinic Name" value={settingsForm.name || ''} onChange={e => setSettingsForm({ ...settingsForm, name: e.target.value })} />
-                                <Input label="Contact Phone" value={settingsForm.contactPhone || ''} onChange={e => setSettingsForm({ ...settingsForm, contactPhone: e.target.value })} />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><Clock className="h-3" /> Opens At</label>
-                                    <input type="time" className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white" value={hoursRange.start} onChange={e => setHoursRange({ ...hoursRange, start: e.target.value })} />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><Clock className="h-3" /> Closes At</label>
-                                    <input type="time" className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white" value={hoursRange.end} onChange={e => setHoursRange({ ...hoursRange, end: e.target.value })} />
-                                </div>
-                            </div>
+                    <div className="flex-1 overflow-hidden flex flex-col">
+                        <div className="px-6 py-4 bg-white border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Clinic About / Description</label>
-                                <textarea className="w-full p-3 border border-slate-300 rounded-lg text-sm min-h-[100px] outline-none focus:ring-1 focus:ring-primary-500" value={settingsForm.about || ''} onChange={e => setSettingsForm({ ...settingsForm, about: e.target.value })} placeholder="Briefly describe your clinic..." />
+                                <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
+                                    <CalendarDays className="h-7 w-7 text-primary-600" /> Scheduled Visits
+                                </h3>
+                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1.5">Overview of confirmed clinical appointments</p>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Operational Mode</label>
-                                <select className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white" value={settingsForm.operationMode} onChange={e => setSettingsForm({ ...settingsForm, operationMode: e.target.value as ClinicOperationMode })}>
-                                    {Object.values(ClinicOperationMode).map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}
-                                </select>
-                            </div>
-                        </div>
-                    )}
-
-                    {activeSettingsTab === 'LOCATION' && (
-                        <div className="space-y-6 animate-in fade-in">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Input label="City" value={settingsForm.city || ''} onChange={e => setSettingsForm({ ...settingsForm, city: e.target.value })} />
-                                <Input label="Pincode" value={settingsForm.pincode || ''} onChange={e => setSettingsForm({ ...settingsForm, pincode: e.target.value })} />
-                            </div>
-                            <Input label="Full Address" value={settingsForm.address || ''} onChange={e => setSettingsForm({ ...settingsForm, address: e.target.value })} />
                             
-                            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
-                                <div className="flex items-center justify-between mb-2">
-                                    <label className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
-                                        <Navigation2 className="h-4 w-4 text-primary-600" /> Precise Coordinates
-                                    </label>
-                                    <button 
-                                        onClick={handleDetectLocation} 
-                                        disabled={isDetectingLocation}
-                                        className="text-[10px] font-black uppercase tracking-widest text-primary-600 bg-white border border-primary-100 px-3 py-1.5 rounded-lg shadow-sm hover:bg-primary-50 transition-all flex items-center gap-2"
-                                    >
-                                        {isDetectingLocation ? <div className="h-3 w-3 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div> : <Crosshair className="h-3 w-3" />}
-                                        Detect My Location
-                                    </button>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Latitude</label>
-                                        <input 
-                                            type="number" 
-                                            step="0.000001"
-                                            className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none"
-                                            value={settingsForm.geoLocation?.lat || ''}
-                                            onChange={e => setSettingsForm({ ...settingsForm, geoLocation: { ...settingsForm.geoLocation!, lat: parseFloat(e.target.value) || 0 } })}
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Longitude</label>
-                                        <input 
-                                            type="number" 
-                                            step="0.000001"
-                                            className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none"
-                                            value={settingsForm.geoLocation?.lng || ''}
-                                            onChange={e => setSettingsForm({ ...settingsForm, geoLocation: { ...settingsForm.geoLocation!, lng: parseFloat(e.target.value) || 0 } })}
-                                        />
-                                    </div>
-                                </div>
+                            <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
+                                <button onClick={() => setAppointmentViewMode('LIST')} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${appointmentViewMode === 'LIST' ? 'bg-white text-primary-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-800'}`}> List View </button>
+                                <button onClick={() => setAppointmentViewMode('CALENDAR')} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${appointmentViewMode === 'CALENDAR' ? 'bg-white text-primary-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-800'}`}> Calendar </button>
                             </div>
+                        </div>
 
-                            <div className="space-y-3">
-                                <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><Globe className="h-4" /> Pin Location on Map</label>
-                                <div className="flex gap-2 mb-2">
-                                    <div className="relative flex-1">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                        <input 
-                                            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none" 
-                                            placeholder="Search locality, street..." 
-                                            value={mapSearchQuery} 
-                                            onChange={e => setMapSearchQuery(e.target.value)} 
-                                            onKeyDown={e => e.key === 'Enter' && handleSearchLocation()} 
-                                        />
+                        <div className="flex-1 overflow-auto p-4 sm:p-6 custom-scrollbar bg-slate-50">
+                            {appointmentViewMode === 'LIST' ? (
+                                upcomingAppointments.length > 0 ? (
+                                    <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden animate-in fade-in duration-300">
+                                        <table className="w-full text-sm text-left border-separate border-spacing-0">
+                                            <thead className="text-slate-400 font-black text-[9px] uppercase tracking-[0.2em] sticky top-0 z-10 bg-slate-50 border-b border-slate-100">
+                                                <tr>
+                                                    <th className="px-8 py-5 border-b border-slate-200">Patient Profile</th>
+                                                    <th className="px-8 py-5 border-b border-slate-200">Consultant</th>
+                                                    <th className="px-8 py-5 border-b border-slate-200">Schedule</th>
+                                                    <th className="px-8 py-5 border-b border-slate-200 text-right">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {upcomingAppointments.map((p) => {
+                                                    const doc = doctors.find(d => d.id === p.doctorId);
+                                                    const apptDateObj = new Date(p.appointmentDate!);
+                                                    const isToday = p.appointmentDate === getLocalToday();
+                                                    return (
+                                                        <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                                                            <td className="px-8 py-4">
+                                                                <div className="font-black text-slate-900 text-base">{p.name}</div>
+                                                                <div className="text-[10px] text-slate-500 font-black uppercase tracking-wider mt-1">{p.phone}</div>
+                                                            </td>
+                                                            <td className="px-8 py-4">
+                                                                <div className="font-black text-slate-700">Dr. {doc?.name || 'Unknown'}</div>
+                                                                <div className="text-[10px] text-slate-400 font-black uppercase tracking-tighter mt-1">{doc?.specialty}</div>
+                                                            </td>
+                                                            <td className="px-8 py-4">
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider border ${isToday ? 'bg-green-100 text-green-800 border-green-200 shadow-sm' : 'bg-blue-50 text-blue-700 border-blue-100'}`}> {isToday ? 'Today' : apptDateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} </span>
+                                                                    <span className="font-black text-slate-700 text-sm">{format12h(p.appointmentTime || '--:--')}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-8 py-4 text-right">
+                                                                <div className="flex justify-end gap-2">
+                                                                    {!p.isCheckedIn && ( <button onClick={() => onManualCheckIn(p.id)} className="h-10 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-emerald-100 active:scale-95"> Arrived </button> )}
+                                                                    <button onClick={() => setEditingPatient(p)} className="p-2.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all"> <Edit2 className="h-5 w-5" /> </button>
+                                                                    <button onClick={() => onCancelPatient(p.id)} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"> <XCircle className="h-5 w-5" /> </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
                                     </div>
-                                    <Button size="sm" onClick={handleSearchLocation} isLoading={isSearchingLocation} variant="secondary">Search</Button>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center py-32 bg-white rounded-[3rem] border-2 border-dashed border-slate-200 text-slate-400">
+                                        <CalendarDays className="h-16 w-16 mb-6 opacity-20" />
+                                        <p className="font-black uppercase tracking-[0.2em] text-xs">No pending scheduled appointments</p>
+                                        <Button onClick={() => { setEditingPatient(null); setIsPatientModalOpen(true); }} variant="secondary" size="md" className="mt-8 border-slate-300 rounded-2xl px-10 font-black uppercase text-[11px] tracking-widest hover:bg-slate-50">Schedule Visit Now</Button>
+                                    </div>
+                                )
+                            ) : (
+                                <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                    <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden p-8">
+                                        <div className="flex justify-between items-center mb-10">
+                                            <div className="flex items-center gap-6">
+                                                <button onClick={() => changeMonth(-1)} className="p-3 hover:bg-slate-100 rounded-full transition-all border border-transparent hover:border-slate-200"><ChevronLeft className="h-6 w-6 text-slate-600" /></button>
+                                                <h4 className="text-3xl font-black text-slate-900 tracking-tighter"> {new Date(calendarYear, calendarMonth).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} </h4>
+                                                <button onClick={() => changeMonth(1)} className="p-3 hover:bg-slate-100 rounded-full transition-all border border-transparent hover:border-slate-200"><ChevronRight className="h-6 w-6 text-slate-600" /></button>
+                                            </div>
+                                            <div className="flex items-center gap-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                                                <div className="flex items-center gap-2.5"><div className="w-3 h-3 rounded-full bg-primary-500 shadow-sm"></div> With Appts</div>
+                                                <div className="flex items-center gap-2.5"><div className="w-3 h-3 rounded-full bg-slate-200 shadow-inner"></div> Free Days</div>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-7 gap-px bg-slate-100 rounded-3xl border border-slate-100 overflow-hidden shadow-inner">
+                                            {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => ( <div key={day} className="bg-slate-50 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">{day}</div> ))}
+                                            {calendarDays.map((dayObj, idx) => {
+                                                const isToday = dayObj && dayObj.dateStr === getLocalToday();
+                                                const isSelected = dayObj && dayObj.dateStr === selectedCalendarDay;
+                                                return (
+                                                    <div key={idx} onClick={() => dayObj && setSelectedCalendarDay(dayObj.dateStr)} className={`bg-white min-h-[120px] p-4 transition-all cursor-pointer group hover:bg-slate-50/50 ${!dayObj ? 'opacity-30' : ''} ${isSelected ? 'ring-2 ring-inset ring-primary-600 z-10 shadow-lg' : ''}`}>
+                                                        {dayObj && (
+                                                            <div className="flex flex-col h-full">
+                                                                <div className="flex justify-between items-start">
+                                                                    <span className={`text-base font-black transition-all ${isToday ? 'bg-primary-600 text-white w-9 h-9 rounded-xl flex items-center justify-center shadow-lg shadow-primary-200 scale-110' : isSelected ? 'text-primary-600 scale-110' : 'text-slate-900 group-hover:scale-110'}`}>{dayObj.day}</span>
+                                                                    {dayObj.appointments.length > 0 && ( <span className="bg-primary-50 text-primary-700 text-[10px] font-black px-2 py-1 rounded-lg border border-primary-100 shadow-sm">{dayObj.appointments.length}</span> )}
+                                                                </div>
+                                                                <div className="mt-auto flex flex-wrap gap-1.5">
+                                                                    {dayObj.appointments.slice(0, 4).map(a => ( <div key={a.id} className="w-2 h-2 rounded-full bg-primary-500 shadow-[0_0_8px_rgba(20,184,166,0.4)]" title={`${a.name} @ ${a.appointmentTime}`}></div> ))}
+                                                                    {dayObj.appointments.length > 4 && <span className="text-[10px] font-black text-slate-400 ml-1">+{dayObj.appointments.length - 4}</span>}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                    {selectedCalendarDay && (
+                                        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden animate-in slide-in-from-top-4 duration-500">
+                                            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                                <h5 className="font-black text-slate-800 uppercase tracking-[0.2em] text-xs flex items-center gap-3"> <CalendarDays className="h-5 w-5 text-primary-600" /> {new Date(selectedCalendarDay).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} </h5>
+                                                <button onClick={() => setSelectedCalendarDay(null)} className="p-2 text-slate-400 hover:text-slate-900 transition-colors"><X className="h-6 w-6" /></button>
+                                            </div>
+                                            <div className="p-8">
+                                                {patients.filter(p => p.visitType === 'APPOINTMENT' && p.appointmentDate === selectedCalendarDay).length > 0 ? (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                        {patients.filter(p => p.visitType === 'APPOINTMENT' && p.appointmentDate === selectedCalendarDay).map(p => {
+                                                            const doc = doctors.find(d => d.id === p.doctorId);
+                                                            return (
+                                                                <div key={p.id} className="bg-slate-50/50 p-6 rounded-[2rem] border border-slate-200 flex flex-col gap-4 group relative hover:border-primary-400 hover:bg-white hover:shadow-xl transition-all">
+                                                                    <div className="flex justify-between items-start">
+                                                                        <div className="min-w-0">
+                                                                            <div className="font-black text-slate-900 text-lg truncate mb-1">{p.name}</div>
+                                                                            <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{p.phone}</div>
+                                                                        </div>
+                                                                        <div className="text-right">
+                                                                            <div className="bg-slate-900 text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-lg">{format12h(p.appointmentTime || '--:--')}</div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3 pt-4 border-t border-slate-200/60">
+                                                                        <img src={doc?.avatarUrl} className="w-8 h-8 rounded-xl object-cover border border-white shadow-sm" />
+                                                                        <div className="min-w-0">
+                                                                            <span className="text-[11px] font-black text-slate-700 block truncate leading-none">Dr. {doc?.name.split(' ').pop()}</span>
+                                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter truncate block mt-1">{doc?.specialty}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
+                                                                        <button onClick={() => setEditingPatient(p)} className="p-2.5 bg-white text-slate-400 hover:text-primary-600 rounded-xl shadow-lg hover:shadow-primary-100 border border-slate-100"><Edit2 className="h-4 w-4" /></button>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : ( <div className="text-center py-20 text-slate-400 italic text-sm font-bold uppercase tracking-widest opacity-40">No entries for this specific date</div> )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="h-[300px] rounded-2xl border border-slate-200 overflow-hidden relative shadow-inner">
-                                    <MapContainer center={[settingsForm.geoLocation?.lat || 13.0827, settingsForm.geoLocation?.lng || 80.2707]} zoom={14} className="h-full w-full">
-                                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                                        <MapUpdater center={[settingsForm.geoLocation?.lat || 13.0827, settingsForm.geoLocation?.lng || 80.2707]} />
-                                        <MapClickHandler onLocationSelect={(lat, lng) => setSettingsForm({ ...settingsForm, geoLocation: { lat, lng } })} />
-                                        {settingsForm.geoLocation && (
-                                            <DraggableSettingsMarker 
-                                                position={[settingsForm.geoLocation.lat, settingsForm.geoLocation.lng]} 
-                                                onDragEnd={(lat, lng) => setSettingsForm({ ...settingsForm, geoLocation: { lat, lng } })}
-                                            />
-                                        )}
-                                    </MapContainer>
-                                    <div className="absolute bottom-2 left-2 z-[400] bg-white/90 px-3 py-1.5 rounded-lg text-[10px] font-black text-slate-600 shadow-sm border border-slate-200 flex items-center gap-2">
-                                        <div className="flex flex-col">
-                                            <span>Lat: {settingsForm.geoLocation?.lat.toFixed(6)}</span>
-                                            <span>Lng: {settingsForm.geoLocation?.lng.toFixed(6)}</span>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'DATABASE' && <PatientDatabaseTable patients={patients} doctors={doctors} onHistoryClick={(p) => setHistoryPatient(p)} onEditClick={(p) => setEditingPatient(p)} onDeleteClick={(p) => setPatientHistoryToDelete(p)} />}
+                {activeTab === 'DOCTORS' && <DoctorManager doctors={doctors} onAddDoctor={() => { setDoctorModalMode('ADD'); setEditingDoctorData(undefined); setIsDoctorModalOpen(true); }} onEditDoctor={(doc) => { setDoctorModalMode('EDIT'); setEditingDoctorId(doc.id); setEditingDoctorData(doc); setIsDoctorModalOpen(true); }} onDeleteDoctor={(id) => { const doc = doctors.find(d => d.id === id); if (doc) setDoctorToDelete(doc); }} onAddPresetSlot={() => {}} onStatusChange={(id, status) => onEditDoctor(id, { status })} />}
+                {activeTab === 'REPORTS' && <ReceptionStats patients={patients} doctors={doctors} />}
+            </div>
+
+            {/* MODALS */}
+            <AddPatientModal isOpen={isPatientModalOpen || !!editingPatient} onClose={() => { setIsPatientModalOpen(false); setEditingPatient(null); }} mode={editingPatient ? 'EDIT' : 'ADD'} initialData={editingPatient} onAdd={onAddPatient} onEdit={onEditPatient} doctors={doctors} patients={patients} addToast={addToast} />
+            <DoctorFormModal isOpen={isDoctorModalOpen} onClose={() => setIsDoctorModalOpen(false)} mode={doctorModalMode} initialData={editingDoctorData} onSave={(data) => { if (doctorModalMode === 'EDIT' && editingDoctorId) { onEditDoctor(editingDoctorId, data); addToast('Doctor profile updated', 'success'); } else { onAddDoctor(data.name, data.specialty, data.room, data.schedule, data.mobile, data.regNo, data.masterId, data.avatarUrl, parseFloat(data.fee), parseInt(data.consultationTime)); addToast('Doctor registered', 'success'); } }} onCheckMasterDoctor={onCheckMasterDoctor} addToast={addToast} />
+            <PatientHistoryModal 
+                isOpen={!!historyPatient} 
+                onClose={() => setHistoryPatient(null)} 
+                patient={historyPatient} 
+                allClinicsPatients={patients} 
+                doctors={doctors} 
+            />
+            <VitalsModal
+                isOpen={!!vitalsPatient}
+                onClose={() => setVitalsPatient(null)}
+                patient={vitalsPatient}
+                onSave={(pid, vitals) => onEditPatient(pid, { vitals })}
+            />
+            <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} title="Clinic Settings" maxWidth="max-w-5xl">
+                <div className="flex flex-col h-[80vh] sm:h-[520px] overflow-hidden">
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-1 bg-slate-100 p-1.5 rounded-2xl mb-6 w-full sm:w-auto self-start shadow-inner border border-slate-200">
+                        <button onClick={() => setSettingsTab('GENERAL')} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsTab === 'GENERAL' ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-800'}`}> <Layout className="h-4 w-4" /> General </button>
+                        <button onClick={() => setSettingsTab('PROFILE')} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsTab === 'PROFILE' ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-800'}`}> <ImageIcon className="h-4 w-4" /> Profile </button>
+                        <button onClick={() => setSettingsTab('LOCATION')} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsTab === 'LOCATION' ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-800'}`}> <LucideMap className="h-4 w-4" /> Location </button>
+                    </div>
+                    <form onSubmit={handleSaveSettings} className="flex-1 flex flex-col overflow-hidden">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
+                            {settingsTab === 'GENERAL' && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in duration-300">
+                                    <div className="space-y-6">
+                                        <div className="border-b border-slate-100 pb-3 mb-4"><span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Clinical Identity</span></div>
+                                        <Input label="Clinic Name" value={settingsForm.name || ''} onChange={e => setSettingsForm({...settingsForm, name: e.target.value})} required className="h-11 rounded-xl" />
+                                        <Input label="Primary Contact" value={settingsForm.contactPhone || ''} onChange={e => setSettingsForm({...settingsForm, contactPhone: e.target.value})} className="h-11 rounded-xl" />
+                                        <div>
+                                            <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2">Access & Flow Configuration</label>
+                                            <select className="w-full h-11 rounded-xl border border-slate-300 px-4 text-sm font-bold focus:ring-2 focus:ring-primary-500 focus:border-primary-400 outline-none bg-white appearance-none transition-all cursor-pointer" value={settingsForm.operationMode} onChange={e => setSettingsForm({...settingsForm, operationMode: e.target.value as ClinicOperationMode})}>
+                                                <option value={ClinicOperationMode.DIRECT_WALK_IN}>Direct Walk-In Only</option>
+                                                <option value={ClinicOperationMode.ONLINE_WALK_IN}>Online Token Only</option>
+                                                <option value={ClinicOperationMode.BOTH_WALK_IN}>Direct & Online Walk-In</option>
+                                                <option value={ClinicOperationMode.HYBRID_DIRECT_APPT}>Direct & Appointment</option>
+                                                <option value={ClinicOperationMode.HYBRID_FULL}>Hybrid Full Access</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-6 flex flex-col min-h-[300px]">
+                                        <div className="border-b border-slate-100 pb-3 mb-4 flex flex-wrap justify-between items-center gap-2"> <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Operating Shifts</span> <button type="button" onClick={addOperatingSlot} className="text-primary-600 hover:text-primary-700 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 bg-primary-50 px-3 py-1.5 rounded-xl border border-primary-100 shadow-sm transition-all active:scale-95"> <Plus className="h-3.5 w-3.5" /> New Shift </button> </div>
+                                        <div className="bg-slate-50 p-5 rounded-[2rem] border border-slate-200 shadow-inner overflow-y-auto custom-scrollbar flex-1">
+                                            <div className="space-y-5">
+                                                {operatingSlots.map((slot, idx) => (
+                                                    <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm relative group hover:border-primary-300 transition-all">
+                                                        <div className="flex items-center gap-4 sm:gap-6">
+                                                            <div className="flex-1 min-w-0"> <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-2">Opens</span> <input type="time" value={slot.start} onChange={e => updateOperatingSlot(idx, 'start', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-black outline-none focus:ring-2 focus:ring-primary-500/10 focus:border-primary-400" /> </div>
+                                                            <ArrowRight className="h-5 w-5 text-slate-300 mt-6 flex-shrink-0" />
+                                                            <div className="flex-1 min-w-0"> <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-2">Closes</span> <input type="time" value={slot.end} onChange={e => updateOperatingSlot(idx, 'end', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-black outline-none focus:ring-2 focus:ring-primary-500/10 focus:border-primary-400" /> </div>
+                                                            {operatingSlots.length > 1 && ( <button type="button" onClick={() => removeOperatingSlot(idx)} className="mt-6 p-2 text-slate-300 hover:text-red-500 transition-colors bg-slate-50 rounded-lg"> <X className="h-4 w-4" /> </button> )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div className="mt-6 p-4 rounded-2xl bg-white border border-primary-100 shadow-sm">
+                                                <p className="text-[10px] text-primary-600 font-black uppercase tracking-[0.2em] flex items-center gap-3 justify-center text-center"> 
+                                                    <Clock className="h-4 w-4 flex-shrink-0" /> 
+                                                    {operatingSlots.map(s => `${format12h(s.start)} - ${format12h(s.end)}`).join(', ')} 
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                                <p className="text-[10px] text-slate-400 italic">Drag the pin or click on the map to set the exact clinic entrance.</p>
-                            </div>
-                        </div>
-                    )}
-
-                    {activeSettingsTab === 'BRANDING' && (
-                        <div className="space-y-6 animate-in fade-in">
-                            <div className="space-y-2">
-                                <label className="block text-sm font-medium text-slate-700">Clinic Image URL</label>
-                                <div className="flex gap-4 items-center">
-                                    <div className="w-24 h-24 bg-slate-100 rounded-2xl border border-dashed border-slate-300 overflow-hidden flex items-center justify-center shrink-0">
-                                        {settingsForm.imageUrl ? <img src={settingsForm.imageUrl} className="w-full h-full object-cover" /> : <ImageIcon className="h-8 text-slate-300" />}
+                            )}
+                            {settingsTab === 'PROFILE' && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-full animate-in fade-in duration-300">
+                                    <div className="flex flex-col gap-6">
+                                        <div className="border-b border-slate-100 pb-3"><span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Visual Branding</span></div>
+                                        <div className="relative group aspect-[16/8] bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-300 overflow-hidden flex items-center justify-center transition-all hover:border-primary-400 hover:bg-white shadow-inner flex-shrink-0">
+                                            {settingsForm.imageUrl ? (
+                                                <> <img src={settingsForm.imageUrl} className="w-full h-full object-cover" alt="Banner" /> <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-6 backdrop-blur-[2px]"> <button type="button" onClick={() => fileInputRef.current?.click()} className="p-4 bg-white rounded-2xl text-slate-900 shadow-2xl hover:scale-110 active:scale-95 transition-all"><Upload className="h-6 w-6" /></button> <button type="button" onClick={() => setSettingsForm({...settingsForm, imageUrl: ''})} className="p-4 bg-white rounded-2xl text-red-600 shadow-2xl hover:scale-110 active:scale-95 transition-all"><Trash2 className="h-6 w-6" /></button> </div> </>
+                                            ) : ( <button type="button" onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center gap-3 text-slate-400 hover:text-primary-600 transition-colors"> <LucideImage className="h-12 w-12 opacity-20" /> <span className="text-[10px] font-black uppercase tracking-[0.4em]">Upload Clinic Banner</span> </button> )}
+                                            <input type="file" ref={fileInputRef} onChange={handleBannerUpload} className="hidden" accept="image/*" />
+                                        </div>
+                                        <div className="flex-1 flex flex-col">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Clinic Introduction</label>
+                                            <textarea className="flex-1 w-full p-5 bg-slate-50 border border-slate-300 rounded-[2rem] text-sm font-bold text-slate-700 focus:ring-2 focus:ring-primary-500/10 focus:border-primary-400 outline-none resize-none shadow-inner leading-relaxed" placeholder="Write a professional overview for your patients..." value={settingsForm.about || ''} onChange={e => setSettingsForm({...settingsForm, about: e.target.value})} />
+                                        </div>
                                     </div>
-                                    <Input placeholder="https://image-url.com/clinic.jpg" value={settingsForm.imageUrl || ''} onChange={e => setSettingsForm({ ...settingsForm, imageUrl: e.target.value })} />
+                                    <div className="flex flex-col gap-6">
+                                        <div className="border-b border-slate-100 pb-3"><span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Services & Amenities</span></div>
+                                        <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 shadow-inner">
+                                            <div className="flex gap-3"> <input type="text" className="flex-1 rounded-xl border border-slate-300 px-5 h-11 text-sm font-bold focus:ring-2 focus:ring-primary-500 focus:border-primary-400 outline-none min-w-0 shadow-sm" placeholder="Custom Service..." value={newAmenity} onChange={e => setNewAmenity(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddAmenity())} /> <Button type="button" onClick={() => handleAddAmenity()} className="px-6 rounded-xl font-black text-[10px] tracking-[0.15em] flex-shrink-0 shadow-md">ADD</Button> </div>
+                                            <div className="flex flex-wrap gap-2 mt-4"> {COMMON_AMENITIES.slice(0, 8).map(a => ( <button key={a} type="button" onClick={() => handleAddAmenity(a)} disabled={settingsForm.amenities?.includes(a)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border shadow-sm ${settingsForm.amenities?.includes(a) ? 'bg-slate-100 text-slate-300 border-slate-100 cursor-not-allowed opacity-50' : 'bg-white text-slate-600 border-slate-200 hover:border-primary-400 hover:text-primary-600 hover:scale-105'}`}>{a}</button> ))} </div>
+                                        </div>
+                                        <div className="min-h-[150px] flex-1 bg-white rounded-[2.5rem] border border-slate-200 p-6 overflow-y-auto custom-scrollbar shadow-inner">
+                                            <div className="flex flex-wrap gap-3">
+                                                {settingsForm.amenities?.map((a, i) => ( <div key={i} className="inline-flex items-center gap-3 px-4 py-2 rounded-2xl bg-primary-50 text-primary-900 text-[10px] font-black border border-primary-100 shadow-sm animate-in fade-in zoom-in-95"> {a} <button type="button" onClick={() => setSettingsForm({...settingsForm, amenities: settingsForm.amenities?.filter((_, idx) => idx !== i)})} className="text-primary-300 hover:text-red-500 transition-colors p-1"><X className="h-4 w-4" /></button> </div> ))}
+                                                {(!settingsForm.amenities || settingsForm.amenities.length === 0) && <div className="text-center w-full py-16 text-slate-300 italic text-[11px] font-bold uppercase tracking-[0.3em] opacity-40">No amenities defined</div>}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-
-                            <div className="space-y-3">
-                                <label className="block text-sm font-medium text-slate-700">Amenities & Facilities</label>
-                                <div className="flex gap-2">
-                                    <Input placeholder="e.g. WiFi, Parking, Pharmacy" value={newAmenity} onChange={e => setNewAmenity(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddAmenity()} />
-                                    <Button onClick={handleAddAmenity} variant="secondary"><Plus className="h-4" /></Button>
+                            )}
+                            {settingsTab === 'LOCATION' && (
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in duration-300 h-full">
+                                    <div className="col-span-1 flex flex-col gap-6">
+                                        <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden flex-shrink-0 group">
+                                            <Target className="absolute -top-6 -right-6 h-24 w-24 opacity-5 group-hover:scale-110 transition-transform duration-700" />
+                                            <h4 className="text-sm font-black mb-2 flex items-center gap-3"><Sparkles className="h-5 w-5 text-primary-400" /> GPS Precision Pins</h4>
+                                            <p className="text-[10px] text-slate-400 leading-relaxed mb-6 uppercase tracking-wider">Enable live travel tracking for your patients by accurately pinning your entrance.</p>
+                                            <div className="grid grid-cols-1 gap-3 mb-6"> 
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-primary-400 opacity-50">LAT</span>
+                                                    <input type="number" step="0.000001" value={settingsForm.geoLocation?.lat ?? ''} onChange={(e) => handleManualCoordChange('lat', e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-3 py-3 text-xs font-mono font-bold focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400/30 outline-none text-white shadow-inner" placeholder="0.000000" /> 
+                                                </div>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-primary-400 opacity-50">LNG</span>
+                                                    <input type="number" step="0.000001" value={settingsForm.geoLocation?.lng ?? ''} onChange={(e) => handleManualCoordChange('lng', e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-3 py-3 text-xs font-mono font-bold focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400/30 outline-none text-white shadow-inner" placeholder="0.000000" /> 
+                                                </div>
+                                            </div>
+                                            <button type="button" onClick={fetchCurrentGPSLocation} disabled={isFetchingLocation} className={`w-full flex items-center justify-center gap-3 h-12 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-xl ${isFetchingLocation ? 'bg-slate-800 text-slate-500' : 'bg-primary-600 text-white hover:bg-primary-500 hover:scale-[1.02] active:scale-95'}`}> {isFetchingLocation ? <span className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full"></span> : <LocateFixed className="h-4 w-4" />} Sync GPS Location </button>
+                                        </div>
+                                        <div className="p-6 bg-white border border-slate-200 rounded-[2.5rem] space-y-4 shadow-sm flex-shrink-0"> 
+                                            <Input label="Mailing Address" value={settingsForm.address || ''} onChange={e => setSettingsForm({...settingsForm, address: e.target.value})} className="h-11 rounded-xl text-sm" /> 
+                                            <div className="grid grid-cols-2 gap-4"> 
+                                                <Input label="City" value={settingsForm.city || ''} onChange={e => setSettingsForm({...settingsForm, city: e.target.value})} className="h-11 rounded-xl text-sm" /> 
+                                                <Input label="Pincode" value={settingsForm.pincode || ''} onChange={e => setSettingsForm({...settingsForm, pincode: e.target.value})} className="h-11 rounded-xl text-sm" /> 
+                                            </div> 
+                                        </div>
+                                    </div>
+                                    <div className="hidden md:block col-span-2 relative min-h-[400px] rounded-[3rem] border border-slate-200 overflow-hidden shadow-2xl bg-slate-100 ring-4 ring-slate-100">
+                                        <MapContainer center={(!isNaN(settingsForm.geoLocation?.lat ?? NaN)) ? [settingsForm.geoLocation!.lat, settingsForm.geoLocation!.lng] : [13.0850, 80.2100]} zoom={15} className="h-full w-full z-0">
+                                            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                                            <MapManager center={(!isNaN(settingsForm.geoLocation?.lat ?? NaN)) ? [settingsForm.geoLocation!.lat, settingsForm.geoLocation!.lng] : [13.0850, 80.2100]} isTabActive={settingsTab === 'LOCATION'} />
+                                            <MapClickHandler onSelect={handleMapClick} />
+                                            {settingsForm.geoLocation && !isNaN(settingsForm.geoLocation.lat) && !isNaN(settingsForm.geoLocation.lng) && <Marker position={[settingsForm.geoLocation.lat, settingsForm.geoLocation.lng]} />}
+                                        </MapContainer>
+                                        <div className="absolute bottom-6 right-6 z-10 bg-slate-900/95 backdrop-blur-xl text-white px-6 py-3 rounded-2xl border border-white/10 shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom-4"> <div className="w-2.5 h-2.5 bg-primary-500 rounded-full animate-pulse shadow-[0_0_15px_#14b8a6]"></div> <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Live Geosync Engaged</span> </div>
+                                    </div>
                                 </div>
-                                <div className="flex flex-wrap gap-2 pt-1">
-                                    {(settingsForm.amenities || []).map(a => (
-                                        <span key={a} className="bg-primary-50 text-primary-700 px-3 py-1.5 rounded-xl border border-primary-100 text-xs font-bold flex items-center gap-2 group">
-                                            {a}
-                                            <button onClick={() => handleRemoveAmenity(a)} className="text-primary-300 hover:text-primary-600 transition-colors"><X className="h-3 w-3" /></button>
-                                        </span>
-                                    ))}
-                                    {(!settingsForm.amenities || settingsForm.amenities.length === 0) && <p className="text-xs text-slate-400 italic">No amenities added.</p>}
-                                </div>
-                            </div>
+                            )}
                         </div>
-                    )}
-                </div>
-
-                <div className="flex justify-end gap-3 pt-8 mt-6 border-t border-slate-100">
-                    <Button variant="secondary" onClick={() => setIsSettingsModalOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSaveSettings} className="px-10 shadow-lg shadow-primary-200">Save Clinic Config</Button>
-                </div>
-            </Modal>
-
-            <AddPatientModal isOpen={isPatientModalOpen} onClose={() => setIsPatientModalOpen(false)} onAdd={onAddPatient} doctors={doctors} patients={patients} addToast={addToast} />
-            <DoctorFormModal isOpen={isDoctorModalOpen} onClose={() => setIsDoctorModalOpen(false)} mode={doctorModalMode} initialData={editingDoctorData} onSave={(data) => {
-                if (doctorModalMode === 'ADD') onAddDoctor(data.name, data.specialty, data.room, data.schedule, data.mobile, data.regNo, data.masterId, data.avatarUrl, parseFloat(data.fee), parseFloat(data.consultationTime));
-                else if (editingDoctorId) onEditDoctor(editingDoctorId, { ...data, weeklySchedule: data.schedule, consultationFee: parseFloat(data.fee), consultationTime: parseFloat(data.consultationTime) });
-            }} onCheckMasterDoctor={onCheckMasterDoctor} addToast={addToast} />
-            
-            <ConfirmationModal isOpen={!!doctorToDelete} onClose={() => setDoctorToDelete(null)} onConfirm={() => { if(doctorToDelete) { onDeleteDoctor(doctorToDelete.id); setDoctorToDelete(null); } }} title="Remove Doctor?" message={`Remove Dr. ${doctorToDelete?.name}?`} confirmLabel="Remove" variant="danger" />
-            <ConfirmationModal isOpen={!!patientHistoryToDelete} onClose={() => setPatientHistoryToDelete(null)} onConfirm={() => { if(patientHistoryToDelete) { const ids = patients.filter(pat => pat.phone === patientHistoryToDelete.phone).map(pat => pat.id); onDeleteMultiplePatients(ids); setPatientHistoryToDelete(null); addToast(`History for ${patientHistoryToDelete.name} deleted`, 'info'); } }} title="Delete Patient History?" message={`Permanently delete records for ${patientHistoryToDelete?.name}?`} confirmLabel="Delete" variant="danger" />
-            
-            <Modal isOpen={!!editingPatient} onClose={() => setEditingPatient(null)} title="Edit Patient Profile" maxWidth="max-w-md">
-                {editingPatient && (
-                    <form onSubmit={(e) => { e.preventDefault(); onEditPatient(editingPatient.id, { name: editingPatient.name, phone: editingPatient.phone, age: editingPatient.age, gender: editingPatient.gender }); setEditingPatient(null); addToast('Patient updated', 'success'); }} className="space-y-4">
-                        <Input label="Name" value={editingPatient.name} onChange={e => setEditingPatient({...editingPatient, name: e.target.value})} required />
-                        <div className="grid grid-cols-2 gap-4">
-                            <Input label="Phone" value={editingPatient.phone} onChange={e => setEditingPatient({...editingPatient, phone: e.target.value})} required />
-                            <Input label="Age" value={editingPatient.age || ''} onChange={e => setEditingPatient({...editingPatient, age: e.target.value})} />
+                        <div className="pt-6 flex flex-col-reverse xs:flex-row justify-end gap-3 border-t border-slate-100 mt-6 bg-white flex-shrink-0">
+                            <Button variant="secondary" type="button" onClick={() => setIsSettingsModalOpen(false)} className="w-full xs:w-auto px-10 rounded-2xl font-black text-[10px] uppercase tracking-widest h-12 border-slate-200 hover:bg-slate-50">Dismiss</Button>
+                            <Button type="submit" className="w-full xs:w-auto px-16 rounded-2xl shadow-2xl shadow-primary-900/20 font-black uppercase tracking-[0.2em] h-12 bg-primary-600 hover:bg-primary-700 active:scale-95 transition-all transform"> <Save className="h-5 w-5 mr-3" /> Save Changes </Button>
                         </div>
-                        <div className="flex justify-end gap-3 pt-2"><Button variant="secondary" onClick={() => setEditingPatient(null)}>Cancel</Button><Button type="submit">Save Changes</Button></div>
                     </form>
-                )}
-            </Modal>
-
-            <Modal isOpen={!!vitalsPatient} onClose={() => setVitalsPatient(null)} title="Vitals Recording" maxWidth="max-w-2xl">
-                {vitalsPatient && (
-                    <form onSubmit={(e) => { e.preventDefault(); onEditPatient(vitalsPatient.id, { vitals: vitalsPatient.vitals }); setVitalsPatient(null); addToast('Vitals recorded', 'success'); }} className="space-y-6">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                            <Input label="BP" placeholder="120/80" value={vitalsPatient.vitals?.bp || ''} onChange={e => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, bp: e.target.value}})} />
-                            <Input label="Temp (°F)" placeholder="98.6" value={vitalsPatient.vitals?.temp || ''} onChange={e => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, temp: e.target.value}})} />
-                            <Input label="Pulse (bpm)" placeholder="72" value={vitalsPatient.vitals?.pulse || ''} onChange={e => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, pulse: e.target.value}})} />
-                            <Input label="SpO2 (%)" placeholder="98" value={vitalsPatient.vitals?.spo2 || ''} onChange={e => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, spo2: e.target.value}})} />
-                            <Input label="Weight (kg)" placeholder="70" value={vitalsPatient.vitals?.weight || ''} onChange={e => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, weight: e.target.value}})} />
-                            <Input label="Height" placeholder="170cm" value={vitalsPatient.vitals?.height || ''} onChange={e => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, height: e.target.value}})} />
-                            <div className="col-span-2">
-                                <Input label="Blood Sugar (mg/dL)" placeholder="100" value={vitalsPatient.vitals?.sugar || ''} onChange={e => setVitalsPatient({...vitalsPatient, vitals: {...vitalsPatient.vitals, sugar: e.target.value}})} />
-                            </div>
-                        </div>
-                        <div className="flex justify-end gap-3 pt-4 border-t"><Button variant="secondary" onClick={() => setVitalsPatient(null)}>Cancel</Button><Button type="submit">Update Vitals</Button></div>
-                    </form>
-                )}
-            </Modal>
-
-            <Modal isOpen={!!historyPatient} onClose={() => setHistoryPatient(null)} title="Visit History" maxWidth="max-w-2xl">
-                {historyPatient && (
-                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-                        {patients.filter(p => p.phone === historyPatient.phone).sort((a,b) => b.timeAdded - a.timeAdded).map(visit => (
-                            <div key={visit.id} className="p-4 border rounded-xl bg-slate-50 border-slate-200">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">{new Date(visit.timeAdded).toLocaleDateString()}</div>
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}`}>{visit.status}</span>
-                                </div>
-                                <div className="font-bold text-slate-800 text-sm mb-1">Dr. {doctors.find(d => d.id === visit.doctorId)?.name}</div>
-                                {visit.notes && <p className="text-xs text-slate-600 italic bg-white p-2 rounded-lg border border-slate-100 mt-2">"{visit.notes}"</p>}
-                            </div>
-                        ))}
-                    </div>
-                )}
+                </div>
             </Modal>
         </div>
     );

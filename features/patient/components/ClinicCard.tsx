@@ -1,7 +1,7 @@
 import React from 'react';
 import { Clinic, Doctor, ClinicOperationMode } from '../../../types';
 import { Button } from '../../../components/Button';
-import { Building2, MapPin, Clock, Calendar, Zap, Navigation, ShieldCheck, Star, CheckCircle2, Info, Footprints, Shuffle, LayoutGrid } from 'lucide-react';
+import { Building2, MapPin, Clock, Calendar, Zap, Navigation, ShieldCheck, Star, CheckCircle2, Info } from 'lucide-react';
 
 function IndianRupeeIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -40,34 +40,6 @@ interface ClinicCardProps {
   onViewDoctor: (doctor: Doctor) => void;
 }
 
-const MODE_CONFIG = {
-    [ClinicOperationMode.DIRECT_WALK_IN]: {
-        label: 'Walk-In Only',
-        styles: 'bg-orange-500 text-white border-orange-600',
-        icon: Footprints
-    },
-    [ClinicOperationMode.ONLINE_WALK_IN]: {
-        label: 'Online Token',
-        styles: 'bg-blue-600 text-white border-blue-700',
-        icon: Zap
-    },
-    [ClinicOperationMode.BOTH_WALK_IN]: {
-        label: 'Token & Walk-In',
-        styles: 'bg-emerald-600 text-white border-emerald-700',
-        icon: Shuffle
-    },
-    [ClinicOperationMode.HYBRID_DIRECT_APPT]: {
-        label: 'Walk-In & Appt',
-        styles: 'bg-indigo-600 text-white border-indigo-700',
-        icon: Calendar
-    },
-    [ClinicOperationMode.HYBRID_FULL]: {
-        label: 'Token & Appt',
-        styles: 'bg-primary-600 text-white border-primary-700',
-        icon: LayoutGrid
-    }
-};
-
 export const ClinicCard: React.FC<ClinicCardProps> = ({
   clinic, waitInfo, feeRange, distLabel, gmapsLink, relevantDoctors, isHighlighted, isOpen, cardRef, onSelect, onBook, onQueue, onViewDoctor
 }) => {
@@ -81,9 +53,6 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
     return (total / clinic.doctors.length).toFixed(1);
   }, [clinic.doctors]);
 
-  const mode = MODE_CONFIG[clinic.operationMode] || { label: 'General', styles: 'bg-slate-500 text-white', icon: Info };
-  const ModeIcon = mode.icon;
-
   return (
     <div 
         id={`clinic-card-${clinic.id}`}
@@ -95,16 +64,17 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
             {/* Status Badges Row - Clean and distinct */}
             <div className="flex flex-wrap gap-1 mb-3">
                 {isOpen ? (
-                    <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm">Open Now</span>
+                    <span className="bg-emerald-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm">Open</span>
                 ) : (
-                    <span className="bg-slate-100 text-slate-500 border border-slate-200 text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm">Closed</span>
+                    <span className="bg-slate-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm">Closed</span>
                 )}
                 
-                {/* EXPLICIT OPERATION MODE DISPLAY */}
-                <span className={`inline-flex items-center gap-1 ${mode.styles} text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm border`}>
-                    <ModeIcon className="h-2 w-2" />
-                    {mode.label}
-                </span>
+                {isDirectWalkInOnly && (
+                    <span className="bg-orange-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm">At Clinic Only</span>
+                )}
+                {canQueueOnline && (
+                    <span className="bg-primary-600 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm">Live Token</span>
+                )}
                 
                 {clinic.subscriptionStatus === 'ACTIVE' && (
                     <span className="bg-primary-50 text-primary-600 border border-primary-100 text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm flex items-center gap-0.5 ml-auto">
@@ -127,6 +97,11 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                         <h3 className="font-extrabold text-slate-900 text-sm md:text-base leading-tight group-hover:text-primary-600 transition-colors pr-1 break-words flex-1">
                             {clinic.name}
                         </h3>
+                    </div>
+
+                    {/* Clinic Street Address Integrated Here */}
+                    <div className="text-[10px] text-slate-400 font-bold truncate leading-tight mb-1">
+                        {clinic.address}
                     </div>
 
                     <div className="flex items-center justify-between gap-1 text-[10px] text-slate-500 font-medium mb-1">

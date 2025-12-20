@@ -3,7 +3,7 @@ import { Doctor, DaySchedule } from '../../../types';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { Modal } from '../../../components/Modal';
-import { Plus, Trash2, Link as LinkIcon, Clock, Calendar, Zap, Lock, Languages, GraduationCap, FileText, X, Sun, CloudSun, Moon, MoonStar } from 'lucide-react';
+import { Plus, Trash2, Link as LinkIcon, Clock, Calendar, Zap, Lock, Languages, GraduationCap, FileText, X, Sun, CloudSun, Moon, MoonStar, Copy, CheckCircle2 } from 'lucide-react';
 
 interface DoctorFormModalProps {
   isOpen: boolean;
@@ -166,6 +166,21 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
       setForm({ ...form, schedule: newSchedule });
   };
 
+  const copyToAllDays = (fromIdx: number) => {
+    const source = form.schedule[fromIdx];
+    const newSchedule = form.schedule.map((day, idx) => {
+        if (idx === fromIdx) return day;
+        return {
+            ...day,
+            isOff: source.isOff,
+            // Deep copy slots to avoid reference sharing
+            slots: (source.slots || []).map(s => ({ ...s }))
+        };
+    });
+    setForm({ ...form, schedule: newSchedule });
+    addToast(`Schedule copied from ${source.day} to all days`, 'success');
+  };
+
   const updateSlot = (dayIndex: number, slotIndex: number, field: string, value: string | boolean) => { 
       const newSchedule = [...form.schedule]; 
       const cur = newSchedule[dayIndex]; 
@@ -294,6 +309,17 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
                                         {daySchedule.isOff ? 'Off' : 'Working'}
                                     </button>
                                     <h4 className="font-bold text-slate-800">{daySchedule.day}</h4>
+                                    
+                                    {!daySchedule.isOff && (
+                                        <button 
+                                            type="button" 
+                                            onClick={() => copyToAllDays(idx)}
+                                            className="ml-2 flex items-center gap-1 text-[9px] font-black uppercase text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 transition-all hover:scale-105 active:scale-95"
+                                            title="Apply this day's schedule to the rest of the week"
+                                        >
+                                            <Copy className="h-3 w-3" /> Copy to All
+                                        </button>
+                                    )}
                                 </div>
                                 
                                 {!daySchedule.isOff && (
