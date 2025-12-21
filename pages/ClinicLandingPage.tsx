@@ -37,16 +37,9 @@ export const ClinicLandingPage: React.FC<ClinicLandingPageProps> = ({ onStartFre
             </div>
 
             <div className="flex items-center gap-4">
-                {/* Mode Toggle */}
-               <div className="bg-slate-100 p-1 rounded-full flex items-center">
-                  <button onClick={onBackToPatient} className="px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold text-slate-500 hover:text-slate-900 transition-all">
-                      Patient
-                  </button>
-                  <button className="px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold bg-white text-slate-900 shadow-sm transition-all cursor-default">
-                      Clinic
-                  </button>
-               </div>
-
+                <Button onClick={onBackToPatient} variant="ghost" className="text-sm font-bold text-slate-500 hover:text-slate-900">
+                    For Patients
+                </Button>
                <div className="flex items-center gap-2 hidden sm:flex">
                    <button onClick={onLogin} className="text-sm font-bold text-slate-600 hover:text-primary-600 px-3">Login</button>
                    <Button onClick={onStartFreeTrial} className="rounded-full px-5 bg-slate-900 hover:bg-slate-800 text-white shadow-lg text-sm">Start Free Trial</Button>

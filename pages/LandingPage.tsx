@@ -1,13 +1,27 @@
 
-import React, { useState, useEffect } from 'react';
-import { Clinic } from '../types';
-import { 
-  Search, MapPin, Calendar, Clock, 
-  Stethoscope, Smile, Heart, 
-  Activity, Monitor, ArrowRight, Bell, Star,
-  Users, LayoutGrid,
-  AlertTriangle, Zap, Smartphone, CheckCircle2, ShieldCheck,
-  Building2, ChevronDown, QrCode, Home, Check, CheckSquare
+import React, { useEffect, useMemo, useState } from 'react';
+import { Clinic, ClinicType } from '../types';
+import {
+  Search,
+  MapPin,
+  Stethoscope,
+  Building2,
+  Calendar,
+  QrCode,
+  Bell,
+  Star,
+  ChevronRight,
+  Users,
+  Activity,
+  CheckCircle2,
+  ShieldCheck,
+  Clock,
+  Home,
+  PhoneCall,
+  FlaskConical,
+  Pill,
+  UserSearch,
+  ArrowRight,
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Logo } from '../components/Logo';
@@ -15,313 +29,499 @@ import { Logo } from '../components/Logo';
 interface LandingPageProps {
   onPatientEnter: (mode?: 'DOCTOR' | 'CLINIC', query?: string, location?: string) => void;
   onClinicMarketing: () => void;
+  // Fix: Added missing onStaffLogin prop to satisfy App.tsx requirements
   onStaffLogin: () => void;
   onSimulateQRScan: (clinicId: string) => void;
   clinics: Clinic[];
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onPatientEnter, onClinicMarketing, onStaffLogin, clinics }) => {
-  // --- LIVE QUEUE SIMULATION STATE ---
+// Map a subset of specialities to friendly labels and icons
+const SPECIALTIES: { label: string; query: string; icon: React.ElementType }[] = [
+  { label: 'General Physician', query: 'General Physician', icon: Stethoscope },
+  { label: 'Pediatrician', query: 'Pediatric', icon: Users },
+  { label: 'Dentist', query: 'Dental', icon: ShieldCheck },
+  { label: 'Orthopedic', query: 'Ortho', icon: Activity },
+  { label: 'Dermatologist', query: 'Dermatology', icon: ShieldCheck },
+  { label: 'Cardiologist', query: 'Cardiology', icon: HeartIconFallback },
+];
+
+function HeartIconFallback(props: any) {
+  return <svg viewBox="0 0 24 24" width={20} height={20} {...props}><path fill="currentColor" d="M12 21s-6.716-4.58-9.536-7.4C-0.356 11.2-.289 6.57 3.05 4.05 5.26 2.3 8.28 3.02 10 5c1.72-1.98 4.74-2.7 6.95-.95 3.34 2.52 3.41 7.15.586 9.55C18.716 16.42 12 21 12 21z"/></svg>;
+}
+
+export const LandingPage: React.FC<LandingPageProps> = ({
+  onPatientEnter,
+  onClinicMarketing,
+  // Fix: Destructured onStaffLogin prop
+  onStaffLogin,
+  onSimulateQRScan,
+  clinics,
+}) => {
+  // Search state
+  const [searchMode, setSearchMode] = useState<'DOCTOR' | 'CLINIC'>('DOCTOR');
+  const [query, setQuery] = useState('');
+  const [location, setLocation] = useState('');
+
+  // Subtle live-queue simulation to communicate the concept
   const [mockQueue, setMockQueue] = useState(8);
   const [mockEta, setMockEta] = useState(22);
-  
-  // --- SEARCH WIDGET STATE ---
-  const [searchMode, setSearchMode] = useState<'DOCTOR' | 'CLINIC'>('CLINIC');
-  const [location, setLocation] = useState('');
-  const [query, setQuery] = useState(''); // New query state if needed for refined search
-
-  // Simulate a living system
   useEffect(() => {
-    const interval = setInterval(() => {
-        setMockQueue(prev => prev > 5 ? prev - 1 : 8);
-        setMockEta(prev => prev > 15 ? prev - 3 : 22);
+    const t = setInterval(() => {
+      setMockQueue((p) => (p > 5 ? p - 1 : 9));
+      setMockEta((p) => (p > 15 ? p - 3 : 24));
     }, 4000);
-    return () => clearInterval(interval);
+    return () => clearInterval(t);
   }, []);
+
+  const topClinics = useMemo(() => {
+    // Heuristic: sort by avg doctor rating and limit
+    return [...clinics]
+      .map((c) => {
+        const ratings = c.doctors.map((d) => d.rating || 0);
+        const avg = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 4.5;
+        return { clinic: c, avg };
+      })
+      .sort((a, b) => b.avg - a.avg)
+      .slice(0, 6)
+      .map((x) => x.clinic);
+  }, [clinics]);
+
+  const handleSearch = () => {
+    onPatientEnter(searchMode, query || undefined, location || undefined);
+  };
+
+  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') handleSearch();
+  };
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-teal-100 selection:text-teal-900 overflow-x-hidden">
-      
-      {/* --- NAVBAR --- */}
+      {/* NAVBAR */}
       <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
+          <div className="flex justify-between items-center h-16 sm:h-20">
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-              <Logo className="h-9 w-9" />
+              <Logo className="h-8 w-8" />
               <div className="flex flex-col">
-                  <span className="text-xl font-bold tracking-tight text-slate-900 leading-none">Smart<span className="text-teal-600">QFlow</span></span>
-                  <span className="text-[10px] text-slate-500 font-medium tracking-widest uppercase">Live Queue System</span>
+                <span className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-none">
+                  Smart<span className="text-teal-600">QFlow</span>
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium tracking-widest uppercase">Book & Track Visits</span>
               </div>
             </div>
 
             <div className="hidden md:flex items-center gap-6">
-                <button onClick={() => { const el = document.getElementById('features'); el?.scrollIntoView({ behavior: 'smooth' }); }} className="text-sm font-medium text-slate-600 hover:text-teal-600 transition-colors">Why Us</button>
-                <button onClick={() => { const el = document.getElementById('how-it-works'); el?.scrollIntoView({ behavior: 'smooth' }); }} className="text-sm font-medium text-slate-600 hover:text-teal-600 transition-colors">How it Works</button>
+              <button className="text-sm font-medium text-slate-600 hover:text-teal-600 transition-colors" onClick={() => document.getElementById('specialities')?.scrollIntoView({ behavior: 'smooth' })}>
+                Specialities
+              </button>
+              <button className="text-sm font-medium text-slate-600 hover:text-teal-600 transition-colors" onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>
+                How it works
+              </button>
             </div>
 
-            <div className="flex items-center gap-4">
-               {/* Mode Toggle */}
-               <div className="bg-slate-100 p-1 rounded-full flex items-center">
-                  <button className="px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold bg-white text-slate-900 shadow-sm transition-all cursor-default">
-                      Patient
-                  </button>
-                  <button onClick={onClinicMarketing} className="px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold text-slate-500 hover:text-slate-900 transition-all">
-                      Clinic
-                  </button>
-               </div>
-
-               <Button onClick={() => onPatientEnter('CLINIC')} className="rounded-full px-5 bg-teal-600 hover:bg-teal-700 shadow-lg shadow-teal-100 font-bold hidden sm:flex text-sm">Find Care</Button>
+            <div className="flex items-center gap-2 sm:gap-4">
+              <Button onClick={onClinicMarketing} variant="ghost" className="text-sm font-bold text-slate-500 hover:text-slate-900">
+                Clinic Owners
+              </Button>
+              <Button onClick={() => onPatientEnter('DOCTOR')} className="rounded-full px-5 bg-teal-600 hover:bg-teal-700 shadow-lg shadow-teal-100 font-bold hidden sm:flex text-sm">
+                Book Appointment
+              </Button>
             </div>
           </div>
         </div>
       </nav>
 
-      {/* --- HERO SECTION --- */}
-      <section className="relative pt-12 pb-20 lg:pt-20 lg:pb-28 overflow-hidden bg-slate-50">
-          {/* Abstract Grid Background */}
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-teal-100/50 rounded-full blur-3xl opacity-50 pointer-events-none -mr-20 -mt-20"></div>
+      {/* HERO SECTION */}
+      <section className="relative pt-10 pb-12 sm:pt-16 sm:pb-20 bg-slate-50 overflow-hidden">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-teal-100/50 rounded-full blur-3xl opacity-50 pointer-events-none -mr-20 -mt-20"></div>
 
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-              <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-                  
-                  {/* Left: Headline & Copy */}
-                  <div className="text-center lg:text-left">
-                      <div className="inline-flex items-center gap-2 bg-white border border-teal-100 rounded-full px-4 py-1.5 mb-8 shadow-sm">
-                          <span className="flex h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse"></span>
-                          <span className="text-sm font-bold text-slate-700 tracking-wide uppercase">Live Queue Updates</span>
-                      </div>
-                      
-                      <h1 className="text-5xl lg:text-7xl font-black text-slate-900 tracking-tight mb-6 leading-[1.1]">
-                          Find Clinics. <br/>
-                          Skip Waiting Rooms. <br/>
-                          <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-blue-600">Feel in Control.</span>
-                      </h1>
-                      
-                      <p className="text-xl text-slate-600 mb-10 leading-relaxed max-w-lg mx-auto lg:mx-0">
-                          SmartQFlow helps you book appointments or join the live queue at your nearby clinic — so you wait at home, not in a crowded waiting hall.
-                      </p>
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 items-center gap-10">
+            {/* Left copy */}
+            <div className="text-center lg:text-left">
+              <div className="inline-flex items-center gap-2 bg-white border border-teal-100 rounded-full px-4 py-1.5 mb-6 shadow-sm">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse"></span>
+                <span className="text-xs sm:text-sm font-bold text-slate-700 tracking-wide uppercase">Live queue & instant booking</span>
+              </div>
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] mb-4">
+                Skip the Clinic Waiting Room
+              </h1>
+              <p className="text-base sm:text-lg text-slate-600 mb-10 max-w-xl mx-auto lg:mx-0 leading-relaxed">
+                Experience a hassle-free visit. Join live queues remotely and arrive just in time for your consultation.
+              </p>
 
-                      {/* --- SEARCH WIDGET --- */}
-                      <div className="bg-white p-2 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200 max-w-lg mx-auto lg:mx-0 transform transition-all hover:scale-[1.01]">
-                          {/* Tabs */}
-                          <div className="flex p-1 bg-slate-100 rounded-2xl mb-2">
-                              <button 
-                                  onClick={() => setSearchMode('CLINIC')}
-                                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${searchMode === 'CLINIC' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                              >
-                                  <Building2 className="h-4 w-4" /> Clinics
-                              </button>
-                              <button 
-                                  onClick={() => setSearchMode('DOCTOR')}
-                                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${searchMode === 'DOCTOR' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                              >
-                                  <Stethoscope className="h-4 w-4" /> Doctors
-                              </button>
-                          </div>
+              {/* NEW HERO ACTION CARDS */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto lg:mx-0 mb-8">
+                <HeroActionCard 
+                  title="Find Clinics"
+                  description="Search hospitals nearby and see live wait times before you leave."
+                  icon={Building2}
+                  onClick={() => onPatientEnter('CLINIC')}
+                  variant="primary"
+                />
+                <HeroActionCard 
+                  title="Find Doctors"
+                  description="Book specialists based on experience, rating, and fees."
+                  icon={UserSearch}
+                  onClick={() => onPatientEnter('DOCTOR')}
+                  variant="secondary"
+                />
+              </div>
 
-                          {/* Inputs Row */}
-                          <div className="flex flex-col sm:flex-row gap-2">
-                              <div className="relative flex-1 group">
-                                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
-                                  <input 
-                                      type="text" 
-                                      value={location}
-                                      onChange={(e) => setLocation(e.target.value)}
-                                      onKeyDown={(e) => e.key === 'Enter' && onPatientEnter(searchMode, undefined, location)}
-                                      className="w-full pl-12 pr-4 h-14 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 outline-none font-medium text-slate-900 transition-all placeholder:text-slate-400"
-                                      placeholder="City (e.g. Chennai)"
-                                  />
-                              </div>
-                              <Button 
-                                  onClick={() => onPatientEnter(searchMode, undefined, location)} 
-                                  className="h-14 rounded-2xl px-8 bg-teal-600 hover:bg-teal-700 shadow-lg shadow-teal-200 text-lg font-bold flex items-center justify-center gap-2 shrink-0"
-                              >
-                                  <Search className="h-5 w-5" /> Search
-                              </Button>
-                          </div>
-                      </div>
+              {/* Social Proof */}
+              <p className="text-xs sm:text-sm text-slate-400 font-bold uppercase tracking-wider">
+                Trusted by 500+ Clinics • 4.9/5 Patient Rating
+              </p>
+            </div>
 
-                      <p className="mt-6 text-sm text-slate-400 font-medium">Used by 500+ Clinics • 4.9/5 Patient Rating</p>
+            {/* Right: explainer card showing the queue concept */}
+            <div className="hidden md:block relative max-w-md w-full mx-auto lg:ml-auto">
+              <div className="absolute -top-6 -right-6 bg-white p-3 rounded-xl shadow-lg border border-slate-100 flex items-center gap-3 animate-bounce-slow z-20">
+                <div className="bg-red-100 p-2 rounded-lg">
+                  <Bell className="h-5 w-5 text-red-500" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-900">Dr. delayed by 10m</p>
+                  <p className="text-[10px] text-slate-500">Auto-update sent</p>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden relative z-10 transform rotate-1 hover:rotate-0 transition-transform duration-500">
+                <div className="bg-slate-900 p-6 text-white">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="font-bold text-lg">City Clinic</h3>
+                      <p className="text-slate-400 text-sm">Gen. Physician • Dr. Meera</p>
+                    </div>
+                    <div className="bg-green-500/20 border border-green-500/50 px-2 py-1 rounded text-xs font-bold text-green-400 flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div> LIVE
+                    </div>
                   </div>
-
-                  {/* Right: Live Queue Simulator Widget */}
-                  <div className="relative mx-auto lg:ml-auto w-full max-w-md mt-10 lg:mt-0 hidden md:block">
-                      {/* Floating Elements */}
-                      <div className="absolute -top-6 -right-6 bg-white p-3 rounded-xl shadow-lg border border-slate-100 flex items-center gap-3 animate-bounce-slow z-20">
-                           <div className="bg-red-100 p-2 rounded-lg"><Bell className="h-5 w-5 text-red-500" /></div>
-                           <div><p className="text-xs font-bold text-slate-900">Dr. delayed by 10m</p><p className="text-[10px] text-slate-500">Auto-update sent</p></div>
-                      </div>
-
-                      {/* Main Card */}
-                      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden relative z-10 transform rotate-1 hover:rotate-0 transition-transform duration-500">
-                          {/* Card Header */}
-                          <div className="bg-slate-900 p-6 text-white">
-                              <div className="flex justify-between items-start mb-4">
-                                  <div>
-                                      <h3 className="font-bold text-lg">Apollo Clinic</h3>
-                                      <p className="text-slate-400 text-sm">Gen. Physician • Dr. Ravi</p>
-                                  </div>
-                                  <div className="bg-green-500/20 border border-green-500/50 px-2 py-1 rounded text-xs font-bold text-green-400 flex items-center gap-1">
-                                      <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div> LIVE
-                                  </div>
-                              </div>
-                              <div className="flex gap-4">
-                                  <div className="bg-white/10 rounded-lg p-3 flex-1 text-center">
-                                      <div className="text-2xl font-black">{mockQueue}</div>
-                                      <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Waiting</div>
-                                  </div>
-                                  <div className="bg-white/10 rounded-lg p-3 flex-1 text-center">
-                                      <div className="text-2xl font-black">{mockEta}m</div>
-                                      <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Est. Wait</div>
-                                  </div>
-                              </div>
-                          </div>
-
-                          {/* Card Body */}
-                          <div className="p-6 space-y-4">
-                              <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-100 rounded-xl">
-                                  <Clock className="h-5 w-5 text-red-500 flex-shrink-0" />
-                                  <p className="text-xs text-red-700 font-medium">Doctor is running slightly late. Queue times adjusted automatically.</p>
-                              </div>
-                              
-                              <div className="space-y-3">
-                                  <button onClick={() => onPatientEnter('CLINIC')} className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold shadow-lg shadow-teal-100 transition-all flex items-center justify-center gap-2">
-                                      <Zap className="h-4 w-4 fill-current" /> Join Walk-in Queue Now
-                                  </button>
-                                  <button onClick={() => onPatientEnter('DOCTOR')} className="w-full py-3 bg-white border-2 border-slate-200 hover:border-slate-800 text-slate-700 rounded-xl font-bold transition-all flex items-center justify-center gap-2">
-                                      <Calendar className="h-4 w-4" /> Book Appointment Slot
-                                  </button>
-                              </div>
-                              
-                              <div className="text-center">
-                                  <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Powered by SmartQFlow</p>
-                              </div>
-                          </div>
-                      </div>
+                  <div className="flex gap-4">
+                    <div className="bg-white/10 rounded-lg p-3 flex-1 text-center">
+                      <div className="text-2xl font-black">{mockQueue}</div>
+                      <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Waiting</div>
+                    </div>
+                    <div className="bg-white/10 rounded-lg p-3 flex-1 text-center">
+                      <div className="text-2xl font-black">{mockEta}m</div>
+                      <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Est. Wait</div>
+                    </div>
                   </div>
+                </div>
 
-              </div>
-          </div>
-      </section>
-
-      {/* --- WHY PATIENTS LOVE US (7 Points) --- */}
-      <section id="features" className="py-24 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="text-center mb-16">
-                  <h2 className="text-3xl font-bold text-slate-900">Why Patients Love SmartQFlow</h2>
-                  <p className="text-slate-500 mt-4 max-w-2xl mx-auto">We've reimagined the clinic experience to put you back in control of your time.</p>
-              </div>
-
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {[
-                      { title: "Zero Waiting Room Stress", desc: "Join the queue from home or your office. Arrive only when your turn is near.", icon: Home, color: "text-blue-600", bg: "bg-blue-50" },
-                      { title: "Live Queue Tracking", desc: "See exactly how many patients are ahead of you, your live ETA, and doctor’s status.", icon: Activity, color: "text-emerald-600", bg: "bg-emerald-50" },
-                      { title: "Book Appointments Instantly", desc: "Find clinics nearby, check availability, and book a confirmed time slot in seconds.", icon: Calendar, color: "text-purple-600", bg: "bg-purple-50" },
-                      { title: "Smart Walk-in Tokens", desc: "Doctor available now? Join the walk-in queue instantly without physically standing in line.", icon: Zap, color: "text-amber-600", bg: "bg-amber-50" },
-                      { title: "Family Profiles", desc: "Add kids, parents, or spouse. Book and manage all family health visits under one account.", icon: Users, color: "text-indigo-600", bg: "bg-indigo-50" },
-                      { title: "Alerts & Notifications", desc: "If the queue moves fast or doctor is delayed, you get instant updates.", icon: Bell, color: "text-rose-600", bg: "bg-rose-50" },
-                      { title: "QR Check-in", desc: "Simply scan the clinic QR to mark your arrival — no manual registration.", icon: QrCode, color: "text-slate-600", bg: "bg-slate-100" },
-                  ].map((feat, i) => (
-                      <div key={i} className="p-6 rounded-2xl border border-slate-100 bg-white hover:shadow-xl hover:border-slate-200 transition-all group">
-                          <div className={`w-12 h-12 ${feat.bg} rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-                              <feat.icon className={`h-6 w-6 ${feat.color}`} />
-                          </div>
-                          <h3 className="font-bold text-lg text-slate-900 mb-2">{feat.title}</h3>
-                          <p className="text-sm text-slate-500 leading-relaxed">{feat.desc}</p>
-                      </div>
-                  ))}
-              </div>
-          </div>
-      </section>
-
-      {/* --- HOW IT WORKS (4 Steps) --- */}
-      <section id="how-it-works" className="py-24 bg-slate-50 border-y border-slate-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-              <h2 className="text-3xl font-bold text-slate-900 mb-16">How It Works</h2>
-              
-              <div className="grid md:grid-cols-4 gap-8 relative">
-                  {/* Connector Line (Desktop) */}
-                  <div className="hidden md:block absolute top-12 left-1/12 right-1/12 h-0.5 bg-slate-200 -z-10"></div>
-
-                  {[
-                      { step: "01", title: "Search Clinics & Doctors", desc: "Find care by clinic name, doctor name, city, or symptoms.", icon: Search },
-                      { step: "02", title: "Choose Appointment or Walk-in", desc: "Select a time slot OR join the live queue.", icon: CheckCircle2 },
-                      { step: "03", title: "Track Your Turn Live", desc: "See your position, ETA, and doctor status (On Time / Break).", icon: Activity },
-                      { step: "04", title: "Get Called When It's Your Turn", desc: "Arrive exactly on time. No waiting room frustration.", icon: MapPin },
-                  ].map((s, i) => (
-                      <div key={i} className="flex flex-col items-center relative bg-slate-50 p-4">
-                          <div className="w-24 h-24 bg-white rounded-full shadow-lg border-4 border-slate-100 flex items-center justify-center mb-6 z-10 text-teal-600 font-black text-2xl relative">
-                              <s.icon className="h-10 w-10 z-10" />
-                              <div className="absolute -top-2 -right-2 w-8 h-8 bg-slate-900 text-white rounded-full text-xs flex items-center justify-center border-4 border-slate-50">{s.step}</div>
-                          </div>
-                          <h3 className="text-xl font-bold text-slate-900 mb-2">{s.title}</h3>
-                          <p className="text-slate-500 text-sm max-w-[200px] mx-auto">{s.desc}</p>
-                      </div>
-                  ))}
-              </div>
-          </div>
-      </section>
-
-      {/* --- COMPARISON TABLE --- */}
-      <section className="py-24 bg-white">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="text-center mb-12">
-                  <h2 className="text-3xl font-bold text-slate-900">Why SmartQFlow Is Better</h2>
-                  <p className="text-slate-500 mt-2">Compare the experience.</p>
-              </div>
-
-              <div className="rounded-3xl shadow-xl border border-slate-200 overflow-hidden bg-white">
-                  <div className="grid grid-cols-2 text-center bg-slate-50 border-b border-slate-200">
-                      <div className="py-6 font-bold text-slate-500 text-lg">Traditional Visit</div>
-                      <div className="py-6 font-bold text-teal-700 bg-teal-50/50 text-lg">SmartQFlow Visit</div>
+                <div className="p-6 space-y-4">
+                  <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                    <Clock className="h-5 w-5 text-amber-600" />
+                    <p className="text-xs text-amber-700 font-medium">Queue adjusts automatically if the doctor is late.</p>
                   </div>
-                  
-                  {[
-                      ["Sit for 1–3 hours in noisy waiting rooms", "Wait at home comfortably"],
-                      ["No idea how long it will take", "Live ETA & position"],
-                      ["Reception confusion", "Automated queue"],
-                      ["Miss your appointment if late", "Smart late-arrival logic"],
-                      ["No digital history", "Centralized online visit records"],
-                  ].map((row, i) => (
-                      <div key={i} className="grid grid-cols-2 border-b border-slate-100 last:border-none hover:bg-slate-50/50 transition-colors">
-                          <div className="p-6 text-slate-600 flex items-center justify-center text-center border-r border-slate-100">{row[0]}</div>
-                          <div className="p-6 font-bold text-slate-900 bg-teal-50/10 flex items-center justify-center text-center relative overflow-hidden">
-                              <div className="absolute inset-0 bg-teal-50 opacity-0 hover:opacity-100 transition-opacity"></div>
-                              <span className="relative z-10 flex items-center gap-2"><Check className="h-4 w-4 text-teal-600" /> {row[1]}</span>
-                          </div>
-                      </div>
-                  ))}
+                  <div className="space-y-3">
+                    <button onClick={() => onPatientEnter('CLINIC')} className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold shadow-lg shadow-teal-100 transition-all flex items-center justify-center gap-2">
+                      <QrCode className="h-4 w-4" /> Join Walk-in Queue
+                    </button>
+                    <button onClick={() => onPatientEnter('DOCTOR')} className="w-full py-3 bg-white border-2 border-slate-200 hover:border-slate-800 text-slate-700 rounded-xl font-bold transition-all flex items-center justify-center gap-2">
+                      <Calendar className="h-4 w-4" /> Book Appointment
+                    </button>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Powered by SmartQFlow</p>
+                  </div>
+                </div>
               </div>
+            </div>
           </div>
+        </div>
       </section>
 
-      {/* --- CTA --- */}
-      <section className="py-24 bg-slate-900 text-white relative overflow-hidden">
-           <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-teal-500/20 rounded-full blur-3xl pointer-events-none -mt-32 -mr-32"></div>
-           <div className="max-w-4xl mx-auto px-4 text-center relative z-10">
-               <h2 className="text-4xl md:text-5xl font-black mb-6 tracking-tight">Ready for stress-free clinic visits?</h2>
-               <p className="text-slate-400 text-lg mb-10 leading-relaxed max-w-2xl mx-auto">
-                   Search clinics now and skip waiting rooms forever.
-               </p>
-               <div className="flex flex-col sm:flex-row justify-center gap-4">
-                   <Button size="lg" className="bg-white hover:bg-slate-100 text-slate-900 h-14 px-10 rounded-full text-lg font-bold shadow-2xl" onClick={() => onPatientEnter('CLINIC', undefined, location)}>
-                       Find Clinics Near Me
-                   </Button>
-                   <Button size="lg" variant="outline" className="border-slate-700 text-white hover:bg-slate-800 h-14 px-10 rounded-full text-lg" onClick={() => onPatientEnter('DOCTOR', undefined, location)}>
-                       Find Doctors
-                   </Button>
-               </div>
-               
-               <div className="mt-16 pt-8 border-t border-slate-800/50">
-                   <p className="text-sm text-slate-500 mb-4">Are you a Doctor or Clinic Owner?</p>
-                   <button onClick={onClinicMarketing} className="text-teal-400 hover:text-teal-300 font-bold hover:underline">
-                       See how SmartQFlow can transform your practice &rarr;
-                   </button>
-               </div>
-           </div>
+      {/* QUICK ACTIONS */}
+      <section className="py-10 sm:py-12 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+            <QuickAction
+              title="Live Queue Status"
+              subtitle="Track your place in line"
+              icon={Activity}
+              onClick={() => onPatientEnter('CLINIC', undefined, location)}
+              color="bg-emerald-50 text-emerald-700"
+            />
+            <QuickAction
+              title="Smart Notifications"
+              subtitle="Get alerts when your turn is near"
+              icon={Bell}
+              onClick={() => onPatientEnter('DOCTOR', undefined, location)}
+              color="bg-blue-50 text-blue-700"
+            />
+            <QuickAction
+              title="Doctor Profiles"
+              subtitle="Detailed info about doctors"
+              icon={Users}
+              onClick={() => onPatientEnter('DOCTOR', undefined, location)}
+              color="bg-purple-50 text-purple-700"
+            />
+            <QuickAction
+              title="Clinic Locations"
+              subtitle="Find clinics on a map"
+              icon={MapPin}
+              onClick={() => onPatientEnter('CLINIC', undefined, location)}
+              color="bg-orange-50 text-orange-700"
+            />
+          </div>
+        </div>
       </section>
 
+      {/* TOP SPECIALITIES */}
+      <section id="specialities" className="py-16 bg-slate-50 border-y border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-end justify-between mb-6">
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-bold">Top specialities</h2>
+              <p className="text-slate-500 text-sm">Popular choices for quick booking</p>
+            </div>
+            <Button variant="ghost" className="text-slate-600 hover:text-slate-900 text-sm" onClick={() => onPatientEnter('DOCTOR', undefined, location)}>
+              See all <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4">
+            {SPECIALTIES.map((s) => (
+              <button
+                key={s.label}
+                onClick={() => onPatientEnter('DOCTOR', s.query, location)}
+                className="group p-4 rounded-2xl bg-white border border-slate-200 hover:border-slate-300 hover:shadow-lg transition-all text-left"
+              >
+                <div className="w-10 h-10 rounded-xl bg-slate-100 text-teal-700 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <s.icon className="h-5 w-5" />
+                </div>
+                <div className="font-bold text-slate-900 text-sm">{s.label}</div>
+                <div className="text-[11px] text-slate-500">Book now</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* POPULAR CLINICS NEARBY */}
+      <section className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-end justify-between mb-6">
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-bold">Popular clinics</h2>
+              <p className="text-slate-500 text-sm">Highly rated clinics around you</p>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {topClinics.map((c) => (
+              <ClinicCard key={c.id} clinic={c} onClick={() => onPatientEnter('CLINIC', c.name, c.city)} />
+            ))}
+            {topClinics.length === 0 && (
+              <div className="col-span-full text-slate-500 text-sm">No clinics found in your data. Try importing mock data.</div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* HOW IT WORKS */}
+      <section id="how-it-works" className="py-20 bg-slate-50 border-y border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl font-bold mb-4">A Stress-Free Clinic Visit in 4 Easy Steps</h2>
+          <p className="text-slate-600 mb-12 max-w-2xl mx-auto">
+            With SmartQFlow, you're always in control. Here's how simple it is to save time and avoid waiting rooms.
+          </p>
+
+          <div className="grid md:grid-cols-4 gap-8">
+            {[
+              { title: 'Find Your Doctor', desc: 'Search for doctors or clinics in your city and choose the one that’s right for you.', icon: Search },
+              { title: 'Book Your Spot', desc: 'Choose to book a specific time slot or join a live walk-in queue from the comfort of your home.', icon: CheckCircle2 },
+              { title: 'Track Your Turn', desc: 'Get real-time updates on your queue position and estimated wait time on your phone.', icon: Activity },
+              { title: 'Arrive Just in Time', desc: 'Head to the clinic when it’s almost your turn. No more long, uncertain waits!', icon: MapPin },
+            ].map((s, idx) => (
+              <div key={idx} className="flex flex-col items-center">
+                <div className="w-20 h-20 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center mb-4">
+                  <s.icon className="h-8 w-8 text-teal-700" />
+                </div>
+                <div className="font-bold text-slate-900 mb-1">{s.title}</div>
+                <div className="text-slate-600 text-sm max-w-[220px]">{s.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* SAFETY + BENEFITS STRIP */}
+      <section className="py-12 bg-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="grid sm:grid-cols-3 gap-4">
+      <Benefit icon={ShieldCheck} title="Verified Professionals" subtitle="Every doctor and clinic is verified by our team." />
+      <Benefit icon={Clock} title="See Live Wait Times" subtitle="Know the queue length before you even leave home." />
+      <Benefit icon={Home} title="Wait From Anywhere" subtitle="Join the queue remotely and relax until it's your turn." />
+      </div>
+      </div>
+      </section>
+      
+      {/* CTA FOOTER */}
+      <section className="py-16 bg-slate-900 text-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-teal-500/20 rounded-full blur-3xl pointer-events-none -mt-32 -mr-32"></div>
+        <div className="max-w-4xl mx-auto px-4 text-center relative z-10">
+          <h2 className="text-3xl sm:text-4xl font-black mb-4 tracking-tight">Your time matters. Take control of it.</h2>
+          <p className="text-slate-300 mb-8">Ready to get started? Find a doctor or clinic near you and experience a new, stress-free way to manage your health.</p>
+          <div className="flex flex-col sm:flex-row justify-center gap-3">
+            <Button size="lg" className="bg-white hover:bg-slate-100 text-slate-900 h-12 sm:h-14 px-8 sm:px-10 rounded-full text-base sm:text-lg font-bold" onClick={() => onPatientEnter('CLINIC', undefined, location)}>
+              Find clinics near me
+            </Button>
+            <Button size="lg" variant="outline" className="border-slate-700 text-white hover:bg-slate-800 h-12 sm:h-14 px-8 sm:px-10 rounded-full text-base sm:text-lg" onClick={() => onPatientEnter('DOCTOR', undefined, location)}>
+              Find doctors
+            </Button>
+          </div>
+          <div className="mt-10 text-sm text-slate-400">
+            Are you a clinic owner?{' '}
+            <button onClick={onClinicMarketing} className="text-teal-300 hover:text-teal-200 font-semibold underline">
+              See how SmartQFlow helps you →
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };
+
+function HeroActionCard({
+  title,
+  description,
+  icon: Icon,
+  onClick,
+  variant,
+}: {
+  title: string;
+  description: string;
+  icon: React.ElementType;
+  onClick: () => void;
+  variant: 'primary' | 'secondary';
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`group relative bg-white border border-slate-200 p-5 rounded-[2rem] text-left transition-all duration-300 hover:shadow-2xl hover:shadow-teal-900/5 hover:-translate-y-1 overflow-hidden`}
+    >
+      <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full blur-2xl opacity-10 transition-opacity group-hover:opacity-20 ${variant === 'primary' ? 'bg-teal-600' : 'bg-indigo-600'}`}></div>
+      
+      <div className="flex items-center gap-4 mb-3">
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 duration-300 ${variant === 'primary' ? 'bg-teal-50 text-teal-600' : 'bg-indigo-50 text-indigo-600'}`}>
+          <Icon className="h-6 w-6" />
+        </div>
+        <h3 className="font-black text-slate-900 text-lg leading-tight uppercase tracking-tight">{title}</h3>
+      </div>
+      
+      <p className="text-xs text-slate-500 font-bold leading-relaxed mb-4">
+        {description}
+      </p>
+      
+      <div className={`inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${variant === 'primary' ? 'text-teal-600' : 'text-indigo-600'}`}>
+        Go to search <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" />
+      </div>
+    </button>
+  );
+}
+
+function QuickAction({
+  title,
+  subtitle,
+  icon: Icon,
+  onClick,
+  color,
+}: {
+  title: string;
+  subtitle: string;
+  icon: React.ElementType;
+  onClick: () => void;
+  color: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`group rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 text-left hover:shadow-lg transition-all hover:-translate-y-0.5`}
+    >
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${color}`}>
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="font-bold text-slate-900 text-sm">{title}</div>
+      <div className="text-xs text-slate-500">{subtitle}</div>
+    </button>
+  );
+}
+
+function Benefit({ icon: Icon, title, subtitle }: { icon: React.ElementType; title: string; subtitle: string }) {
+  return (
+    <div className="p-4 rounded-2xl border border-slate-200 bg-white flex items-center gap-3">
+      <div className="w-10 h-10 rounded-xl bg-slate-100 text-teal-700 flex items-center justify-center">
+        <Icon className="h-5 w-5" />
+      </div>
+      <div>
+        <div className="font-bold text-slate-900 text-sm">{title}</div>
+        <div className="text-xs text-slate-500">{subtitle}</div>
+      </div>
+    </div>
+  );
+}
+
+function ClinicCard({ clinic, onClick }: { clinic: Clinic; onClick: () => void }) {
+  const avgRating = useMemo(() => {
+    const rs = clinic.doctors.map((d) => d.rating || 0);
+    return rs.length ? Math.round((rs.reduce((a, b) => a + b, 0) / rs.length) * 10) / 10 : 4.5;
+  }, [clinic]);
+
+  const typeLabel = clinic.type ? formatClinicType(clinic.type) : 'Clinic';
+
+  return (
+    <button onClick={onClick} className="text-left bg-white border border-slate-200 rounded-2xl p-4 hover:shadow-lg hover:border-slate-300 transition-all">
+      <div className="flex items-start gap-3">
+        {clinic.imageUrl ? (
+          <img src={clinic.imageUrl} alt={clinic.name} className="h-12 w-12 rounded-xl object-cover" />
+        ) : (
+          <div className="h-12 w-12 flex items-center justify-center rounded-xl bg-slate-100 text-slate-700 font-bold">{clinic.name.substring(0, 2).toUpperCase()}</div>
+        )}
+        <div className="flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="font-bold text-slate-900">{clinic.name}</div>
+            <div className="flex items-center gap-1 text-amber-600 text-sm">
+              <Star className="h-4 w-4 fill-amber-400" /> {avgRating}
+            </div>
+          </div>
+          <div className="text-xs text-slate-500 mt-0.5">{typeLabel} • {clinic.city}</div>
+          {clinic.operatingHours && (
+            <div className="text-[11px] text-slate-500 mt-1">Hours: {clinic.operatingHours}</div>
+          )}
+          <div className="mt-3 flex items-center justify-between">
+            <div className="text-xs text-slate-500">{clinic.doctors.length} doctors • Live queue supported</div>
+            <div className="text-xs font-semibold text-teal-700 flex items-center gap-1">
+              Book now <ChevronRight className="h-3.5 w-3.5" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function formatClinicType(type: ClinicType) {
+  switch (type) {
+    case ClinicType.GENERAL:
+      return 'General Clinic';
+    case ClinicType.PEDIATRIC:
+      return 'Pediatric Clinic';
+    case ClinicType.GYNECOLOGY:
+      return 'Gynecology Clinic';
+    case ClinicType.ORTHOPEDIC:
+      return 'Orthopedic Clinic';
+    case ClinicType.DENTAL:
+      return 'Dental Clinic';
+    case ClinicType.CARDIOLOGY:
+      return 'Cardiology Clinic';
+    case ClinicType.DERMATOLOGY:
+      return 'Dermatology Clinic';
+    case ClinicType.EMERGENCY:
+      return 'Emergency Care';
+    default:
+      return 'Clinic';
+  }
+}

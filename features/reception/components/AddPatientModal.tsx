@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Doctor, Patient, PatientStatus } from '../../../types';
 import { Button } from '../../../components/Button';
@@ -11,7 +12,8 @@ interface AddPatientModalProps {
   onClose: () => void;
   mode?: 'ADD' | 'EDIT';
   initialData?: Patient | null;
-  onAdd: (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: any, symptoms?: string, nextOfKin?: {name: string, phone: string}, address?: string, city?: string, country?: string, location?: {lat: number, lng: number}) => void;
+  // Fix: Strictly typed gender in onAdd prop
+  onAdd: (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: 'Male' | 'Female' | 'Other', symptoms?: string, nextOfKin?: {name: string, phone: string}, address?: string, city?: string, country?: string, location?: {lat: number, lng: number}) => void;
   onEdit?: (id: string, updates: Partial<Patient>) => void;
   doctors: Doctor[];
   patients: Patient[];
@@ -60,7 +62,8 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
   const [phone, setPhone] = useState('');
   const [doctorId, setDoctorId] = useState('');
   const [age, setAge] = useState('');
-  const [gender, setGender] = useState('Male');
+  // Fix: Strictly typing the gender state to match Patient type requirements
+  const [gender, setGender] = useState<'Male' | 'Female' | 'Other'>('Male');
   const [type, setType] = useState<'WALK_IN' | 'APPOINTMENT'>('WALK_IN');
   const [symptoms, setSymptoms] = useState('');
   const [existingProfiles, setExistingProfiles] = useState<Patient[]>([]);
@@ -136,7 +139,7 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
       return schedule.slots.filter(s => s.active !== false).map(shift => {
           const [sh, sm] = shift.startTime.split(':').map(Number);
           const [eh, em] = shift.endTime.split(':').map(Number);
-          const startTotal = sh * 60 + sm;
+          const startTotal = startH * 60 + startM;
           let endTotal = eh * 60 + em;
           if (endTotal <= startTotal) endTotal += 1440;
 
@@ -362,7 +365,7 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
                                 <Input label="Age" value={age} onChange={e => setAge(e.target.value)} />
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
-                                    <select className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm focus:ring-primary-500" value={gender} onChange={e => setGender(e.target.value)}>
+                                    <select className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm focus:ring-primary-500" value={gender} onChange={e => setGender(e.target.value as 'Male' | 'Female' | 'Other')}>
                                         <option>Male</option><option>Female</option><option>Other</option>
                                     </select>
                                 </div>

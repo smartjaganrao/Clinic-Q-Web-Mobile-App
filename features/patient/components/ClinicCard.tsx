@@ -2,6 +2,7 @@ import React from 'react';
 import { Clinic, Doctor, ClinicOperationMode } from '../../../types';
 import { Button } from '../../../components/Button';
 import { Building2, MapPin, Clock, Calendar, Zap, Navigation, ShieldCheck, Star, CheckCircle2, Info } from 'lucide-react';
+import { Tooltip } from '../../../components/Tooltip';
 
 function IndianRupeeIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -70,10 +71,20 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                 )}
                 
                 {isDirectWalkInOnly && (
-                    <span className="bg-orange-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm">At Clinic Only</span>
+                    <Tooltip text="Walk-in registration only">
+                        <span className="bg-orange-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1">
+                            At Clinic Only
+                            <Info className="h-2.5 w-2.5" />
+                        </span>
+                    </Tooltip>
                 )}
                 {canQueueOnline && (
-                    <span className="bg-primary-600 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm">Live Token</span>
+                    <Tooltip text="Join queue online">
+                        <span className="bg-primary-600 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1">
+                            Live Token
+                            <Info className="h-2.5 w-2.5" />
+                        </span>
+                    </Tooltip>
                 )}
                 
                 {clinic.subscriptionStatus === 'ACTIVE' && (
@@ -159,40 +170,50 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
         </div>
         
         {/* Actions Footer - High Visibility Button Styles */}
-        <div className="bg-slate-50 p-2.5 flex items-center gap-2 mt-auto border-t border-slate-100">
+        <div className="bg-slate-50 p-2.5 flex flex-col sm:flex-row items-stretch gap-2 mt-auto border-t border-slate-100">
             {canBook && (
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onBook(); }} 
-                    className="flex-1 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-[11px] font-black h-10 px-2 rounded-xl shadow-sm transition-all flex items-center justify-center gap-1 active:scale-95"
-                >
-                    <Calendar className="h-3.5 w-3.5" />
-                    {canQueueOnline ? 'Book Slot' : 'Appt'}
-                </button>
+                <div className="flex-1">
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onBook(); }} 
+                        className="w-full bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-[11px] font-black h-10 px-2 rounded-xl shadow-sm transition-all flex items-center justify-center gap-1 active:scale-95"
+                    >
+                        <Calendar className="h-3.5 w-3.5" />
+                        {canQueueOnline ? 'Book Slot' : 'Appt'}
+                    </button>
+                </div>
             )}
             
             {canQueueOnline ? (
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onQueue(); }} 
-                    className="flex-[1.2] bg-primary-600 text-white hover:bg-primary-700 text-[11px] font-black h-10 px-2 rounded-xl shadow-md shadow-primary-100 transition-all flex items-center justify-center gap-1 active:scale-95"
-                >
-                    <Zap className="h-3.5 w-3.5 fill-current" />
-                    Get Token
-                </button>
+                <div className="flex-[1.2] flex flex-col">
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onQueue(); }} 
+                        className={`w-full bg-primary-600 text-white hover:bg-primary-700 text-[11px] font-black h-10 px-2 rounded-xl shadow-md shadow-primary-100 transition-all flex items-center justify-center gap-1 active:scale-95 ${isHighlighted ? 'ring-2 ring-primary-500 ring-offset-1' : ''}`}
+                    >
+                        <Zap className="h-3.5 w-3.5 fill-current" />
+                        Get Token
+                    </button>
+                    <p className="text-[9px] text-center text-slate-500 mt-1 px-1">Join from home. Activate when you arrive.</p>
+                </div>
             ) : isDirectWalkInOnly ? (
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onSelect(); }} 
-                    className="flex-1 bg-orange-600 text-white hover:bg-orange-700 text-[11px] font-black h-10 px-2 rounded-xl shadow-md transition-all flex items-center justify-center gap-1 active:scale-95"
-                >
-                    <MapPin className="h-3.5 w-3.5" />
-                    Visit Clinic
-                </button>
+                <div className="flex-[1.2] flex flex-col">
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onSelect(); }} 
+                        className={`w-full bg-orange-600 text-white hover:bg-orange-700 text-[11px] font-black h-10 px-2 rounded-xl shadow-md transition-all flex items-center justify-center gap-1 active:scale-95 ${!isHighlighted ? 'ring-2 ring-orange-500 ring-offset-1' : ''}`}
+                    >
+                        <MapPin className="h-3.5 w-3.5" />
+                        Visit Clinic
+                    </button>
+                    <p className="text-[9px] text-center text-slate-500 mt-1 px-1">Walk in and join queue at reception.</p>
+                </div>
             ) : (
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onSelect(); }} 
-                    className="flex-1 bg-slate-900 text-white hover:bg-slate-800 text-[11px] font-black h-10 px-2 rounded-xl shadow-md transition-all flex items-center justify-center gap-1 active:scale-95"
-                >
-                    View Details
-                </button>
+                <div className="flex-1">
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onSelect(); }} 
+                        className="w-full bg-slate-900 text-white hover:bg-slate-800 text-[11px] font-black h-10 px-2 rounded-xl shadow-md transition-all flex items-center justify-center gap-1 active:scale-95"
+                    >
+                        View Details
+                    </button>
+                </div>
             )}
         </div>
     </div>

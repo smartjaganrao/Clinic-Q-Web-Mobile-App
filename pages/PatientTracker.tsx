@@ -13,13 +13,14 @@ import { ClinicCard } from '../features/patient/components/ClinicCard';
 import { DoctorSearchCard } from '../features/patient/components/DoctorSearchCard';
 import { MapPanel } from '../features/patient/components/MapPanel';
 import { DoctorProfileModal } from '../features/patient/components/DoctorProfileModal';
+import { Filter } from '../features/patient/components/Filter';
 import { Modal } from '../components/Modal';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import L from 'leaflet';
 
 import { 
     ArrowLeft, MapPin, Search, Calendar, QrCode, 
-    AlertTriangle, Star, Clock, Filter, Stethoscope, Smile, 
+    AlertTriangle, Star, Clock, Stethoscope, Smile, 
     Baby, Heart, Activity, Sparkles, LayoutGrid, Eye, Ear, 
     Navigation, Timer, Building2, 
     Info, Lock, History, X, AlertCircle, Sun, Moon,
@@ -268,7 +269,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'NEAR' | 'WAIT' | 'FEE'>('NEAR');
   
-  // NEW FILTERS
   const [selectedDoctorGender, setSelectedDoctorGender] = useState<string>('ALL');
   const [selectedMinExperience, setSelectedMinExperience] = useState<number>(0);
 
@@ -952,7 +952,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       if (visitType === 'WALK_IN') {
           // Find chosen shift stats
           const shiftStats = walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
-          const estimatedWaitMins = shiftStats?.totalWaitMins || 0;
+          // Fix: Accessing totalWaitMins from inside stats property
+          const estimatedWaitMins = shiftStats?.stats.totalWaitMins || 0;
           
           if (travelMins > estimatedWaitMins + 15) { 
               setShowLateWarningModal(true); 
@@ -1096,7 +1097,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       return schedule.slots.filter(s => s.active !== false).map(shift => {
           const [sh, sm] = shift.startTime.split(':').map(Number);
           const [eh, em] = shift.endTime.split(':').map(Number);
-          const startTotal = sh * 60 + sm;
+          const startTotal = startH * 60 + startM;
           let endTotal = eh * 60 + em;
           if (endTotal <= startTotal) endTotal += 1440;
 
@@ -1407,221 +1408,153 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         </aside>
         
         <main className="flex-1 flex flex-col h-screen overflow-hidden relative bg-slate-50 w-full">
+            <div className="bg-slate-900 text-white text-center py-2 text-sm font-bold shadow-lg z-[100] relative flex items-center justify-center gap-2">
+                <span className="text-slate-300 text-xs uppercase font-black tracking-widest">How it works:</span>
+                <span className="font-extrabold tracking-wider text-amber-300">Join</span> 
+                <ChevronRight className="inline h-4 w-4 text-slate-500" /> 
+                <span className="font-extrabold tracking-wider text-amber-300">Track</span> 
+                <ChevronRight className="inline h-4 w-4 text-slate-500" /> 
+                <span className="font-extrabold tracking-wider text-amber-300">Arrive</span>
+            </div>
             {/* PERSISTENT HEADER WITH GLOBAL SEARCH AND INTEGRATED FILTERS */}
-            <header className="bg-white border-b border-slate-200 px-4 md:px-8 py-3 sticky top-0 z-[60] flex flex-col shadow-sm shrink-0">
-                <div className="flex items-center gap-4">
-                    <div className="md:hidden flex items-center">
-                        {bookingView !== 'LIST' && activeTab === 'BOOK' ? (
-                            <Button variant="ghost" size="sm" onClick={handleUIBack} className="p-1 mr-1 hover:bg-slate-100 rounded-full">
-                                <ArrowLeft className="h-5 w-5" />
-                            </Button>
-                        ) : null}
-                        <Logo className="h-8 w-8" />
-                    </div>
-                    
-                    {/* Global Search Input */}
-                    <div ref={searchBarContainerRef} className="flex-1 max-w-2xl relative">
-                        <div className="relative group">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
-                            <input 
-                                type="text" 
-                                className="w-full pl-12 pr-4 h-12 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary-500/10 focus:border-primary-400 outline-none transition-all font-bold text-sm shadow-inner"
-                                placeholder="Find doctors, clinics or symptoms..."
-                                value={searchQuery}
-                                onFocus={() => setShowSuggestions(true)}
-                                onChange={(e) => {
-                                    setSearchQuery(e.target.value);
-                                    setShowSuggestions(true);
-                                }}
-                            />
-                            {searchQuery && (
+
+<header className="bg-white border-b border-slate-200 px-4 md:px-8 py-4 sticky top-0 z-[60] shadow-sm shrink-0">
+    <div className="flex items-center justify-between gap-2">
+        {/* Global Search Input */}
+        <div ref={searchBarContainerRef} className="flex-1 max-w-2xl relative">
+            <div className="relative group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
+                <input 
+                    type="text" 
+                    className="w-full pl-12 pr-4 h-12 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary-500/10 focus:border-primary-400 outline-none transition-all font-bold text-sm shadow-inner"
+                    placeholder="Search doctor, clinic or problem (fever, cough)"
+                    value={searchQuery}
+                    onFocus={() => setShowSuggestions(true)}
+                    onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setShowSuggestions(true);
+                    }}
+                />
+                {searchQuery && (
+                    <button 
+                        onClick={() => { setSearchQuery(''); setShowSuggestions(false); }}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-300 hover:text-slate-500"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                )}
+            </div>
+
+            {showSuggestions && globalSuggestions && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in slide-in-from-top-2 z-[70] max-h-[60vh] overflow-y-auto">
+                    {globalSuggestions.clinics.length > 0 && (
+                        <div className="p-2 border-b border-slate-50">
+                            <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <Building2 className="h-3 w-3" /> Partner Clinics
+                            </div>
+                            {globalSuggestions.clinics.map(c => (
                                 <button 
-                                    onClick={() => { setSearchQuery(''); setShowSuggestions(false); }}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-300 hover:text-slate-500"
+                                    key={c.id} 
+                                    onClick={() => handleSuggestionClick('CLINIC', c)}
+                                    className="w-full text-left p-3 rounded-xl hover:bg-primary-50 group flex items-center gap-4 transition-colors"
                                 >
-                                    <X className="h-4 w-4" />
+                                    <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+                                        {c.imageUrl ? <img src={c.imageUrl} className="w-full h-full object-cover rounded-lg" /> : <Building2 className="h-5 w-5 text-slate-400" />}
+                                    </div>
+                                    <div className="flex-1 min-w-0"><div className="font-bold text-slate-900 text-sm truncate">{c.name}</div><div className="text-xs text-slate-500 truncate">{c.address}</div></div><ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary-400" />
                                 </button>
-                            )}
-                        </div>
-
-                        {showSuggestions && globalSuggestions && (
-                            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in slide-in-from-top-2 z-[70] max-h-[60vh] overflow-y-auto">
-                                {globalSuggestions.clinics.length > 0 && (
-                                    <div className="p-2 border-b border-slate-50">
-                                        <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                            <Building2 className="h-3 w-3" /> Partner Clinics
-                                        </div>
-                                        {globalSuggestions.clinics.map(c => (
-                                            <button 
-                                                key={c.id} 
-                                                onClick={() => handleSuggestionClick('CLINIC', c)}
-                                                className="w-full text-left p-3 rounded-xl hover:bg-primary-50 group flex items-center gap-4 transition-colors"
-                                            >
-                                                <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
-                                                    {c.imageUrl ? <img src={c.imageUrl} className="w-full h-full object-cover rounded-lg" /> : <Building2 className="h-5 w-5 text-slate-400" />}
-                                                </div>
-                                                <div className="flex-1 min-w-0"><div className="font-bold text-slate-900 text-sm truncate">{c.name}</div><div className="text-xs text-slate-500 truncate">{c.address}</div></div><ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary-400" />
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                                {globalSuggestions.doctors.length > 0 && (
-                                    <div className="p-2">
-                                        <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Stethoscope className="h-3 w-3" /> Specialists</div>
-                                        {globalSuggestions.doctors.map(({ clinic, doctor }) => (
-                                            <button key={`${clinic.id}-${doctor.id}`} onClick={() => handleSuggestionClick('DOCTOR', { clinic, doctor })} className="w-full text-left p-3 rounded-xl hover:bg-primary-50 group flex items-center gap-4 transition-colors"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center shrink-0"><img src={doctor.avatarUrl} className="w-full h-full object-cover rounded-full" /></div><div className="flex-1 min-w-0"><div className="font-bold text-slate-900 text-sm truncate">{doctor.name}</div><div className="text-xs text-primary-600 font-bold">{doctor.specialty} <span className="text-slate-300 mx-1">•</span> <span className="text-slate-500 font-normal">{clinic.name}</span></div></div><ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary-400" /></button>
-                                        ))}
-                                    </div>
-                                )}
-                                {globalSuggestions.clinics.length === 0 && globalSuggestions.doctors.length === 0 && (
-                                    <div className="p-8 text-center text-slate-400"><Search className="h-8 w-8 mx-auto mb-2 opacity-20" /><p className="text-sm font-bold">No exact matches found</p><p className="text-xs">Try searching for symptoms like 'fever'</p></div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Integrated Filters (Moved next to input on desktop) */}
-                    {bookingView === 'LIST' && (
-                        <div className="hidden lg:flex items-center gap-3">
-                            <button 
-                                onClick={handleLocateMe}
-                                className={`h-11 px-4 rounded-2xl border-2 flex items-center gap-2 transition-all shrink-0 max-w-[220px] group ${pinnedAddress ? 'bg-primary-50 border-primary-200 text-primary-700 shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-primary-400'}`}
-                                title="Fetch Current Location"
-                            >
-                                {isLocating ? (
-                                    <span className="animate-spin h-4 w-4 border-2 border-primary-500 border-t-transparent rounded-full shrink-0"></span>
-                                ) : (
-                                    <LocateFixed className={`h-4 w-4 shrink-0 transition-transform group-hover:scale-110 ${pinnedAddress ? 'text-primary-600' : 'text-slate-400'}`} />
-                                )}
-                                <span className="text-[10px] font-black uppercase tracking-widest truncate">
-                                    {pinnedAddress || (isLocating ? 'Locating...' : 'Fetch Location')}
-                                </span>
-                            </button>
-
-                            <div className="flex bg-slate-100 p-1 rounded-2xl shrink-0 h-11 items-center border border-slate-200/50">
-                                <button onClick={() => setSearchMode('CLINIC')} className={`h-9 px-4 rounded-xl transition-all flex items-center gap-2 ${searchMode === 'CLINIC' ? 'bg-white text-primary-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}><Building2 className="h-4 w-4" /><span className="text-[10px] font-black uppercase tracking-widest">Clinics</span></button>
-                                <button onClick={() => setSearchMode('DOCTOR')} className={`h-9 px-4 rounded-xl transition-all flex items-center gap-2 ${searchMode === 'DOCTOR' ? 'bg-white text-primary-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}><Stethoscope className="h-4 w-4" /><span className="text-[10px] font-black uppercase tracking-widest">Doctors</span></button>
-                            </div>
-
-                            <div className="relative min-w-[140px] h-11 bg-slate-50 rounded-2xl border-2 border-slate-200 px-3 flex items-center gap-2 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-colors">
-                                <ArrowUpDown className="h-3.5 w-3.5" />
-                                <select className="absolute inset-0 opacity-0 cursor-pointer" value={sortBy} onChange={(e) => { const val = e.target.value as any; setSortBy(val); if(val === 'NEAR' && !userLocation) handleLocateMe(); }}>
-                                    <option value="NEAR">Nearest</option><option value="WAIT">Shortest Wait</option><option value="FEE">Lowest Fee</option>
-                                </select>
-                                <span className="truncate">{sortBy === 'NEAR' ? 'Nearest' : sortBy === 'WAIT' ? 'Shortest Wait' : 'Lowest Fee'}</span>
-                                <ChevronDown className="h-3 w-3 ml-auto opacity-40" />
-                            </div>
-
-                            <div className="relative min-w-[140px] h-11 bg-slate-50 rounded-2xl border-2 border-slate-200 px-3 flex items-center gap-2 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-colors">
-                                <Building2 className="h-3.5 w-3.5" />
-                                <select className="absolute inset-0 opacity-0 cursor-pointer" value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)}>
-                                    {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
-                                </select>
-                                <span className="truncate">{selectedCity}</span>
-                                <ChevronDown className="h-3 w-3 ml-auto opacity-40" />
-                            </div>
-
-                            <button onClick={() => setShowMap(!showMap)} className={`w-11 h-11 flex items-center justify-center rounded-2xl border-2 transition-all shrink-0 ${showMap ? 'bg-primary-600 border-primary-600 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-500 hover:border-primary-400'}`}>
-                                {showMap ? <ListIcon className="h-5 w-5" /> : <MapIcon className="h-5 w-5" />}
-                            </button>
+                            ))}
                         </div>
                     )}
-
-                    <div className="hidden lg:flex items-center gap-3">
-                        <Button variant="outline" onClick={() => setShowQRScanner(true)} className="rounded-2xl h-11 border-slate-200 px-5 text-primary-700 font-black text-[10px] uppercase tracking-widest">
-                            <QrCode className="h-4 w-4 mr-2" /> QR Check-in
-                        </Button>
-                        {!isGuest && (
-                            <button onClick={onBack} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-colors px-3">Logout</button>
-                        )}
-                        {isGuest && (
-                            <Button onClick={() => onLoginClick?.()} className="rounded-2xl h-11 px-6 shadow-lg text-[10px] font-black uppercase tracking-widest">Sign In</Button>
-                        )}
-                    </div>
-                    <button onClick={() => setShowQRScanner(true)} className="lg:hidden bg-slate-900 text-white p-2.5 rounded-xl shadow-lg active:scale-95"><QrCode className="h-5 w-5" /></button>
+                    {globalSuggestions.doctors.length > 0 && (
+                        <div className="p-2">
+                            <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Stethoscope className="h-3 w-3" /> Specialists</div>
+                            {globalSuggestions.doctors.map(({ clinic, doctor }) => (
+                                <button key={`${clinic.id}-${doctor.id}`} onClick={() => handleSuggestionClick('DOCTOR', { clinic, doctor })} className="w-full text-left p-3 rounded-xl hover:bg-primary-50 group flex items-center gap-4 transition-colors"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center shrink-0"><img src={doctor.avatarUrl} className="w-full h-full object-cover rounded-full" /></div><div className="flex-1 min-w-0"><div className="font-bold text-slate-900 text-sm truncate">{doctor.name}</div><div className="text-xs text-primary-600 font-bold">{doctor.specialty} <span className="text-slate-300 mx-1">•</span> <span className="text-slate-500 font-normal">{clinic.name}</span></div></div><ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary-400" /></button>
+                            ))}
+                        </div>
+                    )}
+                    {globalSuggestions.clinics.length === 0 && globalSuggestions.doctors.length === 0 && (
+                        <div className="p-8 text-center text-slate-400"><Search className="h-8 w-8 mx-auto mb-2 opacity-20" /><p className="text-sm font-bold">No exact matches found</p><p className="text-xs">Try searching for symptoms like 'fever'</p></div>
+                    )}
                 </div>
+            )}
+        </div>
 
-                {/* Mobile Secondary Row - Shown only on small screens for filters */}
-                {bookingView === 'LIST' && (
-                    <div className="lg:hidden flex flex-wrap gap-2 mt-4">
-                        <button 
-                            onClick={handleLocateMe}
-                            className={`h-9 px-3 rounded-xl border flex items-center gap-1.5 transition-all text-[9px] font-black uppercase ${pinnedAddress ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-200 text-slate-500'}`}
-                        >
-                            {isLocating ? <span className="animate-spin h-3 w-3 border border-primary-500 border-t-transparent rounded-full"></span> : <LocateFixed className="h-3 w-3" />}
-                            <span className="truncate max-w-[100px]">{pinnedAddress || (isLocating ? '...' : 'Locate')}</span>
-                        </button>
-                        <div className="flex bg-slate-100 p-1 rounded-2xl h-9 items-center">
-                            <button onClick={() => setSearchMode('CLINIC')} className={`h-7 px-3 rounded-lg text-[9px] font-black uppercase ${searchMode === 'CLINIC' ? 'bg-white text-primary-700' : 'text-slate-500'}`}>Clinics</button>
-                            <button onClick={() => setSearchMode('DOCTOR')} className={`h-7 px-3 rounded-lg text-[9px] font-black uppercase ${searchMode === 'DOCTOR' ? 'bg-white text-primary-700' : 'text-slate-500'}`}>Doctors</button>
-                        </div>
-                        <div className="relative h-9 bg-white border border-slate-200 rounded-xl px-3 flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase">
-                            <select className="absolute inset-0 opacity-0" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}><option value="NEAR">Near</option><option value="WAIT">Wait</option><option value="FEE">Fee</option></select>
-                            <span>{sortBy === 'NEAR' ? 'Near' : sortBy === 'WAIT' ? 'Wait' : 'Fee'}</span>
-                            <ChevronDown className="h-2.5 w-2.5 opacity-50" />
-                        </div>
-                        <button onClick={() => setShowMap(!showMap)} className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-all ${showMap ? 'bg-primary-600 text-white' : 'bg-white text-slate-400'}`}>
-                            {showMap ? <ListIcon className="h-4 w-4" /> : <MapIcon className="h-4 w-4" />}
-                        </button>
-                    </div>
+        {/* Clinics/Doctors Toggle, Location, QR, Sign In */}
+        <div className="flex items-center gap-2">
+            {/* Toggle */}
+            <div className="flex bg-slate-100 p-1 rounded-2xl shrink-0 h-11 items-center border border-slate-200/50">
+                <button onClick={() => setSearchMode('CLINIC')} className={`h-9 px-4 rounded-xl transition-all flex items-center gap-2 ${searchMode === 'CLINIC' ? 'bg-white text-primary-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}><Building2 className="h-4 w-4" /><span className="text-[10px] font-black uppercase tracking-widest">Clinics</span></button>
+                <button onClick={() => setSearchMode('DOCTOR')} className={`h-9 px-4 rounded-xl transition-all flex items-center gap-2 ${searchMode === 'DOCTOR' ? 'bg-white text-primary-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}><Stethoscope className="h-4 w-4" /><span className="text-[10px] font-black uppercase tracking-widest">Doctors</span></button>
+            </div>
+
+            {/* Location */}
+            <div className="relative flex items-center gap-2 text-sm text-slate-600 cursor-pointer hover:text-primary-600 transition-colors">
+                <MapPin className="h-4 w-4" />
+                <select 
+                    className="absolute inset-0 opacity-0 cursor-pointer" 
+                    value={selectedCity} 
+                    onChange={(e) => setSelectedCity(e.target.value)}
+                >
+                    {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
+                </select>
+                <span className="font-medium">{selectedCity}</span>
+                <ChevronDown className="h-3 w-3 opacity-50" />
+            </div>
+
+            <button
+                onClick={handleLocateMe}
+                className={`h-11 px-4 rounded-2xl border-2 flex items-center gap-2 transition-all shrink-0 max-w-[180px] group hidden md:flex ${pinnedAddress ? 'bg-primary-50 border-primary-200 text-primary-700 shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-primary-400'}`}
+                title="Fetch Current Location"
+            >
+                {isLocating ? (
+                    <span className="animate-spin h-4 w-4 border-2 border-primary-500 border-t-transparent rounded-full shrink-0"></span>
+                ) : (
+                    <LocateFixed className={`h-4 w-4 shrink-0 transition-transform group-hover:scale-110 ${pinnedAddress ? 'text-primary-600' : 'text-slate-400'}`} />
                 )}
+                <span className="text-[10px] font-black uppercase tracking-widest truncate">
+                    {pinnedAddress || (isLocating ? 'Locating...' : 'Fetch Location')}
+                </span>
+            </button>
 
-                {/* ADDITIONAL FILTERS ROW (Gender & Experience) */}
-                {bookingView === 'LIST' && (
-                    <div className="flex flex-wrap gap-2 mt-3 mb-1 animate-in slide-in-from-top-1 px-1">
-                        {/* Gender Filter */}
-                        <div className="relative h-10 bg-slate-50 rounded-2xl border-2 border-slate-200 px-4 flex items-center gap-2 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-colors">
-                            <User className="h-3.5 w-3.5" />
-                            <select className="absolute inset-0 opacity-0 cursor-pointer" value={selectedDoctorGender} onChange={(e) => setSelectedDoctorGender(e.target.value)}>
-                                <option value="ALL">All Genders</option>
-                                <option value="Male">Male Doctor</option>
-                                <option value="Female">Female Doctor</option>
-                            </select>
-                            <span className="truncate">{selectedDoctorGender === 'ALL' ? 'Gender' : `${selectedDoctorGender} Doctor`}</span>
-                            <ChevronDown className="h-3 w-3 ml-1 opacity-40" />
-                        </div>
+            {/* QR Check-in */}
+            <Button variant="outline" onClick={() => setShowQRScanner(true)} className="rounded-2xl h-11 border-slate-200 px-5 text-primary-700 font-black text-[10px] uppercase tracking-widest">
+                <QrCode className="h-4 w-4 mr-2" /> QR Check-in
+            </Button>
 
-                        {/* Experience Filter */}
-                        <div className="relative h-10 bg-slate-50 rounded-2xl border-2 border-slate-200 px-4 flex items-center gap-2 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-colors">
-                            <Award className="h-3.5 w-3.5" />
-                            <select className="absolute inset-0 opacity-0 cursor-pointer" value={selectedMinExperience} onChange={(e) => setSelectedMinExperience(Number(e.target.value))}>
-                                <option value={0}>Any Experience</option>
-                                <option value={5}>5+ Years</option>
-                                <option value={10}>10+ Years</option>
-                                <option value={15}>15+ Years</option>
-                                <option value={20}>20+ Years</option>
-                            </select>
-                            <span className="truncate">{selectedMinExperience === 0 ? 'Experience' : `${selectedMinExperience}+ Years`}</span>
-                            <ChevronDown className="h-3 w-3 ml-1 opacity-40" />
-                        </div>
-                        
-                        {/* Clear Filters Button (Only show if filters active) */}
-                        {(selectedDoctorGender !== 'ALL' || selectedMinExperience > 0 || selectedCategory !== 'ALL') && (
-                            <button 
-                                onClick={() => { setSelectedDoctorGender('ALL'); setSelectedMinExperience(0); setSelectedCategory('ALL'); }}
-                                className="h-10 px-4 rounded-2xl bg-slate-200 text-slate-600 hover:bg-slate-300 transition-all text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5"
-                            >
-                                <X className="h-3 w-3" /> Clear Filters
-                            </button>
-                        )}
-                    </div>
-                )}
+            {/* Sign In/Logout */}
+            {!isGuest && (
+                <button onClick={onBack} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-colors px-3">Logout</button>
+            )}
+            {isGuest && (
+                <Button onClick={() => onLoginClick?.()} className="rounded-2xl h-11 px-6 shadow-lg text-[10px] font-black uppercase tracking-widest">Sign In</Button>
+            )}
+        </div>
+    </div>
+</header>
 
-                {/* Specialization Pills (Always visible below main bar as per typical healthcare SaaS design) */}
-                {bookingView === 'LIST' && (
-                    <div className="flex gap-2 overflow-x-auto no-scrollbar pt-3 pb-1 border-t border-slate-50 mt-1">
-                        {CATEGORIES.map(cat => (
-                            <button
-                                key={cat.id}
-                                onClick={() => setSelectedCategory(cat.id)}
-                                className={`flex items-center gap-2 px-4 h-9 rounded-full border-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategory === cat.id ? 'bg-primary-600 text-white border-primary-600 shadow-md' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
-                            >
-                                <cat.icon className="h-3.5 w-3.5" /> {cat.label.replace(' Specializations', '')}
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </header>
+<Filter
+    searchMode={searchMode}
+    setSearchMode={setSearchMode}
+    sortBy={sortBy}
+    setSortBy={setSortBy}
+    userLocation={userLocation}
+    uniqueCities={uniqueCities}
+    selectedCity={selectedCity}
+    setSelectedCity={setSelectedCity}
+    showMap={showMap}
+    setShowMap={setShowMap}
+    selectedDoctorGender={selectedDoctorGender}
+    setSelectedDoctorGender={setSelectedDoctorGender}
+    selectedMinExperience={selectedMinExperience}
+    setSelectedMinExperience={setSelectedMinExperience}
+    selectedCategory={selectedCategory}
+    setSelectedCategory={setSelectedCategory}
+    CATEGORIES={CATEGORIES}
+    bookingView={bookingView}
+/>
+
 
             <div className={`flex-1 flex flex-col w-full relative ${activeTab === 'BOOK' && (bookingView === 'LIST' || showMap) ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden scroll-smooth pb-32 md:pb-8'}`}>
                 
