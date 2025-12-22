@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useMatch, useLocation, useSearchParams } from 'react-router-dom';
 import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode, Review, TimeSlot } from '../types';
@@ -686,18 +685,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       let relevantDoctors = clinic.doctors;
       if (selectedCategory !== 'ALL') {
           const term = selectedCategory.toLowerCase();
-          if (term === 'dental' && !relevantDoctors.some(d => d.specialty.toLowerCase().includes('dent'))) {
-              // fallback if filtering is too restrictive
-          } else if (term === 'pediatric' && !relevantDoctors.some(d => d.specialty.toLowerCase().includes('pedia'))) {
-              // fallback
-          }
-          
-          relevantDoctors = relevantDoctors.filter(d => {
-              if (term === 'dental') return d.specialty.toLowerCase().includes('dent');
-              if (term === 'pediatric') return d.specialty.toLowerCase().includes('pedia');
-              if (term === 'ent') return d.specialty.toLowerCase().includes('ent');
-              return true;
-          });
+          if (term === 'dental') relevantDoctors = relevantDoctors.filter(d => d.specialty.toLowerCase().includes('dent'));
+          else if (term === 'pediatric') relevantDoctors = relevantDoctors.filter(d => d.specialty.toLowerCase().includes('pedia'));
+          else if (term === 'ent') relevantDoctors = relevantDoctors.filter(d => d.specialty.toLowerCase().includes('ent'));
           
           if (relevantDoctors.length === 0) relevantDoctors = clinic.doctors;
       }
@@ -961,8 +951,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       if (visitType === 'WALK_IN') {
           // Find chosen shift stats
           const shiftStats = walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
-          // Fixed ReferenceError by accessing nested totalWaitMins
-          const estimatedWaitMins = shiftStats?.stats?.totalWaitMins || 0;
+          // Fix: Accessing totalWaitMins from inside stats property
+          const estimatedWaitMins = shiftStats?.stats.totalWaitMins || 0;
           
           if (travelMins > estimatedWaitMins + 15) { 
               setShowLateWarningModal(true); 
@@ -1417,14 +1407,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         </aside>
         
         <main className="flex-1 flex flex-col h-screen overflow-hidden relative bg-slate-50 w-full">
-            <div className="bg-slate-900 text-white text-center py-2 text-sm font-bold shadow-lg z-[100] relative flex items-center justify-center gap-2">
-                <span className="text-slate-300 text-xs uppercase font-black tracking-widest">How it works:</span>
-                <span className="font-extrabold tracking-wider text-amber-300">Join</span> 
-                <ChevronRight className="inline h-4 w-4 text-slate-500" /> 
-                <span className="font-extrabold tracking-wider text-amber-300">Track</span> 
-                <ChevronRight className="inline h-4 w-4 text-slate-500" /> 
-                <span className="font-extrabold tracking-wider text-amber-300">Arrive</span>
-            </div>
             {/* PERSISTENT HEADER WITH GLOBAL SEARCH AND INTEGRATED FILTERS */}
 
 <header className="bg-white border-b border-slate-200 px-4 md:px-8 py-4 sticky top-0 z-[60] shadow-sm shrink-0">
@@ -1808,7 +1790,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
                                                                         <div className="mt-4 flex items-center justify-between">
                                                                             <div className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border shadow-sm ${docWait.time < 30 ? 'bg-green-50 text-green-700 border-green-100' : 'bg-orange-50 text-orange-700 border-orange-100'}`}>
-                                                                                <div className={`w-1.5 h-1.5 rounded-full ${docWait.time < 30 ? 'bg-green-500' : 'bg-orange-500'} animate-pulse`} />
+                                                                                <div className={`w-2 h-2 rounded-full ${docWait.time < 30 ? 'bg-green-500' : 'bg-orange-500'} animate-pulse`} />
                                                                                 {isClinicDirectWalkInOnly ? `Queue: ${docWait.count}` : `~${docWait.time}m wait`}
                                                                             </div>
 

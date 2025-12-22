@@ -139,6 +139,7 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
       return schedule.slots.filter(s => s.active !== false).map(shift => {
           const [sh, sm] = shift.startTime.split(':').map(Number);
           const [eh, em] = shift.endTime.split(':').map(Number);
+          // Fixed: using sh and sm instead of non-existent startH and startM
           const startTotal = sh * 60 + sm;
           let endTotal = eh * 60 + em;
           if (endTotal <= startTotal) endTotal += 1440;

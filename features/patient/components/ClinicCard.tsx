@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Clinic, Doctor, ClinicOperationMode } from '../../../types';
 import { Button } from '../../../components/Button';
@@ -58,8 +59,8 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
     <div 
         id={`clinic-card-${clinic.id}`}
         ref={cardRef}
-        className={`bg-white rounded-2xl border p-0 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col group relative overflow-hidden break-inside-avoid-column mb-4
-            ${isHighlighted ? 'border-primary-500 ring-2 ring-primary-100 bg-primary-50 scale-[1.01] z-10' : 'border-slate-200'}`}
+        className={`bg-white rounded-2xl border p-0 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col group relative overflow-visible break-inside-avoid-column mb-4
+            ${isHighlighted ? 'border-primary-500 ring-2 ring-primary-100 bg-primary-50 scale-[1.01] z-20' : 'border-slate-200'}`}
     >
         <div className="p-3 md:p-3.5 flex flex-col cursor-pointer" onClick={onSelect}>
             {/* Status Badges Row - Clean and distinct */}
@@ -71,20 +72,16 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                 )}
                 
                 {isDirectWalkInOnly && (
-                    <Tooltip text="Walk-in registration only">
-                        <span className="bg-orange-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1">
-                            At Clinic Only
-                            <Info className="h-2.5 w-2.5" />
-                        </span>
-                    </Tooltip>
+                    <span className="bg-orange-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1">
+                        At Clinic Only
+                        <Info className="h-2.5 w-2.5" />
+                    </span>
                 )}
                 {canQueueOnline && (
-                    <Tooltip text="Join queue online">
-                        <span className="bg-primary-600 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1">
-                            Live Token
-                            <Info className="h-2.5 w-2.5" />
-                        </span>
-                    </Tooltip>
+                    <span className="bg-primary-600 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1">
+                        Live Token
+                        <Info className="h-2.5 w-2.5" />
+                    </span>
                 )}
                 
                 {clinic.subscriptionStatus === 'ACTIVE' && (
@@ -95,7 +92,7 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
             </div>
 
             <div className="flex gap-3 mb-3">
-                <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-100 rounded-xl flex-shrink-0 flex items-center justify-center relative overflow-hidden shadow-inner group-hover:shadow-md transition-all">
+                <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-100 rounded-xl flex-shrink-0 flex items-center justify-center relative overflow-hidden shadow-inner group-hover:shadow-md transition-all border border-slate-200/50">
                     {clinic.imageUrl ? (
                         <img src={clinic.imageUrl} alt={clinic.name} className="w-full h-full object-cover" />
                     ) : (
@@ -110,7 +107,6 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                         </h3>
                     </div>
 
-                    {/* Clinic Street Address Integrated Here */}
                     <div className="text-[10px] text-slate-400 font-bold truncate leading-tight mb-1">
                         {clinic.address}
                     </div>
@@ -169,50 +165,56 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
             </div>
         </div>
         
-        {/* Actions Footer - High Visibility Button Styles */}
-        <div className="bg-slate-50 p-2.5 flex flex-col sm:flex-row items-stretch gap-2 mt-auto border-t border-slate-100">
+        {/* Actions Footer - Ensure overflow visible for tooltips */}
+        <div className="bg-slate-50 p-2.5 flex flex-col sm:flex-row items-stretch gap-2 mt-auto border-t border-slate-100 rounded-b-2xl overflow-visible z-10">
             {canBook && (
                 <div className="flex-1">
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onBook(); }} 
-                        className="w-full bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-[11px] font-black h-10 px-2 rounded-xl shadow-sm transition-all flex items-center justify-center gap-1 active:scale-95"
-                    >
-                        <Calendar className="h-3.5 w-3.5" />
-                        {canQueueOnline ? 'Book Slot' : 'Appt'}
-                    </button>
+                    <Tooltip text={canQueueOnline ? "Book a specific time slot" : "Schedule appointment"}>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onBook(); }} 
+                            className="w-full bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-[11px] font-black h-10 px-2 rounded-xl shadow-sm transition-all flex items-center justify-center gap-1 active:scale-95"
+                        >
+                            <Calendar className="h-3.5 w-3.5" />
+                            {canQueueOnline ? 'Book Slot' : 'Appt'}
+                        </button>
+                    </Tooltip>
                 </div>
             )}
             
             {canQueueOnline ? (
-                <div className="flex-[1.2] flex flex-col">
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onQueue(); }} 
-                        className={`w-full bg-primary-600 text-white hover:bg-primary-700 text-[11px] font-black h-10 px-2 rounded-xl shadow-md shadow-primary-100 transition-all flex items-center justify-center gap-1 active:scale-95 ${isHighlighted ? 'ring-2 ring-primary-500 ring-offset-1' : ''}`}
-                    >
-                        <Zap className="h-3.5 w-3.5 fill-current" />
-                        Get Token
-                    </button>
-                    <p className="text-[9px] text-center text-slate-500 mt-1 px-1">Join from home. Activate when you arrive.</p>
+                <div className="flex-[1.2] flex flex-col overflow-visible">
+                    <Tooltip text="Join live queue from home">
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onQueue(); }} 
+                            className={`w-full bg-primary-600 text-white hover:bg-primary-700 text-[11px] font-black h-10 px-2 rounded-xl shadow-md shadow-primary-100 transition-all flex items-center justify-center gap-1 active:scale-95 ${isHighlighted ? 'ring-2 ring-primary-500 ring-offset-1' : ''}`}
+                        >
+                            <Zap className="h-3.5 w-3.5 fill-current" />
+                            Get Token
+                        </button>
+                    </Tooltip>
                 </div>
             ) : isDirectWalkInOnly ? (
-                <div className="flex-[1.2] flex flex-col">
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onSelect(); }} 
-                        className={`w-full bg-orange-600 text-white hover:bg-orange-700 text-[11px] font-black h-10 px-2 rounded-xl shadow-md transition-all flex items-center justify-center gap-1 active:scale-95 ${!isHighlighted ? 'ring-2 ring-orange-500 ring-offset-1' : ''}`}
-                    >
-                        <MapPin className="h-3.5 w-3.5" />
-                        Visit Clinic
-                    </button>
-                    <p className="text-[9px] text-center text-slate-500 mt-1 px-1">Walk in and join queue at reception.</p>
+                <div className="flex-[1.2] flex flex-col overflow-visible">
+                    <Tooltip text="Visit reception for token">
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onSelect(); }} 
+                            className={`w-full bg-orange-600 text-white hover:bg-orange-700 text-[11px] font-black h-10 px-2 rounded-xl shadow-md transition-all flex items-center justify-center gap-1 active:scale-95 ${!isHighlighted ? 'ring-2 ring-orange-500 ring-offset-1' : ''}`}
+                        >
+                            <MapPin className="h-3.5 w-3.5" />
+                            Visit Clinic
+                        </button>
+                    </Tooltip>
                 </div>
             ) : (
                 <div className="flex-1">
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onSelect(); }} 
-                        className="w-full bg-slate-900 text-white hover:bg-slate-800 text-[11px] font-black h-10 px-2 rounded-xl shadow-md transition-all flex items-center justify-center gap-1 active:scale-95"
-                    >
-                        View Details
-                    </button>
+                    <Tooltip text="View full details">
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onSelect(); }} 
+                            className="w-full bg-slate-900 text-white hover:bg-slate-800 text-[11px] font-black h-10 px-2 rounded-xl shadow-md transition-all flex items-center justify-center gap-1 active:scale-95"
+                        >
+                            View Details
+                        </button>
+                    </Tooltip>
                 </div>
             )}
         </div>
