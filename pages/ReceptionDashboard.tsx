@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff, ClinicOperationMode, Clinic, AppointmentConfig } from '../types';
 import { Button } from '../components/Button';
@@ -152,6 +153,67 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     type DashboardTab = 'QUEUE' | 'DATABASE' | 'DOCTORS' | 'APPOINTMENTS' | 'REPORTS';
     const [activeTab, setActiveTab] = useState<DashboardTab>('QUEUE');
     const [queueSubTab, setQueueSubTab] = useState<'LIVE' | 'HOLD' | 'DONE' | 'ABSENT'>('LIVE');
+    
+    // --- NOTIFICATION SYSTEM / ACTIVITY MONITOR ---
+    const prevPatientsRef = useRef<Patient[]>([]);
+    const prevDoctorsRef = useRef<Doctor[]>([]);
+    const isInitialLoad = useRef(true);
+
+    useEffect(() => {
+        // Suppress notifications on first mount to avoid flooding
+        if (isInitialLoad.current) {
+            prevPatientsRef.current = [...patients];
+            prevDoctorsRef.current = [...doctors];
+            isInitialLoad.current = false;
+            return;
+        }
+
+        // 1. Monitor New Patient Bookings (Online or Remote)
+        if (patients.length > prevPatientsRef.current.length) {
+            const newPatients = patients.filter(p => !prevPatientsRef.current.some(prev => prev.id === p.id));
+            newPatients.forEach(p => {
+                const docName = doctors.find(d => d.id === p.doctorId)?.name || 'Unknown';
+                addToast(`New Booking: ${p.name} added to Dr. ${docName}'s queue.`, 'success');
+            });
+        }
+
+        // 2. Monitor Status Changes (Especially Completion by Doctors)
+        patients.forEach(currPatient => {
+            const prevPatient = prevPatientsRef.current.find(p => p.id === currPatient.id);
+            if (prevPatient && prevPatient.status !== currPatient.status) {
+                const docName = doctors.find(d => d.id === currPatient.doctorId)?.name.split(' ').pop() || 'Doc';
+                
+                if (currPatient.status === PatientStatus.COMPLETED) {
+                    addToast(`Visit Finished: Dr. ${docName} completed consultation for ${currPatient.name}.`, 'info');
+                } else if (currPatient.status === PatientStatus.WITH_DOCTOR) {
+                    addToast(`Now Consulting: ${currPatient.name} is in Room with Dr. ${docName}.`, 'info');
+                } else if (currPatient.status === PatientStatus.SKIPPED) {
+                    addToast(`Patient Skipped: ${currPatient.name} marked as absent.`, 'warning');
+                }
+            }
+            
+            // Monitor Emergency Flags
+            if (prevPatient && !prevPatient.isEmergency && currPatient.isEmergency) {
+                addToast(`URGENT: ${currPatient.name} escalated to Emergency priority!`, 'error');
+            }
+        });
+
+        // 3. Monitor Doctor Status Changes
+        doctors.forEach(currDoc => {
+            const prevDoc = prevDoctorsRef.current.find(d => d.id === currDoc.id);
+            if (prevDoc && prevDoc.status !== currDoc.status) {
+                if (currDoc.status === DoctorStatus.ON_BREAK) {
+                    addToast(`Status Update: Dr. ${currDoc.name} is now on break.`, 'warning');
+                } else if (currDoc.status === DoctorStatus.AVAILABLE) {
+                    addToast(`Status Update: Dr. ${currDoc.name} has returned and is available.`, 'success');
+                }
+            }
+        });
+
+        // Sync refs
+        prevPatientsRef.current = [...patients];
+        prevDoctorsRef.current = [...doctors];
+    }, [patients, doctors]);
     
     // Appointment View States
     const [appointmentViewMode, setAppointmentViewMode] = useState<'LIST' | 'CALENDAR'>('LIST');
@@ -634,7 +696,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 upcomingAppointments.length > 0 ? (
                                     <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden animate-in fade-in duration-300">
                                         <table className="w-full text-sm text-left border-separate border-spacing-0">
-                                            <thead className="text-slate-400 font-black text-[9px] uppercase tracking-[0.2em] sticky top-0 z-10 bg-slate-50 border-b border-slate-100">
+                                            <thead className="text-slate-400 font-black text-[9px] uppercase tracking-[0.2em] sticky top-0 z-10 bg-slate-50 border-b border-slate-200">
                                                 <tr>
                                                     <th className="px-8 py-5 border-b border-slate-200">Patient Profile</th>
                                                     <th className="px-8 py-5 border-b border-slate-200">Consultant</th>
@@ -698,7 +760,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-7 gap-px bg-slate-100 rounded-3xl border border-slate-100 overflow-hidden shadow-inner">
-                                            {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => ( <div key={day} className="bg-slate-50 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">{day}</div> ))}
+                                            {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => ( <div key={day} className="bg-slate-50 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-tighter tracking-[0.3em]">{day}</div> ))}
                                             {calendarDays.map((dayObj, idx) => {
                                                 const isToday = dayObj && dayObj.dateStr === getLocalToday();
                                                 const isSelected = dayObj && dayObj.dateStr === selectedCalendarDay;
@@ -910,7 +972,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         </div>
                         <div className="pt-6 flex flex-col-reverse xs:flex-row justify-end gap-3 border-t border-slate-100 mt-6 bg-white flex-shrink-0">
                             <Button variant="secondary" type="button" onClick={() => setIsSettingsModalOpen(false)} className="w-full xs:w-auto px-10 rounded-2xl font-black text-[10px] uppercase tracking-widest h-12 border-slate-200 hover:bg-slate-50">Dismiss</Button>
-                            <Button type="submit" className="w-full xs:w-auto px-16 rounded-2xl shadow-2xl shadow-primary-900/20 font-black uppercase tracking-[0.2em] h-12 bg-primary-600 hover:bg-primary-700 active:scale-95 transition-all transform"> <Save className="h-5 w-5 mr-3" /> Save Changes </Button>
+                            <Button type="submit" className="w-full xs:w-auto px-16 rounded-2xl shadow-2xl shadow-primary-900/20 font-black uppercase tracking-[0.2em] h-12 bg-primary-600 hover:bg-primary-700 active:scale-[0.95] transition-all transform"> <Save className="h-5 w-5 mr-3" /> Save Changes </Button>
                         </div>
                     </form>
                 </div>
