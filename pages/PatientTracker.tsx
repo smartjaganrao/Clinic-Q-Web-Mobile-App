@@ -686,9 +686,18 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       let relevantDoctors = clinic.doctors;
       if (selectedCategory !== 'ALL') {
           const term = selectedCategory.toLowerCase();
-          if (term === 'dental') relevantDoctors = relevantDoctors.filter(d => d.specialty.toLowerCase().includes('dent'));
-          else if (term === 'pediatric') relevantDoctors = relevantDoctors.filter(d => d.specialty.toLowerCase().includes('pedia'));
-          else if (term === 'ent') relevantDoctors = relevantDoctors.filter(d => d.specialty.toLowerCase().includes('ent'));
+          if (term === 'dental' && !relevantDoctors.some(d => d.specialty.toLowerCase().includes('dent'))) {
+              // fallback if filtering is too restrictive
+          } else if (term === 'pediatric' && !relevantDoctors.some(d => d.specialty.toLowerCase().includes('pedia'))) {
+              // fallback
+          }
+          
+          relevantDoctors = relevantDoctors.filter(d => {
+              if (term === 'dental') return d.specialty.toLowerCase().includes('dent');
+              if (term === 'pediatric') return d.specialty.toLowerCase().includes('pedia');
+              if (term === 'ent') return d.specialty.toLowerCase().includes('ent');
+              return true;
+          });
           
           if (relevantDoctors.length === 0) relevantDoctors = clinic.doctors;
       }
@@ -952,8 +961,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       if (visitType === 'WALK_IN') {
           // Find chosen shift stats
           const shiftStats = walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
-          // Fix: Accessing totalWaitMins from inside stats property
-          const estimatedWaitMins = shiftStats?.stats.totalWaitMins || 0;
+          // Fixed ReferenceError by accessing nested totalWaitMins
+          const estimatedWaitMins = shiftStats?.stats?.totalWaitMins || 0;
           
           if (travelMins > estimatedWaitMins + 15) { 
               setShowLateWarningModal(true); 
@@ -1097,7 +1106,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       return schedule.slots.filter(s => s.active !== false).map(shift => {
           const [sh, sm] = shift.startTime.split(':').map(Number);
           const [eh, em] = shift.endTime.split(':').map(Number);
-          const startTotal = startH * 60 + startM;
+          const startTotal = sh * 60 + sm;
           let endTotal = eh * 60 + em;
           if (endTotal <= startTotal) endTotal += 1440;
 
@@ -1799,7 +1808,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
                                                                         <div className="mt-4 flex items-center justify-between">
                                                                             <div className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border shadow-sm ${docWait.time < 30 ? 'bg-green-50 text-green-700 border-green-100' : 'bg-orange-50 text-orange-700 border-orange-100'}`}>
-                                                                                <div className={`w-2 h-2 rounded-full ${docWait.time < 30 ? 'bg-green-500' : 'bg-orange-500'} animate-pulse`} />
+                                                                                <div className={`w-1.5 h-1.5 rounded-full ${docWait.time < 30 ? 'bg-green-500' : 'bg-orange-500'} animate-pulse`} />
                                                                                 {isClinicDirectWalkInOnly ? `Queue: ${docWait.count}` : `~${docWait.time}m wait`}
                                                                             </div>
 
