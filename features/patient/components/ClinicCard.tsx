@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { Clinic, Doctor, ClinicOperationMode } from '../../../types';
-import { Button } from '../../../components/Button';
 import { Building2, MapPin, Clock, Calendar, Zap, Navigation, ShieldCheck, Star, CheckCircle2, Info } from 'lucide-react';
 import { Tooltip } from '../../../components/Tooltip';
 
@@ -59,122 +58,101 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
     <div 
         id={`clinic-card-${clinic.id}`}
         ref={cardRef}
-        className={`bg-white rounded-2xl border p-0 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col group relative overflow-visible break-inside-avoid-column mb-4
-            ${isHighlighted ? 'border-primary-500 ring-2 ring-primary-100 bg-primary-50 scale-[1.01] z-20' : 'border-slate-200'}`}
+        className={`bg-white rounded-[1.5rem] border p-0 shadow-sm hover:shadow-xl transition-all duration-500 flex flex-col group relative overflow-visible mb-2 sm:mb-4
+            ${isHighlighted ? 'border-primary-500 ring-4 ring-primary-500/10 scale-[1.02] z-20' : 'border-slate-200'}`}
     >
-        <div className="p-3 md:p-3.5 flex flex-col cursor-pointer" onClick={onSelect}>
-            {/* Status Badges Row - Clean and distinct */}
-            <div className="flex flex-wrap gap-1 mb-3">
+        <div className="p-4 flex flex-col cursor-pointer" onClick={onSelect}>
+            {/* Status Badges Row */}
+            <div className="flex flex-wrap gap-1.5 mb-3.5">
                 {isOpen ? (
-                    <span className="bg-emerald-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm">Open</span>
+                    <span className="bg-emerald-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-lg shadow-sm">Open</span>
                 ) : (
-                    <span className="bg-slate-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm">Closed</span>
+                    <span className="bg-slate-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-lg shadow-sm">Closed</span>
                 )}
                 
                 {isDirectWalkInOnly && (
-                    <span className="bg-orange-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1">
+                    <span className="bg-orange-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-lg shadow-sm flex items-center gap-1">
                         At Clinic Only
-                        <Info className="h-2.5 w-2.5" />
                     </span>
                 )}
                 {canQueueOnline && (
-                    <span className="bg-primary-600 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1">
+                    <span className="bg-primary-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-lg shadow-sm flex items-center gap-1">
                         Live Token
-                        <Info className="h-2.5 w-2.5" />
                     </span>
                 )}
                 
                 {clinic.subscriptionStatus === 'ACTIVE' && (
-                    <span className="bg-primary-50 text-primary-600 border border-primary-100 text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm flex items-center gap-0.5 ml-auto">
-                        <ShieldCheck className="h-2.5 w-2.5 fill-current" /> Verified
+                    <span className="bg-primary-50 text-primary-600 border border-primary-100 text-[9px] font-black uppercase px-2 py-0.5 rounded-lg shadow-sm flex items-center gap-0.5 ml-auto">
+                        <ShieldCheck className="h-3 w-3 fill-current" /> Verified
                     </span>
                 )}
             </div>
 
-            <div className="flex gap-3 mb-3">
-                <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-100 rounded-xl flex-shrink-0 flex items-center justify-center relative overflow-hidden shadow-inner group-hover:shadow-md transition-all border border-slate-200/50">
+            <div className="flex gap-4 mb-4">
+                <div className="w-20 h-20 bg-slate-100 rounded-2xl flex-shrink-0 flex items-center justify-center relative overflow-hidden shadow-inner group-hover:shadow-md transition-all border border-slate-100">
                     {clinic.imageUrl ? (
                         <img src={clinic.imageUrl} alt={clinic.name} className="w-full h-full object-cover" />
                     ) : (
-                        <Building2 className="h-8 w-8 text-slate-300" />
+                        <Building2 className="h-10 w-10 text-slate-300" />
                     )}
                 </div>
                 
-                <div className="flex-1 min-w-0 flex flex-col">
-                    <div className="flex justify-between items-start mb-0.5">
-                        <h3 className="font-extrabold text-slate-900 text-sm md:text-base leading-tight group-hover:text-primary-600 transition-colors pr-1 break-words flex-1">
-                            {clinic.name}
-                        </h3>
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <h3 className="font-black text-slate-900 text-base leading-tight group-hover:text-primary-600 transition-colors mb-1 truncate">
+                        {clinic.name}
+                    </h3>
+
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-bold mb-2">
+                        <MapPin className="h-3 w-3 text-slate-400 flex-shrink-0" />
+                        <span className="truncate">{clinic.address}</span>
                     </div>
 
-                    <div className="text-[10px] text-slate-400 font-bold truncate leading-tight mb-1">
-                        {clinic.address}
-                    </div>
-
-                    <div className="flex items-center justify-between gap-1 text-[10px] text-slate-500 font-medium mb-1">
-                        <div className="flex items-center gap-1 min-w-0">
-                            <MapPin className="h-2.5 w-2.5 text-slate-400 flex-shrink-0" />
-                            <span className="truncate">{clinic.city}</span>
-                            <span className="text-slate-300">•</span>
-                            <span className="text-primary-600 font-bold">{distLabel}</span>
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1 text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded-lg border border-amber-100">
+                            <Star className="h-3 w-3 fill-current" />
+                            <span className="text-[11px] font-black">{avgRating}</span>
                         </div>
-                        <a 
-                            href={gmapsLink} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="p-1.5 bg-slate-50 text-slate-400 hover:text-blue-600 hover:bg-blue-50 border border-slate-100 rounded-lg transition-all flex-shrink-0 shadow-sm" 
-                            title="Get Directions" 
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <Navigation className="h-3 w-3" />
-                        </a>
-                    </div>
-
-                    <div className="flex items-center gap-2 mb-1.5">
-                        <div className="flex items-center gap-0.5 text-amber-500">
-                            <Star className="h-2.5 w-2.5 fill-current" />
-                            <span className="text-[10px] font-black">{avgRating}</span>
-                        </div>
-                        <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-1.5 py-0.5 rounded uppercase tracking-tighter border border-slate-200 truncate">
+                        <span className="text-[10px] bg-slate-100 text-slate-500 font-black px-2 py-0.5 rounded-lg uppercase tracking-tight border border-slate-200">
                             {clinic.type?.replace('_', ' ') || 'General'}
                         </span>
                     </div>
                 </div>
             </div>
             
-            <div className="space-y-2">
-                <div className="flex flex-wrap gap-1 items-center">
-                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mr-1">Doctors:</span>
+            <div className="space-y-3">
+                <div className="flex flex-wrap gap-2 items-center">
+                    <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Doctors:</span>
                     {relevantDoctors.slice(0, 2).map(d => (
-                        <span key={d.id} className="text-[10px] font-bold text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 truncate max-w-[80px]">Dr. {d.name.split(' ').pop()}</span>
+                        <span key={d.id} className="text-[11px] font-bold text-slate-700 bg-slate-50 px-2 py-1 rounded-xl border border-slate-100 truncate max-w-[90px]">Dr. {d.name.split(' ').pop()}</span>
                     ))}
-                    {relevantDoctors.length > 2 && <span className="text-primary-600 text-[10px] font-bold">+{relevantDoctors.length - 2}</span>}
+                    {relevantDoctors.length > 2 && <span className="text-primary-600 text-[10px] font-black">+{relevantDoctors.length - 2}</span>}
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
-                    <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg border ${waitInfo.bgColor} ${waitInfo.borderColor} shadow-sm shadow-black/5`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${waitInfo.dotColor} animate-pulse flex-shrink-0`} />
-                        <span className={`text-[9px] font-black uppercase tracking-tight ${waitInfo.textColor}`}>
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${waitInfo.bgColor} ${waitInfo.borderColor} shadow-sm`}>
+                        <div className={`w-2 h-2 rounded-full ${waitInfo.dotColor} animate-pulse flex-shrink-0`} />
+                        <span className={`text-[11px] font-black uppercase tracking-tight ${waitInfo.textColor}`}>
                             {isDirectWalkInOnly ? 'Reception Queue' : `${waitInfo.raw}m Wait`}
                         </span>
                     </div>
-                    <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded flex items-center gap-0.5 border border-slate-200">
-                        <IndianRupeeIcon className="h-2.5 w-2.5" /> {feeRange}
-                    </span>
+                    <div className="flex items-center gap-1 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                        <IndianRupeeIcon className="h-3 w-3 text-slate-400" />
+                        <span className="text-[11px] font-black text-slate-700">{feeRange}</span>
+                    </div>
                 </div>
             </div>
         </div>
         
-        {/* Actions Footer - Ensure overflow visible for tooltips */}
-        <div className="bg-slate-50 p-2.5 flex flex-col sm:flex-row items-stretch gap-2 mt-auto border-t border-slate-100 rounded-b-2xl overflow-visible z-10">
+        {/* Actions Footer */}
+        <div className="bg-slate-50 p-3 flex flex-col sm:flex-row items-stretch gap-2 mt-auto border-t border-slate-100 rounded-b-[1.5rem] overflow-visible">
             {canBook && (
-                <div className="flex-1">
-                    <Tooltip text={canQueueOnline ? "Book a specific time slot" : "Schedule appointment"}>
+                <div className="flex-1 overflow-visible">
+                    <Tooltip text={canQueueOnline ? "Schedule a specific date and time for your consultation" : "Book your appointment slot"}>
                         <button 
                             onClick={(e) => { e.stopPropagation(); onBook(); }} 
-                            className="w-full bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-[11px] font-black h-10 px-2 rounded-xl shadow-sm transition-all flex items-center justify-center gap-1 active:scale-95"
+                            className="w-full bg-white border-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-[12px] font-black h-12 px-2 rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 active:scale-95"
                         >
-                            <Calendar className="h-3.5 w-3.5" />
+                            <Calendar className="h-4 w-4" />
                             {canQueueOnline ? 'Book Slot' : 'Appt'}
                         </button>
                     </Tooltip>
@@ -182,35 +160,35 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
             )}
             
             {canQueueOnline ? (
-                <div className="flex-[1.2] flex flex-col overflow-visible">
-                    <Tooltip text="Join live queue from home">
+                <div className="flex-[1.5] flex flex-col overflow-visible">
+                    <Tooltip text="Join the live walk-in queue remotely from your home">
                         <button 
                             onClick={(e) => { e.stopPropagation(); onQueue(); }} 
-                            className={`w-full bg-primary-600 text-white hover:bg-primary-700 text-[11px] font-black h-10 px-2 rounded-xl shadow-md shadow-primary-100 transition-all flex items-center justify-center gap-1 active:scale-95 ${isHighlighted ? 'ring-2 ring-primary-500 ring-offset-1' : ''}`}
+                            className="w-full bg-primary-600 text-white hover:bg-primary-700 text-[12px] font-black h-12 px-2 rounded-2xl shadow-lg shadow-primary-200 transition-all flex items-center justify-center gap-2 active:scale-95"
                         >
-                            <Zap className="h-3.5 w-3.5 fill-current" />
+                            <Zap className="h-4 w-4 fill-current" />
                             Get Token
                         </button>
                     </Tooltip>
                 </div>
             ) : isDirectWalkInOnly ? (
-                <div className="flex-[1.2] flex flex-col overflow-visible">
-                    <Tooltip text="Visit reception for token">
+                <div className="flex-[1.5] flex flex-col overflow-visible">
+                    <Tooltip text="Please visit the clinic reception in person to get a token">
                         <button 
                             onClick={(e) => { e.stopPropagation(); onSelect(); }} 
-                            className={`w-full bg-orange-600 text-white hover:bg-orange-700 text-[11px] font-black h-10 px-2 rounded-xl shadow-md transition-all flex items-center justify-center gap-1 active:scale-95 ${!isHighlighted ? 'ring-2 ring-orange-500 ring-offset-1' : ''}`}
+                            className="w-full bg-orange-600 text-white hover:bg-orange-700 text-[12px] font-black h-12 px-2 rounded-2xl shadow-lg shadow-orange-200 transition-all flex items-center justify-center gap-2 active:scale-95"
                         >
-                            <MapPin className="h-3.5 w-3.5" />
+                            <MapPin className="h-4 w-4" />
                             Visit Clinic
                         </button>
                     </Tooltip>
                 </div>
             ) : (
-                <div className="flex-1">
-                    <Tooltip text="View full details">
+                <div className="flex-1 overflow-visible">
+                    <Tooltip text="View detailed information about services and medical staff">
                         <button 
                             onClick={(e) => { e.stopPropagation(); onSelect(); }} 
-                            className="w-full bg-slate-900 text-white hover:bg-slate-800 text-[11px] font-black h-10 px-2 rounded-xl shadow-md transition-all flex items-center justify-center gap-1 active:scale-95"
+                            className="w-full bg-slate-900 text-white hover:bg-slate-800 text-[12px] font-black h-12 px-2 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95"
                         >
                             View Details
                         </button>

@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useMatch, useLocation, useSearchParams } from 'react-router-dom';
-import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode, Review, TimeSlot } from '../types';
+import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode, Review, TimeSlot, UserRole } from '../types';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
@@ -1409,142 +1410,179 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         <main className="flex-1 flex flex-col h-screen overflow-hidden relative bg-slate-50 w-full">
             {/* PERSISTENT HEADER WITH GLOBAL SEARCH AND INTEGRATED FILTERS */}
 
-<header className="bg-white border-b border-slate-200 px-4 md:px-8 py-4 sticky top-0 z-[60] shadow-sm shrink-0">
-    <div className="flex items-center justify-between gap-2">
-        {/* Global Search Input */}
-        <div ref={searchBarContainerRef} className="flex-1 max-w-2xl relative">
-            <div className="relative group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
-                <input 
-                    type="text" 
-                    className="w-full pl-12 pr-4 h-12 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary-500/10 focus:border-primary-400 outline-none transition-all font-bold text-sm shadow-inner"
-                    placeholder="Search doctor, clinic or problem (fever, cough)"
-                    value={searchQuery}
-                    onFocus={() => setShowSuggestions(true)}
-                    onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        setShowSuggestions(true);
-                    }}
-                />
-                {searchQuery && (
-                    <button 
-                        onClick={() => { setSearchQuery(''); setShowSuggestions(false); }}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-300 hover:text-slate-500"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
-                )}
-            </div>
-
-            {showSuggestions && globalSuggestions && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in slide-in-from-top-2 z-[70] max-h-[60vh] overflow-y-auto">
-                    {globalSuggestions.clinics.length > 0 && (
-                        <div className="p-2 border-b border-slate-50">
-                            <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                <Building2 className="h-3 w-3" /> Partner Clinics
-                            </div>
-                            {globalSuggestions.clinics.map(c => (
-                                <button 
-                                    key={c.id} 
-                                    onClick={() => handleSuggestionClick('CLINIC', c)}
-                                    className="w-full text-left p-3 rounded-xl hover:bg-primary-50 group flex items-center gap-4 transition-colors"
-                                >
-                                    <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
-                                        {c.imageUrl ? <img src={c.imageUrl} className="w-full h-full object-cover rounded-lg" /> : <Building2 className="h-5 w-5 text-slate-400" />}
-                                    </div>
-                                    <div className="flex-1 min-w-0"><div className="font-bold text-slate-900 text-sm truncate">{c.name}</div><div className="text-xs text-slate-500 truncate">{c.address}</div></div><ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary-400" />
+            <header className="bg-white border-b border-slate-200 px-4 md:px-8 py-3 sticky top-0 z-[60] shadow-sm shrink-0">
+                <div className="flex flex-col gap-3">
+                    {/* Top Row on Mobile: Location, QR, User */}
+                    <div className="flex items-center justify-between lg:hidden">
+                        <div className="relative flex items-center gap-1.5 text-xs text-slate-600 font-bold bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                            <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                            <select 
+                                className="absolute inset-0 opacity-0 cursor-pointer" 
+                                value={selectedCity} 
+                                onChange={(e) => setSelectedCity(e.target.value)}
+                            >
+                                {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
+                            </select>
+                            <span className="truncate max-w-[120px]">{selectedCity}</span>
+                            <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => setShowQRScanner(true)} className="p-2.5 bg-primary-50 text-primary-600 rounded-xl border border-primary-100 shadow-sm active:scale-95 transition-all">
+                                <QrCode className="h-5 w-5" />
+                            </button>
+                            {isGuest ? (
+                                <button onClick={() => onLoginClick?.()} className="p-2.5 bg-slate-900 text-white rounded-xl shadow-lg active:scale-95 transition-all">
+                                    <LogIn className="h-5 w-5" />
                                 </button>
-                            ))}
+                            ) : (
+                                <button onClick={onBack} className="p-2.5 bg-red-50 text-red-600 rounded-xl border border-red-100 active:scale-95 transition-all">
+                                    <LogOut className="h-5 w-5" />
+                                </button>
+                            )}
                         </div>
-                    )}
-                    {globalSuggestions.doctors.length > 0 && (
-                        <div className="p-2">
-                            <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Stethoscope className="h-3 w-3" /> Specialists</div>
-                            {globalSuggestions.doctors.map(({ clinic, doctor }) => (
-                                <button key={`${clinic.id}-${doctor.id}`} onClick={() => handleSuggestionClick('DOCTOR', { clinic, doctor })} className="w-full text-left p-3 rounded-xl hover:bg-primary-50 group flex items-center gap-4 transition-colors"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center shrink-0"><img src={doctor.avatarUrl} className="w-full h-full object-cover rounded-full" /></div><div className="flex-1 min-w-0"><div className="font-bold text-slate-900 text-sm truncate">{doctor.name}</div><div className="text-xs text-primary-600 font-bold">{doctor.specialty} <span className="text-slate-300 mx-1">•</span> <span className="text-slate-500 font-normal">{clinic.name}</span></div></div><ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary-400" /></button>
-                            ))}
+                    </div>
+
+                    {/* Main Row: Search + Mode Toggle */}
+                    <div className="flex items-center gap-2 lg:gap-4">
+                        {/* Global Search Input */}
+                        <div ref={searchBarContainerRef} className="flex-1 relative">
+                            <div className="relative group">
+                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
+                                <input 
+                                    type="text" 
+                                    className="w-full pl-10 pr-4 h-10 md:h-12 rounded-xl md:rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary-500/10 focus:border-primary-400 outline-none transition-all font-bold text-sm"
+                                    placeholder="Problem (fever, cough) or doctor"
+                                    value={searchQuery}
+                                    onFocus={() => setShowSuggestions(true)}
+                                    onChange={(e) => {
+                                        setSearchQuery(e.target.value);
+                                        setShowSuggestions(true);
+                                    }}
+                                />
+                                {searchQuery && (
+                                    <button 
+                                        onClick={() => { setSearchQuery(''); setShowSuggestions(false); }}
+                                        className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-slate-300 hover:text-slate-500"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                )}
+                            </div>
+
+                            {showSuggestions && globalSuggestions && (
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in slide-in-from-top-2 z-[70] max-h-[60vh] overflow-y-auto">
+                                    {globalSuggestions.clinics.length > 0 && (
+                                        <div className="p-2 border-b border-slate-50">
+                                            <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                <Building2 className="h-3 w-3" /> Partner Clinics
+                                            </div>
+                                            {globalSuggestions.clinics.map(c => (
+                                                <button 
+                                                    key={c.id} 
+                                                    onClick={() => handleSuggestionClick('CLINIC', c)}
+                                                    className="w-full text-left p-3 rounded-xl hover:bg-primary-50 group flex items-center gap-4 transition-colors"
+                                                >
+                                                    <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+                                                        {c.imageUrl ? <img src={c.imageUrl} className="w-full h-full object-cover rounded-lg" /> : <Building2 className="h-5 w-5 text-slate-400" />}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0"><div className="font-bold text-slate-900 text-sm truncate">{c.name}</div><div className="text-xs text-slate-500 truncate">{c.address}</div></div><ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary-400" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {globalSuggestions.doctors.length > 0 && (
+                                        <div className="p-2">
+                                            <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Stethoscope className="h-3 w-3" /> Specialists</div>
+                                            {globalSuggestions.doctors.map(({ clinic, doctor }) => (
+                                                <button key={`${clinic.id}-${doctor.id}`} onClick={() => handleSuggestionClick('DOCTOR', { clinic, doctor })} className="w-full text-left p-3 rounded-xl hover:bg-primary-50 group flex items-center gap-4 transition-colors"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center shrink-0"><img src={doctor.avatarUrl} className="w-full h-full object-cover rounded-full" /></div><div className="flex-1 min-w-0"><div className="font-bold text-slate-900 text-sm truncate">{doctor.name}</div><div className="text-xs text-primary-600 font-bold">{doctor.specialty} <span className="text-slate-300 mx-1">•</span> <span className="text-slate-500 font-normal">{clinic.name}</span></div></div><ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary-400" /></button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {globalSuggestions.clinics.length === 0 && globalSuggestions.doctors.length === 0 && (
+                                        <div className="p-8 text-center text-slate-400"><Search className="h-8 w-8 mx-auto mb-2 opacity-20" /><p className="text-sm font-bold">No exact matches found</p><p className="text-xs">Try searching for symptoms like 'fever'</p></div>
+                                    )}
+                                </div>
+                            )}
                         </div>
-                    )}
-                    {globalSuggestions.clinics.length === 0 && globalSuggestions.doctors.length === 0 && (
-                        <div className="p-8 text-center text-slate-400"><Search className="h-8 w-8 mx-auto mb-2 opacity-20" /><p className="text-sm font-bold">No exact matches found</p><p className="text-xs">Try searching for symptoms like 'fever'</p></div>
-                    )}
+
+                        {/* Search Mode Toggle */}
+                        <div className="flex bg-slate-100 p-1 rounded-xl md:rounded-2xl shrink-0 h-10 md:h-11 items-center border border-slate-200/50">
+                            <button onClick={() => setSearchMode('CLINIC')} className={`h-8 md:h-9 px-3 md:px-4 rounded-lg md:rounded-xl transition-all flex items-center gap-1.5 md:gap-2 ${searchMode === 'CLINIC' ? 'bg-white text-primary-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>
+                                <Building2 className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest hidden sm:inline">Clinics</span>
+                            </button>
+                            <button onClick={() => setSearchMode('DOCTOR')} className={`h-8 md:h-9 px-3 md:px-4 rounded-lg md:rounded-xl transition-all flex items-center gap-1.5 md:gap-2 ${searchMode === 'DOCTOR' ? 'bg-white text-primary-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>
+                                <Stethoscope className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest hidden sm:inline">Doctors</span>
+                            </button>
+                        </div>
+
+                        {/* Desktop Only Controls */}
+                        <div className="hidden lg:flex items-center gap-3">
+                            {/* Desktop Location Selector */}
+                            <div className="relative flex items-center gap-2 h-11 px-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm text-slate-600 cursor-pointer hover:text-primary-600 hover:border-primary-400 transition-all shrink-0">
+                                <MapPin className="h-4 w-4 text-slate-400" />
+                                <select 
+                                    className="absolute inset-0 opacity-0 cursor-pointer" 
+                                    value={selectedCity} 
+                                    onChange={(e) => setSelectedCity(e.target.value)}
+                                >
+                                    {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
+                                </select>
+                                <span className="font-bold whitespace-nowrap">{selectedCity}</span>
+                                <ChevronDown className="h-3 w-3 opacity-50" />
+                            </div>
+
+                            <button
+                                onClick={handleLocateMe}
+                                className={`h-11 px-4 rounded-2xl border flex items-center gap-2 transition-all shrink-0 group ${pinnedAddress ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-200 text-slate-500 hover:border-primary-400'}`}
+                                title="Use Current GPS"
+                            >
+                                {isLocating ? (
+                                    <span className="animate-spin h-4 w-4 border-2 border-primary-500 border-t-transparent rounded-full"></span>
+                                ) : (
+                                    <LocateFixed className="h-4 w-4 shrink-0 transition-transform group-hover:scale-110" />
+                                )}
+                                <span className="text-[10px] font-black uppercase tracking-widest truncate max-w-[100px]">
+                                    {pinnedAddress || 'Locate'}
+                                </span>
+                            </button>
+
+                            <Button variant="outline" onClick={() => setShowQRScanner(true)} className="rounded-2xl h-11 border-slate-200 px-5 text-primary-700 font-black text-[10px] uppercase tracking-widest whitespace-nowrap">
+                                <QrCode className="h-4 w-4 mr-2" /> QR Check-in
+                            </Button>
+
+                            {isGuest ? (
+                                <Button onClick={() => onLoginClick?.()} className="rounded-2xl h-11 px-6 shadow-lg text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Sign In</Button>
+                            ) : (
+                                <button onClick={onBack} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-colors px-3">Logout</button>
+                            )}
+                        </div>
+                    </div>
                 </div>
-            )}
-        </div>
+            </header>
 
-        {/* Clinics/Doctors Toggle, Location, QR, Sign In */}
-        <div className="flex items-center gap-2">
-            {/* Toggle */}
-            <div className="flex bg-slate-100 p-1 rounded-2xl shrink-0 h-11 items-center border border-slate-200/50">
-                <button onClick={() => setSearchMode('CLINIC')} className={`h-9 px-4 rounded-xl transition-all flex items-center gap-2 ${searchMode === 'CLINIC' ? 'bg-white text-primary-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}><Building2 className="h-4 w-4" /><span className="text-[10px] font-black uppercase tracking-widest">Clinics</span></button>
-                <button onClick={() => setSearchMode('DOCTOR')} className={`h-9 px-4 rounded-xl transition-all flex items-center gap-2 ${searchMode === 'DOCTOR' ? 'bg-white text-primary-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}><Stethoscope className="h-4 w-4" /><span className="text-[10px] font-black uppercase tracking-widest">Doctors</span></button>
-            </div>
-
-            {/* Location */}
-            <div className="relative flex items-center gap-2 text-sm text-slate-600 cursor-pointer hover:text-primary-600 transition-colors">
-                <MapPin className="h-4 w-4" />
-                <select 
-                    className="absolute inset-0 opacity-0 cursor-pointer" 
-                    value={selectedCity} 
-                    onChange={(e) => setSelectedCity(e.target.value)}
-                >
-                    {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
-                </select>
-                <span className="font-medium">{selectedCity}</span>
-                <ChevronDown className="h-3 w-3 opacity-50" />
-            </div>
-
-            <button
-                onClick={handleLocateMe}
-                className={`h-11 px-4 rounded-2xl border-2 flex items-center gap-2 transition-all shrink-0 max-w-[180px] group hidden md:flex ${pinnedAddress ? 'bg-primary-50 border-primary-200 text-primary-700 shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-primary-400'}`}
-                title="Fetch Current Location"
-            >
-                {isLocating ? (
-                    <span className="animate-spin h-4 w-4 border-2 border-primary-500 border-t-transparent rounded-full shrink-0"></span>
-                ) : (
-                    <LocateFixed className={`h-4 w-4 shrink-0 transition-transform group-hover:scale-110 ${pinnedAddress ? 'text-primary-600' : 'text-slate-400'}`} />
-                )}
-                <span className="text-[10px] font-black uppercase tracking-widest truncate">
-                    {pinnedAddress || (isLocating ? 'Locating...' : 'Fetch Location')}
-                </span>
-            </button>
-
-            {/* QR Check-in */}
-            <Button variant="outline" onClick={() => setShowQRScanner(true)} className="rounded-2xl h-11 border-slate-200 px-5 text-primary-700 font-black text-[10px] uppercase tracking-widest">
-                <QrCode className="h-4 w-4 mr-2" /> QR Check-in
-            </Button>
-
-            {/* Sign In/Logout */}
-            {!isGuest && (
-                <button onClick={onBack} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-colors px-3">Logout</button>
-            )}
-            {isGuest && (
-                <Button onClick={() => onLoginClick?.()} className="rounded-2xl h-11 px-6 shadow-lg text-[10px] font-black uppercase tracking-widest">Sign In</Button>
-            )}
-        </div>
-    </div>
-</header>
-
-<Filter
-    searchMode={searchMode}
-    setSearchMode={setSearchMode}
-    sortBy={sortBy}
-    setSortBy={setSortBy}
-    userLocation={userLocation}
-    uniqueCities={uniqueCities}
-    selectedCity={selectedCity}
-    setSelectedCity={setSelectedCity}
-    showMap={showMap}
-    setShowMap={setShowMap}
-    selectedDoctorGender={selectedDoctorGender}
-    setSelectedDoctorGender={setSelectedDoctorGender}
-    selectedMinExperience={selectedMinExperience}
-    setSelectedMinExperience={setSelectedMinExperience}
-    selectedCategory={selectedCategory}
-    setSelectedCategory={setSelectedCategory}
-    CATEGORIES={CATEGORIES}
-    bookingView={bookingView}
-/>
+            <Filter
+                searchMode={searchMode}
+                setSearchMode={setSearchMode}
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                userLocation={userLocation}
+                uniqueCities={uniqueCities}
+                selectedCity={selectedCity}
+                setSelectedCity={setSelectedCity}
+                showMap={showMap}
+                setShowMap={setShowMap}
+                selectedDoctorGender={selectedDoctorGender}
+                setSelectedDoctorGender={setSelectedDoctorGender}
+                selectedMinExperience={selectedMinExperience}
+                setSelectedMinExperience={setSelectedMinExperience}
+                selectedCategory={selectedCategory}
+                setSelectedCategory={setSelectedCategory}
+                CATEGORIES={CATEGORIES}
+                bookingView={bookingView}
+            />
 
 
             <div className={`flex-1 flex flex-col w-full relative ${activeTab === 'BOOK' && (bookingView === 'LIST' || showMap) ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden scroll-smooth pb-32 md:pb-8'}`}>
@@ -1571,7 +1609,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         </Button>
                     </div>
                 )}
-                {activeVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6"> {activeVisits.map(visit => { const queueStats = getSmartQueueDetails(visit); return ( <Card key={visit.id} className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"> <div className="p-5 pb-2"> <div className="flex justify-between items-start mb-2"> <div> <div className="flex items-center gap-2 mb-1"> <h3 className="font-black text-lg text-slate-900 leading-tight truncate max-w-[180px]">{visit.clinicName}</h3> </div> <p className="text-sm text-slate-500 font-bold">Dr. {visit.doctorName}</p> <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><User className="h-3 w-3" /> {visit.name}</p> </div> <div className="flex flex-col items-end gap-2"> <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${visit.visitType === 'APPOINTMENT' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-primary-50 text-primary-700 border-primary-200'}`}> {queueStats.typeLabel} </span> <Badge status={visit.status} /> </div> </div> <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-bold"> <span className="flex items-center gap-1 uppercase tracking-tighter"><Calendar className="h-3 w-3" /> Booked: {queueStats.bookedAt}</span> <span className="text-slate-300">|</span> <span className="flex items-center gap-1 uppercase tracking-tighter"><MapPin className="h-3 w-3" /> Room {visit.room}</span> </div> </div> <div className="bg-white border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center"> <div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Your Token</div><div className="text-4xl font-black text-slate-900">#{visit.tokenNumber}</div></div> <div className="border-x border-slate-100"> <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Now Serving</div> <div className={`text-4xl font-black ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-blue-600 animate-pulse' : 'text-slate-300'}`}> {visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken} </div> </div> <div> <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">People Ahead</div> <div className="text-4xl font-black text-slate-900">{queueStats.peopleAhead}</div> </div> </div> <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold border-b border-slate-100 transition-colors`}> {queueStats.doctorStatus === DoctorStatus.ON_BREAK ? <Coffee className="h-5 w-5 animate-bounce" /> : queueStats.peopleAhead < 3 && !visit.isCheckedIn ? <AlertTriangle className="h-5 w-5 animate-pulse" /> : <Timer className="h-5 w-5" />} <div className="flex-1"> <p className="leading-tight">{queueStats.message}</p> {visit.status === PatientStatus.WAITING && ( <div className="flex gap-2 mt-1"> <span className="text-[10px] opacity-70 font-black uppercase tracking-wide">EST. TIME: {queueStats.expectedTime}</span> {visit.visitType === 'APPOINTMENT' && visit.appointmentTime && ( <span className="text-[10px] font-black text-indigo-700 bg-indigo-100/50 px-1 rounded">Slot: {formatTime12h(visit.appointmentTime)}</span> )} </div> )} </div> </div> <div className="p-4 flex gap-2 mt-auto bg-white"> {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && ( <Button className="flex-1 bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-100" onClick={() => setShowQRScanner(true)}> <QrCode className="h-4 w-4 mr-2" /> Check-In </Button> )} <Button variant="secondary" className={`flex-1 font-bold ${visit.isCheckedIn ? 'w-full' : ''} text-red-600 border-red-100 hover:bg-red-50`} onClick={() => setCancelModal({ isOpen: true, visit })} disabled={visit.status === PatientStatus.WITH_DOCTOR}> Cancel </Button> </div> </Card> ); })} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><Calendar className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No active visits</h3><p className="text-slate-500 mb-6 text-center max-sm">Book an appointment or scan a QR code at a clinic to see your live status here.</p><Button onClick={() => handleTabSwitch('BOOK')} size="lg" className="shadow-lg">Find a Doctor</Button></div> )} </div> ) )}
+                {activeVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6"> {activeVisits.map(visit => { const queueStats = getSmartQueueDetails(visit); return ( <Card key={visit.id} className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"> <div className="p-5 pb-2"> <div className="flex justify-between items-start mb-2"> <div> <div className="flex items-center gap-2 mb-1"> <h3 className="font-black text-lg text-slate-900 leading-tight truncate max-w-[180px]">{visit.clinicName}</h3> </div> <p className="text-sm text-slate-500 font-bold">Dr. {visit.doctorName}</p <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><User className="h-3 w-3" /> {visit.name}</p> </div> <div className="flex flex-col items-end gap-2"> <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${visit.visitType === 'APPOINTMENT' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-primary-50 text-primary-700 border-primary-200'}`}> {queueStats.typeLabel} </span> <Badge status={visit.status} /> </div> </div> <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-bold"> <span className="flex items-center gap-1 uppercase tracking-tighter"><Calendar className="h-3 w-3" /> Booked: {queueStats.bookedAt}</span> <span className="text-slate-300">|</span> <span className="flex items-center gap-1 uppercase tracking-tighter"><MapPin className="h-3 w-3" /> Room {visit.room}</span> </div> </div> <div className="bg-white border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center"> <div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Your Token</div><div className="text-4xl font-black text-slate-900">#{visit.tokenNumber}</div></div> <div className="border-x border-slate-100"> <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Now Serving</div> <div className={`text-4xl font-black ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-blue-600 animate-pulse' : 'text-slate-300'}`}> {visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken} </div> </div> <div> <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">People Ahead</div> <div className="text-4xl font-black text-slate-900">{queueStats.peopleAhead}</div> </div> </div> <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold border-b border-slate-100 transition-colors`}> {queueStats.doctorStatus === DoctorStatus.ON_BREAK ? <Coffee className="h-5 w-5 animate-bounce" /> : queueStats.peopleAhead < 3 && !visit.isCheckedIn ? <AlertTriangle className="h-5 w-5 animate-pulse" /> : <Timer className="h-5 w-5" />} <div className="flex-1"> <p className="leading-tight">{queueStats.message}</p> {visit.status === PatientStatus.WAITING && ( <div className="flex gap-2 mt-1"> <span className="text-[10px] opacity-70 font-black uppercase tracking-wide">EST. TIME: {queueStats.expectedTime}</span> {visit.visitType === 'APPOINTMENT' && visit.appointmentTime && ( <span className="text-[10px] font-black text-indigo-700 bg-indigo-100/50 px-1 rounded">Slot: {formatTime12h(visit.appointmentTime)}</span> )} </div> )} </div> </div> <div className="p-4 flex gap-2 mt-auto bg-white"> {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && ( <Button className="flex-1 bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-100" onClick={() => setShowQRScanner(true)}> <QrCode className="h-4 w-4 mr-2" /> Check-In </Button> )} <Button variant="secondary" className={`flex-1 font-bold ${visit.isCheckedIn ? 'w-full' : ''} text-red-600 border-red-100 hover:bg-red-50`} onClick={() => setCancelModal({ isOpen: true, visit })} disabled={visit.status === PatientStatus.WITH_DOCTOR}> Cancel </Button> </div> </Card> ); })} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><Calendar className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No active visits</h3><p className="text-slate-500 mb-6 text-center max-sm">Book an appointment or scan a QR code at a clinic to see your live status here.</p><Button onClick={() => handleTabSwitch('BOOK')} size="lg" className="shadow-lg">Find a Doctor</Button></div> )} </div> ) )}
                 {activeTab === 'HISTORY' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-0 max-w-[1920px] mx-auto"> {historyVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4"> {historyVisits.map(visit => ( <div key={visit.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between gap-4 h-full hover:border-primary-200 transition-colors"> <div className="flex-1"> <div className="flex items-start gap-3 mb-3"> <div className={`p-3 rounded-lg flex-shrink-0 ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}> {visit.status === PatientStatus.COMPLETED ? <CheckCircle2 className="h-6 w-6" /> : <X className="h-6 w-6" />} </div> <div className="min-w-0 flex-1"> <h3 className="font-bold text-slate-900 truncate text-base">{visit.clinicName}</h3> <p className="text-sm text-slate-500 truncate">Dr. {visit.doctorName}</p> <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(visit.timeAdded).toLocaleDateString()} at {new Date(visit.timeAdded).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', hour12: true})}</p> </div> </div> <div className="space-y-2"> 
                     {visit.rating ? (
                         <div className="bg-amber-50 p-2 rounded-lg border border-amber-100 flex items-center gap-2">
@@ -1600,11 +1638,11 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                     <div className="h-full flex flex-col">
                         {/* Content Area */}
                         <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-                            <div className={`flex-1 overflow-y-auto p-4 md:p-6 pt-0 custom-scrollbar ${showMap && (bookingView === 'LIST' || bookingView === 'CLINIC_DETAILS') ? 'hidden md:block' : 'block'} pb-24 md:pb-6`}>
+                            <div className={`flex-1 overflow-y-auto p-2 sm:p-4 md:p-6 pt-0 custom-scrollbar ${showMap && (bookingView === 'LIST' || bookingView === 'CLINIC_DETAILS') ? 'hidden md:block' : 'block'} pb-24 md:pb-6`}>
                                 {bookingView === 'LIST' ? (
                                     searchMode === 'CLINIC' ? (
                                         filteredClinics.length > 0 ? (
-                                            <div className={`w-full ${showMap ? 'grid gap-4 grid-cols-1 xl:grid-cols-2' : 'columns-1 md:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5 gap-4'}`}>
+                                            <div className={`w-full grid gap-4 ${showMap ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'}`}>
                                                 {filteredClinics.map(clinic => {
                                                     const waitInfo = getClinicWaitStats(clinic);
                                                     const relevantDoctors = getRelevantDoctors(clinic);
@@ -1646,7 +1684,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     ) : (
                                         /* DOCTOR SEARCH RESULTS */
                                         groupedDoctors.length > 0 ? (
-                                            <div className={`w-full ${showMap ? 'grid gap-4 grid-cols-1 xl:grid-cols-2' : 'columns-1 md:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5 gap-4'}`}>
+                                            <div className={`w-full grid gap-4 ${showMap ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'}`}>
                                                 {groupedDoctors.map(({ masterDoc, locations }) => {
                                                     return (
                                                         <DoctorSearchCard
