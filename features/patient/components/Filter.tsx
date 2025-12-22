@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
     MapPin,
@@ -12,7 +13,8 @@ import {
     List as ListIcon,
     User,
     Award,
-    X
+    X,
+    LayoutGrid
 } from 'lucide-react';
 
 interface FilterProps {
@@ -57,7 +59,7 @@ export const Filter: React.FC<FilterProps> = ({
     bookingView
 }) => {
     return (
-        <>
+        <div className="px-4 md:px-8 py-0 shrink-0">
             {/* Integrated Filters for Desktop and Mobile */}
             {bookingView === 'LIST' && (
                 <>
@@ -104,12 +106,16 @@ export const Filter: React.FC<FilterProps> = ({
                             </button>
                         )}
 
-                        <button onClick={() => setShowMap(!showMap)} className={`w-11 h-11 flex items-center justify-center rounded-2xl border-2 transition-all shrink-0 ml-auto ${showMap ? 'bg-primary-600 border-primary-600 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-500 hover:border-primary-400'}`}>
-                            {showMap ? <ListIcon className="h-5 w-5" /> : <MapIcon className="h-5 w-5" />}
+                        <button 
+                            onClick={() => setShowMap(!showMap)} 
+                            className={`h-11 px-5 flex items-center gap-2.5 rounded-2xl border-2 transition-all shrink-0 ml-auto ${showMap ? 'bg-primary-600 border-primary-600 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-500 hover:border-primary-400'}`}
+                        >
+                            {showMap ? <ListIcon className="h-4 w-4" /> : <MapIcon className="h-4 w-4" />}
+                            <span className="text-[10px] font-black uppercase tracking-widest">{showMap ? 'Show List' : 'Show Map'}</span>
                         </button>
                     </div>
 
-                    <div className="lg:hidden flex flex-wrap gap-2 mt-4">
+                    <div className="lg:hidden flex flex-wrap gap-2 mt-2">
                         <div className="relative h-9 bg-white border border-slate-200 rounded-xl px-3 flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase">
                             <select className="absolute inset-0 opacity-0" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}><option value="NEAR">Near</option><option value="WAIT">Wait</option><option value="FEE">Fee</option></select>
                             <span>{sortBy === 'NEAR' ? 'Near' : sortBy === 'WAIT' ? 'Wait' : 'Fee'}</span>
@@ -133,8 +139,12 @@ export const Filter: React.FC<FilterProps> = ({
                             <span className="truncate">{selectedMinExperience === 0 ? 'Experience' : `${selectedMinExperience}+ Yrs`}</span>
                             <ChevronDown className="h-2.5 w-2.5 opacity-50" />
                         </div>
-                        <button onClick={() => setShowMap(!showMap)} className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-all ${showMap ? 'bg-primary-600 text-white' : 'bg-white text-slate-400'}`}>
+                        <button 
+                            onClick={() => setShowMap(!showMap)} 
+                            className={`h-9 px-3 flex items-center gap-2 rounded-xl border transition-all ${showMap ? 'bg-primary-600 text-white border-primary-600 shadow-sm' : 'bg-white text-slate-500 border-slate-200'}`}
+                        >
                             {showMap ? <ListIcon className="h-4 w-4" /> : <MapIcon className="h-4 w-4" />}
+                            <span className="text-[9px] font-black uppercase tracking-widest">{showMap ? 'List' : 'Map'}</span>
                         </button>
                          {(selectedDoctorGender !== 'ALL' || selectedMinExperience > 0 || selectedCategory !== 'ALL') && (
                             <button
@@ -148,21 +158,46 @@ export const Filter: React.FC<FilterProps> = ({
                 </>
             )}
 
-            {/* Specialization Pills (Always visible below main bar as per typical healthcare SaaS design) */}
+            {/* Specialization Filter: Dropdown on Mobile/Tablet, Pills on Desktop */}
             {bookingView === 'LIST' && (
-                <div className="flex gap-2 overflow-x-auto no-scrollbar pt-3 pb-1 border-t border-slate-50 mt-1">
-                    {CATEGORIES.map(cat => (
-                        <button
-                            key={cat.id}
-                            onClick={() => setSelectedCategory(cat.id)}
-                            className={`flex items-center gap-2 px-4 h-9 rounded-full border-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategory === cat.id ? 'bg-primary-600 text-white border-primary-600 shadow-md' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
-                        >
-                            <cat.icon className="h-3.5 w-3.5" /> {cat.label.replace(' Specializations', '')}
-                        </button>
-                    ))}
+                <div className="mt-3">
+                    {/* Mobile/Tablet Dropdown */}
+                    <div className="lg:hidden relative">
+                        <div className="relative flex items-center gap-2 h-10 px-4 bg-white rounded-xl border border-slate-200 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-all shadow-sm">
+                            <LayoutGrid className="h-4 w-4 text-primary-500 shrink-0" />
+                            <select 
+                                className="absolute inset-0 opacity-0 cursor-pointer w-full" 
+                                value={selectedCategory} 
+                                onChange={(e) => setSelectedCategory(e.target.value)}
+                            >
+                                {CATEGORIES.map(cat => (
+                                    <option key={cat.id} value={cat.id}>
+                                        {cat.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <span className="truncate flex-1">
+                                {CATEGORIES.find(c => c.id === selectedCategory)?.label || 'All Specializations'}
+                            </span>
+                            <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+                        </div>
+                    </div>
+
+                    {/* Desktop Pills */}
+                    <div className="hidden lg:flex gap-2 overflow-x-auto no-scrollbar pt-1 pb-1">
+                        {CATEGORIES.map(cat => (
+                            <button
+                                key={cat.id}
+                                onClick={() => setSelectedCategory(cat.id)}
+                                className={`flex items-center gap-2 px-4 h-9 rounded-full border-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategory === cat.id ? 'bg-primary-600 text-white border-primary-600 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
+                            >
+                                <cat.icon className="h-3.5 w-3.5" /> {cat.label.replace(' Specializations', '')}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             )}
-        </>
+        </div>
     );
 };
 
