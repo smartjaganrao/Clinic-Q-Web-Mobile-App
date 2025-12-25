@@ -376,6 +376,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [cancelModal, setCancelModal] = useState<{ isOpen: boolean; visit: any | null }>({ isOpen: false, visit: null });
   const [showLateWarningModal, setShowLateWarningModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showBookingSummary, setShowBookingSummary] = useState(false); // NEW: State for summary confirmation popup
   const [doctorProfileModal, setDoctorProfileModal] = useState<{ isOpen: boolean; doctor: Doctor | null; clinic: Clinic | null }>({ isOpen: false, doctor: null, clinic: null });
 
   const [feedbackModal, setFeedbackModal] = useState<{ isOpen: boolean; visit: any | null; rating: number; text: string }>({ isOpen: false, visit: null, rating: 0, text: '' });
@@ -631,7 +632,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           capacity,
           load: shiftPatients.length,
           isFull: shiftPatients.length >= capacity,
-          remainingMins: endTotal - (now.getHours() * 60 + now.getMinutes())
+          remainingMins: endTotal - (now.getHours() * 60 + now.getMinutes()),
+          totalWaitMins: shiftPatients.length * (doctor.consultationTime || 15)
       };
   };
 
@@ -755,7 +757,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           const term = selectedCategory.toLowerCase();
           if (term === 'dental') relevantDoctors = relevantDoctors.filter(d => d.specialty.toLowerCase().includes('dent'));
           else if (term === 'pediatric') relevantDoctors = relevantDoctors.filter(d => d.specialty.toLowerCase().includes('pedia'));
-          else if (term === 'ent') relevantDoctors = relevantDoctors.filter(d => d.specialty.toLowerCase().includes('ent'));
+          else if (term === 'ent') relevantDoctors = relevantDoctors.filter(d => d.specialty.includes('ENT'));
           
           if (relevantDoctors.length === 0) relevantDoctors = clinic.doctors;
       }
@@ -809,7 +811,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           const cat = selectedCategory.toLowerCase();
           if (cat === 'dental') relevant = relevant.filter(d => d.specialty.toLowerCase().includes('dent'));
           else if (cat === 'pediatric') relevant = relevant.filter(d => d.specialty.toLowerCase().includes('pedia'));
-          else if (cat === 'ent') relevant = relevant.filter(d => d.specialty.toLowerCase().includes('ent'));
+          else if (cat === 'ent') relevant = relevant.filter(d => d.specialty.includes('ENT'));
       }
       
       if (selectedDoctorGender !== 'ALL') {
@@ -1028,6 +1030,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       setSelectedWalkInShiftId(null);
       setShowLateWarningModal(false); 
       setShowAuthModal(false);
+      setShowBookingSummary(false); // NEW: Final close
   };
 
   const handleBookToken = (e?: React.MouseEvent) => {
@@ -1051,12 +1054,18 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           }
       }
       
-      submitBooking();
+      setShowBookingSummary(true); // NEW: Trigger summary before booking
   };
 
   const handleAuthSuccess = (phone: string, name: string, isExisting: boolean) => {
       if (onLoginClick) onLoginClick(phone, name);
-      if (isExisting) { addToast(`Welcome back ${name}! Please confirm booking details.`, "info"); setShowAuthModal(false); } else { submitBooking(name, phone); }
+      if (isExisting) { 
+          addToast(`Welcome back ${name}! Please confirm booking details.`, "info"); 
+          setShowAuthModal(false); 
+          setShowBookingSummary(true); // NEW: Show summary after login
+      } else { 
+          submitBooking(name, phone); 
+      }
   };
 
   const handleSubmitFeedback = () => {
@@ -1221,6 +1230,25 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           }
       }
   }, [walkInShiftsToday, selectedWalkInShiftId]);
+
+  // NEW: Memoize walk-in estimation for confirmation popup
+  const walkInEstimation = useMemo(() => {
+    if (visitType !== 'WALK_IN' || !selectedWalkInShiftId || !selectedDoctor) return null;
+    const selectedShift = walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
+    if (!selectedShift) return null;
+
+    const mins = selectedShift.stats.totalWaitMins;
+    const now = getClinicCurrentTime(selectedClinic?.timezone);
+    const estDate = new Date(now.getTime() + mins * 60000);
+    const estClockTime = estDate.getHours().toString().padStart(2, '0') + ':' + estDate.getMinutes().toString().padStart(2, '0');
+
+    return {
+        count: selectedShift.stats.load,
+        mins,
+        label: mins === 0 ? 'Immediate' : `~${mins} mins`,
+        estClockTime: formatTime12h(estClockTime)
+    };
+  }, [visitType, selectedWalkInShiftId, selectedDoctor, walkInShiftsToday, selectedClinic]);
 
   const isWalkInAllowed = walkInShiftsToday.length > 0 && walkInShiftsToday.some(s => !s.isEnded && !s.isFull) && isClinicOpen(selectedClinic?.operatingHours, selectedClinic?.timezone);
   
@@ -2478,12 +2506,82 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                     You might arrive late and lose your spot.
                 </p>
                 <div className="flex flex-col gap-3">
-                    <Button onClick={() => submitBooking()} className="bg-orange-600 hover:bg-orange-700 text-white w-full">
-                        Book Anyway (I'll Rush)
+                    <Button onClick={() => { setShowLateWarningModal(false); setShowBookingSummary(true); }} className="bg-orange-600 hover:bg-orange-700 text-white w-full">
+                        Proceed Anyway
                     </Button>
                     <Button variant="secondary" onClick={() => setShowLateWarningModal(false)} className="w-full">
                         Cancel
                     </Button>
+                </div>
+            </div>
+        </Modal>
+
+        {/* BOOKING SUMMARY MODAL - NEW FEATURE */}
+        <Modal isOpen={showBookingSummary} onClose={() => setShowBookingSummary(false)} title="Verify Booking Details" maxWidth="max-w-md">
+            <div className="space-y-6">
+                {/* Doctor & Clinic Details Card */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                    <div className="flex items-center gap-4 mb-4">
+                        <div className="w-14 h-14 rounded-2xl overflow-hidden bg-white border border-slate-100 shadow-sm">
+                            <img src={selectedDoctor?.avatarUrl} className="w-full h-full object-cover" alt={selectedDoctor?.name} />
+                        </div>
+                        <div>
+                            <h4 className="font-black text-slate-900 leading-tight">{selectedDoctor?.name}</h4>
+                            <p className="text-xs text-primary-600 font-bold uppercase tracking-wider">{selectedDoctor?.specialty}</p>
+                            <p className="text-[10px] text-slate-500 font-bold flex items-center gap-1 mt-0.5"><Building2 className="h-2.5 w-2.5" /> {selectedClinic?.name}</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white p-3 rounded-xl border border-slate-100">
+                            <span className="text-[9px] font-black text-slate-400 uppercase block mb-1">Patient</span>
+                            <div className="flex items-center gap-1.5 font-bold text-slate-800 text-sm">
+                                <User className="h-3.5 w-3.5 text-primary-50" />
+                                {bookingFor === 'MYSELF' ? userName : bookingFor}
+                            </div>
+                        </div>
+                        <div className="bg-white p-3 rounded-xl border border-slate-100">
+                            <span className="text-[9px] font-black text-slate-400 uppercase block mb-1">Visit Type</span>
+                            <div className="flex items-center gap-1.5 font-bold text-slate-800 text-sm">
+                                {visitType === 'WALK_IN' ? <Zap className="h-3.5 w-3.5 text-primary-500" /> : <CalendarClock className="h-3.5 w-3.5 text-indigo-500" />}
+                                {visitType === 'WALK_IN' ? 'Live Token' : 'Appointment'}
+                            </div>
+                        </div>
+                        <div className="bg-white p-3 rounded-xl border border-slate-100 col-span-2">
+                            <span className="text-[9px] font-black text-slate-400 uppercase block mb-1">Schedule</span>
+                            <div className="flex items-center gap-2 font-bold text-slate-800 text-sm">
+                                <Clock className="h-3.5 w-3.5 text-primary-500" />
+                                {visitType === 'WALK_IN' ? (
+                                    <>Today • {walkInEstimation?.estClockTime} <span className="text-[10px] font-medium text-slate-400 ml-1">(est. turn)</span></>
+                                ) : (
+                                    <>{new Date(apptDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} • {formatTime12h(apptTime)}</>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {symptoms && (
+                    <div className="p-3 bg-white border border-slate-100 rounded-xl">
+                        <span className="text-[9px] font-black text-slate-400 uppercase block mb-1">Stated Symptoms</span>
+                        <p className="text-sm text-slate-700 italic font-medium leading-relaxed">{symptoms}</p>
+                    </div>
+                )}
+
+                <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl flex gap-3 items-start">
+                    <Info className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-[11px] text-amber-700 font-bold leading-relaxed">
+                        Please arrive 10 minutes before your scheduled time. You can track your live turn status in the "Active Visits" tab.
+                    </p>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                    <Button onClick={() => submitBooking()} className="w-full h-14 text-lg font-black rounded-2xl shadow-xl shadow-primary-100">
+                        Confirm & Book Now
+                    </Button>
+                    <button onClick={() => setShowBookingSummary(false)} className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors py-2 flex items-center justify-center gap-2">
+                        <Edit2 className="h-3.5 w-3.5" /> Modify Details
+                    </button>
                 </div>
             </div>
         </Modal>
