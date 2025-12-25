@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
     MapPin,
@@ -35,7 +34,8 @@ interface FilterProps {
     selectedCategory: string;
     setSelectedCategory: (category: string) => void;
     CATEGORIES: { id: string; label: string; icon: React.ElementType }[];
-    bookingView: 'LIST' | 'CLINIC_DETAILS' | 'FORM';
+    // Fix: Added 'DOCTOR_PROFILE' to the allowed types for bookingView to resolve type mismatch in PatientTracker
+    bookingView: 'LIST' | 'CLINIC_DETAILS' | 'DOCTOR_PROFILE' | 'FORM';
 }
 
 export const Filter: React.FC<FilterProps> = ({
