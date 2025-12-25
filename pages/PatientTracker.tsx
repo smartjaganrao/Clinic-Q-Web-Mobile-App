@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useMatch, useLocation, useSearchParams } from 'react-router-dom';
 import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode, Review, TimeSlot } from '../types';
@@ -25,7 +24,7 @@ import {
     Navigation, Timer, Building2, 
     Info, Lock, History, X, AlertCircle, Sun, Moon,
     User, Users, Plus, LogOut, Coffee, LogIn, CloudSun, List as ListIcon, Crosshair, Zap, ExternalLink, ShieldCheck,
-    CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, ChevronLeft, FileText, MoonStar, MessageSquare, Phone, RefreshCw, Map as MapIcon, Languages, MapPinIcon, ThumbsUp, ArrowUpDown, GraduationCap, Award, SlidersHorizontal, ChevronDown, Medal, CalendarClock, Home, LocateFixed
+    CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, ChevronLeft, FileText, MoonStar, MessageSquare, Phone, RefreshCw, Map as MapIcon, Languages, MapPinIcon, ThumbsUp, ArrowUpDown, GraduationCap, Award, SlidersHorizontal, ChevronDown, Medal, CalendarClock, Home, LocateFixed, BriefcaseMedical
 } from 'lucide-react';
 
 // SEO URL Helpers
@@ -1030,7 +1029,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       setSelectedWalkInShiftId(null);
       setShowLateWarningModal(false); 
       setShowAuthModal(false);
-      setShowBookingSummary(false); // NEW: Final close
+      setShowBookingSummary(false); // NEW: Ensure modal closes
   };
 
   const handleBookToken = (e?: React.MouseEvent) => {
@@ -1749,7 +1748,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                     </div>
                 )}
                 {activeVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6"> {activeVisits.map(visit => { const queueStats = getSmartQueueDetails(visit); return ( <Card key={visit.id} className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"> <div className="p-5 pb-2"> <div className="flex justify-between items-start mb-2"> <div> <div className="flex items-center gap-2 mb-1"> <h3 className="font-black text-lg text-slate-900 leading-tight truncate max-w-[180px]">{visit.clinicName}</h3> </div> <p className="text-sm text-slate-500 font-bold">Dr. {visit.doctorName}</p> <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><User className="h-3 w-3" /> {visit.name}</p> </div> <div className="flex flex-col items-end gap-2"> <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${visit.visitType === 'APPOINTMENT' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-primary-50 text-primary-700 border-primary-200'}`}> {queueStats.typeLabel} </span> <Badge status={visit.status} /> </div> </div> <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-bold"> <span className="flex items-center gap-1 uppercase tracking-tighter"><Calendar className="h-3 w-3" /> Booked: {queueStats.bookedAt}</span> <span className="text-slate-300">|</span> <span className="flex items-center gap-1 uppercase tracking-tighter"><MapPin className="h-3 w-3" /> Room {visit.room}</span> </div> </div> <div className="bg-white border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center"> <div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Your Token</div><div className="text-4xl font-black text-slate-900">#{visit.tokenNumber}</div></div> <div className="border-x border-slate-100"> <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Now Serving</div> <div className={`text-4xl font-black ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-blue-600 animate-pulse' : 'text-slate-300'}`}> {visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken} </div> </div> <div> <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">People Ahead</div> <div className="text-4xl font-black text-slate-900">{queueStats.peopleAhead}</div> </div> </div> <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold border-b border-slate-100 transition-colors`}> {queueStats.doctorStatus === DoctorStatus.ON_BREAK ? <Coffee className="h-5 w-5 animate-bounce" /> : queueStats.peopleAhead < 3 && !visit.isCheckedIn ? <AlertTriangle className="h-5 w-5 animate-pulse" /> : <Timer className="h-5 w-5" />} <div className="flex-1"> <p className="leading-tight">{queueStats.message}</p> {visit.status === PatientStatus.WAITING && ( <div className="flex gap-2 mt-1"> <span className="text-[10px] opacity-70 font-black uppercase tracking-wide">EST. TIME: {queueStats.expectedTime}</span> {visit.visitType === 'APPOINTMENT' && visit.appointmentTime && ( <span className="text-[10px] font-black text-indigo-700 bg-indigo-100/50 px-1 rounded">Slot: {formatTime12h(visit.appointmentTime)}</span> )} </div> )} </div> </div> <div className="p-4 flex gap-2 mt-auto bg-white"> {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && ( <Button className="flex-1 bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-100" onClick={() => setShowQRScanner(true)}> <QrCode className="h-4 w-4 mr-2" /> Check-In </Button> )} <Button variant="secondary" className={`flex-1 font-bold ${visit.isCheckedIn ? 'w-full' : ''} text-red-600 border-red-100 hover:bg-red-50`} onClick={() => setCancelModal({ isOpen: true, visit })} disabled={visit.status === PatientStatus.WITH_DOCTOR}> Cancel </Button> </div> </Card> ); })} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><Calendar className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No active visits</h3><p className="text-slate-500 mb-6 text-center max-sm">Book an appointment or scan a QR code at a clinic to see your live status here.</p><Button onClick={() => handleTabSwitch('BOOK')} size="lg" className="shadow-lg">Find a Doctor</Button></div> )} </div> ) )}
-                {activeTab === 'HISTORY' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-0 max-w-[1920px] mx-auto"> {historyVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4"> {historyVisits.map(visit => ( <div key={visit.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between gap-4 h-full hover:border-primary-200 transition-colors"> <div className="flex-1"> <div className="flex items-start gap-3 mb-3"> <div className={`p-3 rounded-lg flex-shrink-0 ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}> {visit.status === PatientStatus.COMPLETED ? <CheckCircle2 className="h-6 w-6" /> : <X className="h-6 w-6" />} </div> <div className="min-w-0 flex-1"> <h3 className="font-bold text-slate-900 truncate text-base">{visit.clinicName}</h3> <p className="text-sm text-slate-500 truncate">Dr. {visit.doctorName}</p <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(visit.timeAdded).toLocaleDateString()} at {new Date(visit.timeAdded).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', hour12: true})}</p> </div> </div> <div className="space-y-2"> 
+                {activeTab === 'HISTORY' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-0 max-w-[1920px] mx-auto"> {historyVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4"> {historyVisits.map(visit => ( <div key={visit.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between gap-4 h-full hover:border-primary-200 transition-colors"> <div className="flex-1"> <div className="flex items-start gap-3 mb-3"> <div className={`p-3 rounded-lg flex-shrink-0 ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}> {visit.status === PatientStatus.COMPLETED ? <CheckCircle2 className="h-6 w-6" /> : <X className="h-6 w-6" />} </div> <div className="min-w-0 flex-1"> <h3 className="font-bold text-slate-900 truncate text-base">{visit.clinicName}</h3> <p className="text-sm text-slate-500 truncate">Dr. {visit.doctorName}</p> <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(visit.timeAdded).toLocaleDateString()} at {new Date(visit.timeAdded).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', hour12: true})}</p> </div> </div> <div className="space-y-2"> 
                     {visit.rating ? (
                         <div className="bg-amber-50 p-2 rounded-lg border border-amber-100 flex items-center gap-2">
                             <div className="flex">
@@ -1941,13 +1940,10 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                     <h3 className="font-bold text-slate-900 mb-4 text-xl">Available Doctors</h3>
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                         {selectedClinic.doctors.map(doc => {
-                                                            const docWait = getDoctorWaitDetails(selectedClinic, doc.id);
                                                             const canQueueOnline = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(selectedClinic.operationMode);
                                                             const canBookAppointments = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(selectedClinic.operationMode);
                                                             const todayShift = getDoctorTodayShift(doc);
                                                             const isAvailable = doc.status === DoctorStatus.AVAILABLE;
-                                                            const isClinicOpenNow = isClinicOpen(selectedClinic.operatingHours, selectedClinic.timezone);
-                                                            const isDoctorShiftActiveNow = isDoctorShiftActive(doc, selectedClinic);
                                                             const hasSlotsTomorrow = hasAvailableSlotsTomorrow(doc, selectedClinic);
                                                             const hasDoctorShiftsToday = hasShiftsToday(doc, selectedClinic);
                                                             const canGetToken = canQueueOnline && hasDoctorShiftsToday;
@@ -2245,7 +2241,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                     <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                                                                         <GraduationCap className="h-3 w-3 text-primary-500" /> Qualifications
                                                                     </h3>
-                                                                    <div className="flex flex-wrap gap-1">
+                                                                    <div className="flex wrap gap-1">
                                                                         {selectedDoctor.education.slice(0, 2).map((edu, i) => (
                                                                             <span key={i} className="text-[9px] font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">{edu}</span>
                                                                         ))}
@@ -2257,7 +2253,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                     <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                                                                         <Languages className="h-3 w-3 text-primary-500" /> Languages
                                                                     </h3>
-                                                                    <div className="flex flex-wrap gap-1">
+                                                                    <div className="flex wrap gap-1">
                                                                         {selectedDoctor.languages.slice(0, 3).map((lang, i) => (
                                                                             <span key={i} className="text-[9px] font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded border border-primary-100">{lang}</span>
                                                                         ))}
@@ -2536,7 +2532,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         <div className="bg-white p-3 rounded-xl border border-slate-100">
                             <span className="text-[9px] font-black text-slate-400 uppercase block mb-1">Patient</span>
                             <div className="flex items-center gap-1.5 font-bold text-slate-800 text-sm">
-                                <User className="h-3.5 w-3.5 text-primary-50" />
+                                <User className="h-3.5 w-3.5 text-primary-500" />
                                 {bookingFor === 'MYSELF' ? userName : bookingFor}
                             </div>
                         </div>
@@ -2603,6 +2599,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                     <p className="text-slate-600 mb-6">Are you sure you want to cancel your visit? This action cannot be undone.</p>
                     <div className="flex gap-3 justify-center">
                         <Button variant="secondary" onClick={() => setCancelModal({ isOpen: false, visit: null })}>Keep Visit</Button>
+                        {/* Fix: Changed confirmDelete to correctly referenced confirmCancel function */}
                         <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={confirmCancel}>Yes, Cancel</Button>
                     </div>
                 </div>
