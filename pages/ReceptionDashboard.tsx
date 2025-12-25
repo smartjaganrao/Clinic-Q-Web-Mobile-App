@@ -31,17 +31,42 @@ const DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
+// Get current time in clinic's timezone
+const getClinicCurrentTime = (timezone?: string) => {
+    const now = new Date();
+    // For now, handle common timezones. In production, use a proper timezone library
+    let offsetHours = 0;
+    if (timezone === 'Asia/Kolkata') {
+        offsetHours = 5.5; // IST is UTC+5:30
+    } else if (timezone === 'Asia/Dubai') {
+        offsetHours = 4; // GST is UTC+4
+    } else if (timezone === 'Europe/London') {
+        offsetHours = 0; // GMT/BST
+    } else if (timezone === 'America/New_York') {
+        offsetHours = -5; // EST, simplified
+    } else if (timezone === 'Asia/Shanghai') {
+        offsetHours = 8; // CST
+    } else {
+        // Default to client's local time if timezone not recognized
+        return now;
+    }
+
+    // Calculate the time in clinic timezone
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    return new Date(utc + (offsetHours * 3600000));
+};
+
 // --- HELPERS ---
-const getLocalToday = () => {
-    const d = new Date();
+const getLocalToday = (timezone?: string) => {
+    const d = getClinicCurrentTime(timezone);
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 };
 
-const getLocalTomorrow = () => {
-    const d = new Date();
+const getLocalTomorrow = (timezone?: string) => {
+    const d = getClinicCurrentTime(timezone);
     d.setDate(d.getDate() + 1);
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -217,13 +242,13 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     
     // Appointment View States
     const [appointmentViewMode, setAppointmentViewMode] = useState<'LIST' | 'CALENDAR'>('LIST');
-    const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
-    const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+    const [calendarMonth, setCalendarMonth] = useState(() => getClinicCurrentTime(clinicData?.timezone).getMonth());
+    const [calendarYear, setCalendarYear] = useState(() => getClinicCurrentTime(clinicData?.timezone).getFullYear());
     const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDoctorId, setFilterDoctorId] = useState<string>('ALL');
-    const [filterDate, setFilterDate] = useState<string>(getLocalToday());
+    const [filterDate, setFilterDate] = useState<string>(() => getLocalToday());
 
     const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false); 
@@ -248,12 +273,41 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
     const [isDeckExpanded, setIsDeckExpanded] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
-    const [currentTime, setCurrentTime] = useState(new Date());
+    const [currentTime, setCurrentTime] = useState(() => getClinicCurrentTime(clinicData?.timezone));
+
+    // Date Navigation Functions
+    const navigateDate = (direction: 'prev' | 'next' | 'today' | 'tomorrow') => {
+        const currentDate = new Date(filterDate);
+        let newDate: Date;
+        
+        switch (direction) {
+            case 'prev':
+                newDate = new Date(currentDate);
+                newDate.setDate(currentDate.getDate() - 1);
+                break;
+            case 'next':
+                newDate = new Date(currentDate);
+                newDate.setDate(currentDate.getDate() + 1);
+                break;
+            case 'today':
+                newDate = new Date();
+                break;
+            case 'tomorrow':
+                newDate = new Date();
+                newDate.setDate(newDate.getDate() + 1);
+                break;
+            default:
+                return;
+        }
+        
+        const newDateStr = newDate.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+        setFilterDate(newDateStr);
+    };
 
     useEffect(() => {
-        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        const timer = setInterval(() => setCurrentTime(getClinicCurrentTime(clinicData?.timezone)), 1000);
         return () => clearInterval(timer);
-    }, []);
+    }, [clinicData?.timezone]);
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 640);
@@ -301,7 +355,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
     const queueTabCounts = useMemo(() => {
         const list = patients.filter(p => {
-            const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
+            const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : new Date(p.timeAdded).toLocaleDateString('en-CA');
             const dateMatch = pDate === filterDate;
             const docMatch = filterDoctorId === 'ALL' || p.doctorId === filterDoctorId;
             return dateMatch && docMatch;
@@ -316,7 +370,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
     const filteredPatients = useMemo(() => {
         let list = patients.filter(p => {
-            const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
+            const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : new Date(p.timeAdded).toLocaleDateString('en-CA');
             return pDate === filterDate;
         });
         if (filterDoctorId !== 'ALL') list = list.filter(p => p.doctorId === filterDoctorId);
@@ -336,7 +390,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     const doctorQueueStats = useMemo(() => {
         return doctors.map(doc => {
             const queue = patients.filter(p => {
-                const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
+                const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : new Date(p.timeAdded).toLocaleDateString('en-CA');
                 return p.doctorId === doc.id && (p.status === PatientStatus.WAITING || p.status === PatientStatus.ON_HOLD) && pDate === filterDate;
             });
             const current = patients.find(p => p.doctorId === doc.id && p.status === PatientStatus.WITH_DOCTOR);
@@ -583,7 +637,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                         <div className="grid grid-cols-3 gap-1 bg-slate-50 rounded-xl p-1 border border-slate-100 mt-1.5 shadow-inner">
                                             <div className="flex flex-col items-center">
                                                 <span className="text-[7px] text-slate-400 font-black uppercase">Now</span>
-                                                <span className={`text-[10px] font-black ${current && filterDate === getLocalToday() ? 'text-blue-600' : 'text-slate-300'}`}>{filterDate === getLocalToday() ? (current ? `#${current.tokenNumber}` : '--') : (doc.consultationTime || 15) + 'm'}</span>
+                                                <span className={`text-[10px] font-black ${current && filterDate === getLocalToday(clinicData?.timezone) ? 'text-blue-600' : 'text-slate-300'}`}>{filterDate === getLocalToday(clinicData?.timezone) ? (current ? `#${current.tokenNumber}` : '--') : (doc.consultationTime || 15) + 'm'}</span>
                                             </div>
                                             <div className="flex flex-col items-center border-x border-slate-200">
                                                 <span className="text-[7px] text-slate-400 font-black uppercase">Next</span>
@@ -605,32 +659,49 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             <div className="flex-1 overflow-hidden relative bg-slate-100 flex flex-col pb-[104px] sm:pb-0">
                 {activeTab === 'QUEUE' && (
                     <>
-                        <div className="hidden sm:flex px-4 py-2 bg-white border-b border-slate-200 items-center justify-between flex-shrink-0 z-10 gap-4">
+                        <div className="flex flex-col sm:flex-row px-4 py-2 bg-white border-b border-slate-200 items-start sm:items-center justify-between flex-shrink-0 z-10 gap-4">
                             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-                                <button onClick={() => setQueueSubTab('LIVE')} className={`flex items-center gap-2 h-10 px-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${queueSubTab === 'LIVE' ? 'bg-primary-600 text-white shadow-lg shadow-primary-200' : 'text-slate-500 hover:bg-slate-50'}`}>
-                                    <Activity className={`h-4 w-4 ${queueSubTab === 'LIVE' ? 'animate-pulse' : ''}`} />
-                                    Live <span className={`ml-1 px-2 py-0.5 rounded-lg text-[9px] ${queueSubTab === 'LIVE' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{queueTabCounts.LIVE}</span>
+                                <button onClick={() => setQueueSubTab('LIVE')} className={`flex items-center gap-2 h-10 md:h-12 px-5 md:px-6 rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${queueSubTab === 'LIVE' ? 'bg-primary-600 text-white shadow-lg shadow-primary-200' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                    <Activity className={`h-4 w-4 md:h-5 md:w-5 ${queueSubTab === 'LIVE' ? 'animate-pulse' : ''}`} />
+                                    Live <span className={`ml-1 px-2 py-0.5 rounded-lg text-[9px] md:text-[10px] ${queueSubTab === 'LIVE' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{queueTabCounts.LIVE}</span>
                                 </button>
-                                <button onClick={() => setQueueSubTab('HOLD')} className={`flex items-center gap-2 h-10 px-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${queueSubTab === 'HOLD' ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
-                                    <PauseCircle className="h-4 w-4" />
-                                    Hold <span className={`ml-1 px-2 py-0.5 rounded-lg text-[9px] ${queueSubTab === 'HOLD' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{queueTabCounts.HOLD}</span>
+                                <button onClick={() => setQueueSubTab('HOLD')} className={`flex items-center gap-2 h-10 md:h-12 px-5 md:px-6 rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${queueSubTab === 'HOLD' ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                    <PauseCircle className="h-4 w-4 md:h-5 md:w-5" />
+                                    Hold <span className={`ml-1 px-2 py-0.5 rounded-lg text-[9px] md:text-[10px] ${queueSubTab === 'HOLD' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{queueTabCounts.HOLD}</span>
                                 </button>
-                                <button onClick={() => setQueueSubTab('DONE')} className={`flex items-center gap-2 h-10 px-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${queueSubTab === 'DONE' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
-                                    <CheckCircle2 className="h-4 w-4" />
-                                    Done <span className={`ml-1 px-2 py-0.5 rounded-lg text-[9px] ${queueSubTab === 'DONE' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{queueTabCounts.DONE}</span>
+                                <button onClick={() => setQueueSubTab('DONE')} className={`flex items-center gap-2 h-10 md:h-12 px-5 md:px-6 rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${queueSubTab === 'DONE' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                    <CheckCircle2 className="h-4 w-4 md:h-5 md:w-5" />
+                                    Done <span className={`ml-1 px-2 py-0.5 rounded-lg text-[9px] md:text-[10px] ${queueSubTab === 'DONE' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{queueTabCounts.DONE}</span>
                                 </button>
-                                <button onClick={() => setQueueSubTab('ABSENT')} className={`flex items-center gap-2 h-10 px-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${queueSubTab === 'ABSENT' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
-                                    <UserX className="h-4 w-4" />
-                                    Absent <span className={`ml-1 px-2 py-0.5 rounded-lg text-[9px] ${queueSubTab === 'ABSENT' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{queueTabCounts.ABSENT}</span>
+                                <button onClick={() => setQueueSubTab('ABSENT')} className={`flex items-center gap-2 h-10 md:h-12 px-5 md:px-6 rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${queueSubTab === 'ABSENT' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                    <UserX className="h-4 w-4 md:h-5 md:w-5" />
+                                    Absent <span className={`ml-1 px-2 py-0.5 rounded-lg text-[9px] md:text-[10px] ${queueSubTab === 'ABSENT' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{queueTabCounts.ABSENT}</span>
                                 </button>
                             </div>
 
-                            <div className="flex items-center gap-2 w-[350px] bg-slate-100 p-1 rounded-2xl border border-slate-200 shadow-inner">
-                                <button onClick={() => setFilterDate(getLocalToday())} className={`flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center ${filterDate === getLocalToday() ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-900'}`}>Today</button>
-                                <button onClick={() => setFilterDate(getLocalTomorrow())} className={`flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center ${filterDate === getLocalTomorrow() ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-900'}`}>Tmrw</button>
-                                <div className="relative flex-[1.5] flex items-center group">
-                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-primary-600 transition-colors pointer-events-none z-10" />
-                                    <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full pl-10 pr-3 h-9 bg-white border border-slate-200 rounded-xl text-[10px] font-black focus:ring-2 focus:ring-primary-500/10 focus:border-primary-400 outline-none shadow-sm appearance-none" />
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-[420px] bg-slate-100 p-1 rounded-2xl border border-slate-200 shadow-inner">
+                                <div className="flex items-center w-full sm:w-auto gap-1">
+                                    <button 
+                                        onClick={() => navigateDate('prev')}
+                                        className="px-3 md:px-4 h-9 md:h-11 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-white transition-all flex items-center justify-center"
+                                        title="Previous Day"
+                                    >
+                                        <ChevronLeft className="h-4 w-4 md:h-5 md:w-5" />
+                                    </button>
+                                    <button onClick={() => navigateDate('today')} className={`flex-1 h-9 md:h-11 rounded-xl text-[10px] md:text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center ${filterDate === getLocalToday() ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-900 hover:bg-white'}`}>Today</button>
+                                    <button onClick={() => navigateDate('tomorrow')} className={`flex-1 h-9 md:h-11 rounded-xl text-[10px] md:text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center ${filterDate === getLocalTomorrow() ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-900 hover:bg-white'}`}>Tomorrow</button>
+                                    <button 
+                                        onClick={() => navigateDate('next')}
+                                        className="px-3 md:px-4 h-9 md:h-11 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-white transition-all flex items-center justify-center"
+                                        title="Next Day"
+                                    >
+                                        <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
+                                    </button>
+                                </div>
+                                <div className="w-px h-6 bg-slate-300 hidden sm:block"></div>
+                                <div className="relative w-full sm:w-[1.2] flex items-center group">
+                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 md:h-5 md:w-5 text-slate-400 group-focus-within:text-primary-600 transition-colors pointer-events-none z-10" />
+                                    <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full pl-10 pr-3 h-9 md:h-11 bg-white border border-slate-200 rounded-xl text-[10px] md:text-[11px] font-black focus:ring-2 focus:ring-primary-500/10 focus:border-primary-400 outline-none shadow-sm appearance-none" />
                                 </div>
                             </div>
                         </div>
@@ -645,29 +716,29 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         {/* MOBILE STICKY BOTTOM MENU */}
                         <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 p-2 bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-[0_-4px_24px_rgba(0,0,0,0.1)] flex flex-col gap-2">
                             <div className="flex items-center gap-1 overflow-x-auto no-scrollbar -mx-2 px-2">
-                                <button onClick={() => setQueueSubTab('LIVE')} className={`flex-1 flex flex-col items-center justify-center min-w-[72px] h-[48px] rounded-2xl transition-all ${queueSubTab === 'LIVE' ? 'bg-primary-600 text-white shadow-lg shadow-primary-200' : 'bg-slate-100 text-slate-500'}`}>
-                                    <Activity className={`h-4 w-4 mb-0.5 ${queueSubTab === 'LIVE' ? 'animate-pulse' : ''}`} />
-                                    <span className="text-[8px] font-black uppercase">Live ({queueTabCounts.LIVE})</span>
+                                <button onClick={() => setQueueSubTab('LIVE')} className={`flex-1 flex flex-col items-center justify-center min-w-[72px] h-[48px] md:h-[56px] rounded-2xl transition-all ${queueSubTab === 'LIVE' ? 'bg-primary-600 text-white shadow-lg shadow-primary-200' : 'bg-slate-100 text-slate-500'}`}>
+                                    <Activity className={`h-4 w-4 md:h-5 md:w-5 mb-0.5 ${queueSubTab === 'LIVE' ? 'animate-pulse' : ''}`} />
+                                    <span className="text-[8px] md:text-[9px] font-black uppercase">Live ({queueTabCounts.LIVE})</span>
                                 </button>
-                                <button onClick={() => setQueueSubTab('HOLD')} className={`flex-1 flex flex-col items-center justify-center min-w-[72px] h-[48px] rounded-2xl transition-all ${queueSubTab === 'HOLD' ? 'bg-orange-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}>
-                                    <PauseCircle className="h-4 w-4 mb-0.5" />
-                                    <span className="text-[8px] font-black uppercase">Hold ({queueTabCounts.HOLD})</span>
+                                <button onClick={() => setQueueSubTab('HOLD')} className={`flex-1 flex flex-col items-center justify-center min-w-[72px] h-[48px] md:h-[56px] rounded-2xl transition-all ${queueSubTab === 'HOLD' ? 'bg-orange-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}>
+                                    <PauseCircle className="h-4 w-4 md:h-5 md:w-5 mb-0.5" />
+                                    <span className="text-[8px] md:text-[9px] font-black uppercase">Hold ({queueTabCounts.HOLD})</span>
                                 </button>
-                                <button onClick={() => setQueueSubTab('DONE')} className={`flex-1 flex flex-col items-center justify-center min-w-[72px] h-[48px] rounded-2xl transition-all ${queueSubTab === 'DONE' ? 'bg-green-600 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}>
-                                    <CheckCircle2 className="h-4 w-4 mb-0.5" />
-                                    <span className="text-[8px] font-black uppercase">Done ({queueTabCounts.DONE})</span>
+                                <button onClick={() => setQueueSubTab('DONE')} className={`flex-1 flex flex-col items-center justify-center min-w-[72px] h-[48px] md:h-[56px] rounded-2xl transition-all ${queueSubTab === 'DONE' ? 'bg-green-600 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}>
+                                    <CheckCircle2 className="h-4 w-4 md:h-5 md:w-5 mb-0.5" />
+                                    <span className="text-[8px] md:text-[9px] font-black uppercase">Done ({queueTabCounts.DONE})</span>
                                 </button>
-                                <button onClick={() => setQueueSubTab('ABSENT')} className={`flex-1 flex flex-col items-center justify-center min-w-[72px] h-[48px] rounded-2xl transition-all ${queueSubTab === 'ABSENT' ? 'bg-slate-800 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}>
-                                    <UserX className="h-4 w-4 mb-0.5" />
-                                    <span className="text-[8px] font-black uppercase">Absent ({queueTabCounts.ABSENT})</span>
+                                <button onClick={() => setQueueSubTab('ABSENT')} className={`flex-1 flex flex-col items-center justify-center min-w-[72px] h-[48px] md:h-[56px] rounded-2xl transition-all ${queueSubTab === 'ABSENT' ? 'bg-slate-800 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}>
+                                    <UserX className="h-4 w-4 md:h-5 md:w-5 mb-0.5" />
+                                    <span className="text-[8px] md:text-[9px] font-black uppercase">Absent ({queueTabCounts.ABSENT})</span>
                                 </button>
                             </div>
                             
                             <div className="flex items-center gap-1.5 h-11 bg-slate-900 rounded-2xl p-1 shadow-lg">
-                                <button onClick={() => setFilterDate(getLocalToday())} className={`flex-1 h-full rounded-xl text-[9px] font-black uppercase tracking-wider transition-all ${filterDate === getLocalToday() ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}>Today</button>
-                                <button onClick={() => setFilterDate(getLocalTomorrow())} className={`flex-1 h-full rounded-xl text-[9px] font-black uppercase tracking-wider transition-all ${filterDate === getLocalTomorrow() ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}>Tmrw</button>
+                                <button onClick={() => setFilterDate(getLocalToday(clinicData?.timezone))} className={`flex-1 h-full rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all ${filterDate === getLocalToday(clinicData?.timezone) ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}>Today</button>
+                                <button onClick={() => setFilterDate(getLocalTomorrow(clinicData?.timezone))} className={`flex-1 h-full rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all ${filterDate === getLocalTomorrow(clinicData?.timezone) ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}>Tmrw</button>
                                 <div className="flex-[1.5] h-full relative group">
-                                    <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full h-full bg-slate-800 rounded-xl text-[9px] font-black text-white px-8 outline-none border border-slate-700 focus:ring-1 focus:ring-primary-500" />
+                                    <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full h-full bg-slate-800 rounded-xl text-[9px] sm:text-[10px] font-black text-white px-8 outline-none border border-slate-700 focus:ring-1 focus:ring-primary-500" />
                                     <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500 pointer-events-none" />
                                 </div>
                             </div>
@@ -686,8 +757,8 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             </div>
                             
                             <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
-                                <button onClick={() => setAppointmentViewMode('LIST')} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${appointmentViewMode === 'LIST' ? 'bg-white text-primary-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-800'}`}> List View </button>
-                                <button onClick={() => setAppointmentViewMode('CALENDAR')} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${appointmentViewMode === 'CALENDAR' ? 'bg-white text-primary-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-800'}`}> Calendar </button>
+                                <button onClick={() => setAppointmentViewMode('LIST')} className={`px-3 sm:px-6 py-2 sm:py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all ${appointmentViewMode === 'LIST' ? 'bg-white text-primary-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-800'}`}> List View </button>
+                                <button onClick={() => setAppointmentViewMode('CALENDAR')} className={`px-3 sm:px-6 py-2 sm:py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all ${appointmentViewMode === 'CALENDAR' ? 'bg-white text-primary-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-800'}`}> Calendar </button>
                             </div>
                         </div>
 
@@ -708,7 +779,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                                 {upcomingAppointments.map((p) => {
                                                     const doc = doctors.find(d => d.id === p.doctorId);
                                                     const apptDateObj = new Date(p.appointmentDate!);
-                                                    const isToday = p.appointmentDate === getLocalToday();
+                                                    const isToday = p.appointmentDate === getLocalToday(clinicData?.timezone);
                                                     return (
                                                         <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                                                             <td className="px-8 py-4">
@@ -762,7 +833,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                         <div className="grid grid-cols-7 gap-px bg-slate-100 rounded-3xl border border-slate-100 overflow-hidden shadow-inner">
                                             {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => ( <div key={day} className="bg-slate-50 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-tighter tracking-[0.3em]">{day}</div> ))}
                                             {calendarDays.map((dayObj, idx) => {
-                                                const isToday = dayObj && dayObj.dateStr === getLocalToday();
+                                                const isToday = dayObj && dayObj.dateStr === getLocalToday(clinicData?.timezone);
                                                 const isSelected = dayObj && dayObj.dateStr === selectedCalendarDay;
                                                 return (
                                                     <div key={idx} onClick={() => dayObj && setSelectedCalendarDay(dayObj.dateStr)} className={`bg-white min-h-[120px] p-4 transition-all cursor-pointer group hover:bg-slate-50/50 ${!dayObj ? 'opacity-30' : ''} ${isSelected ? 'ring-2 ring-inset ring-primary-600 z-10 shadow-lg' : ''}`}>

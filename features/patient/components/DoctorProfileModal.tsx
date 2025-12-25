@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Doctor, ClinicOperationMode, Review } from '../../../types';
+import { Doctor, ClinicOperationMode, Review, Clinic } from '../../../types';
 import { Button } from '../../../components/Button';
 import { Modal } from '../../../components/Modal';
 import { Clock, GraduationCap, Languages, Calendar, User, MessageSquare, Zap, ShieldCheck } from 'lucide-react';
@@ -10,13 +10,86 @@ interface DoctorProfileModalProps {
   onClose: () => void;
   doctor: Doctor | null;
   operationMode?: ClinicOperationMode;
+  clinic?: Clinic;
   onBook: () => void;
 }
 
-export const DoctorProfileModal: React.FC<DoctorProfileModalProps> = ({ isOpen, onClose, doctor, operationMode, onBook }) => {
+export const DoctorProfileModal: React.FC<DoctorProfileModalProps> = ({ isOpen, onClose, doctor, operationMode, clinic, onBook }) => {
   if (!doctor) return null;
 
   const canQueue = operationMode && [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(operationMode);
+  const canBookAppointments = operationMode && [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(operationMode);
+
+  // Check if clinic is open and doctor shift is active
+  const isClinicOpen = clinic ? (() => {
+    if (!clinic.operatingHours) return false;
+    if (clinic.operatingHours.toLowerCase() === '24 hours') return true;
+    try {
+      const now = new Date();
+      const clinicTime = new Date(now.toLocaleString("en-US", {timeZone: clinic.timezone}));
+      const currentMins = clinicTime.getHours() * 60 + clinicTime.getMinutes();
+      const [startStr, endStr] = clinic.operatingHours.split('-').map(s => s.trim());
+      if (!startStr || !endStr) return false;
+      const parseToMins = (timeStr: string) => {
+        const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (!match) return null;
+        let [_, h, m, p] = match;
+        let hour = parseInt(h);
+        const min = parseInt(m);
+        const isPm = p.toUpperCase() === 'PM';
+        if (isPm && hour !== 12) hour += 12;
+        if (!isPm && hour === 12) hour = 0;
+        return hour * 60 + min;
+      };
+      const startMins = parseToMins(startStr);
+      const endMins = parseToMins(endStr);
+      if (startMins === null || endMins === null) return false;
+      return currentMins >= startMins && currentMins <= endMins;
+    } catch (e) {
+      return false;
+    }
+  })() : true;
+
+  const isDoctorShiftActive = clinic && doctor ? (() => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const now = new Date();
+    const clinicTime = new Date(now.toLocaleString("en-US", {timeZone: clinic.timezone}));
+    const dayName = days[clinicTime.getDay()];
+    const schedule = doctor.weeklySchedule.find(s => s.day === dayName);
+    
+    if (!schedule || schedule.isOff || !schedule.slots?.length) return false;
+
+    const currentMins = clinicTime.getHours() * 60 + clinicTime.getMinutes();
+
+    return schedule.slots.some(shift => {
+        if (shift.active === false) return false;
+        const [sh, sm] = shift.startTime.split(':').map(Number);
+        const [eh, em] = shift.endTime.split(':').map(Number);
+        const startTotal = sh * 60 + sm;
+        let endTotal = eh * 60 + em;
+        if (endTotal <= startTotal) endTotal += 1440;
+
+        const isStarted = currentMins >= startTotal;
+        const isEnded = currentMins >= endTotal;
+        return isStarted && !isEnded;
+    });
+  })() : true;
+
+  const hasAvailableSlotsTomorrow = clinic && doctor ? (() => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const tomorrow = new Date();
+    const clinicTime = new Date(tomorrow.toLocaleString("en-US", {timeZone: clinic.timezone}));
+    clinicTime.setDate(clinicTime.getDate() + 1);
+    const tomorrowDayName = days[clinicTime.getDay()];
+    const schedule = doctor.weeklySchedule.find(s => s.day === tomorrowDayName);
+    
+    if (!schedule || schedule.isOff || !schedule.slots?.length) return false;
+
+    return schedule.slots.some(shift => shift.active !== false);
+  })() : true;
+
+  const canGetToken = canQueue && isClinicOpen && isDoctorShiftActive;
+  const canBookForTomorrow = canBookAppointments && hasAvailableSlotsTomorrow;
 
   // Safely access arrays with fallbacks
   const education = doctor.education || [];
@@ -102,9 +175,13 @@ export const DoctorProfileModal: React.FC<DoctorProfileModalProps> = ({ isOpen, 
 
       <div className="mt-8 pt-4 border-t border-slate-100 flex justify-end gap-3 sticky bottom-0 bg-white pb-2">
         <Button variant="secondary" onClick={onClose}>Close</Button>
-        <Button onClick={onBook} className="shadow-lg shadow-primary-200 px-8">
-          {canQueue ? <Zap className="h-4 w-4 mr-2 fill-current" /> : <Calendar className="h-4 w-4 mr-2" />}
-          {canQueue ? "Get Token / Join Queue" : "Book Appointment"}
+        <Button 
+          onClick={(canGetToken || canBookForTomorrow) ? onBook : undefined} 
+          disabled={!(canGetToken || canBookForTomorrow)}
+          className={`shadow-lg shadow-primary-200 px-8 whitespace-nowrap ${!(canGetToken || canBookForTomorrow) ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          {(canGetToken || canBookForTomorrow) ? <Zap className="h-4 w-4 mr-2 fill-current" /> : <Calendar className="h-4 w-4 mr-2" />}
+          {canGetToken ? (canQueue ? "Get Token / Join Queue" : "Book Appointment") : canBookForTomorrow ? "Book Tomorrow" : "Unavailable"}
         </Button>
       </div>
     </Modal>

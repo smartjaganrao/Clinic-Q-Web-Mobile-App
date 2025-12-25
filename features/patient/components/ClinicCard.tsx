@@ -38,11 +38,10 @@ interface ClinicCardProps {
   onSelect: () => void;
   onBook: () => void;
   onQueue: () => void;
-  onViewDoctor: (doctor: Doctor) => void;
 }
 
 export const ClinicCard: React.FC<ClinicCardProps> = ({
-  clinic, waitInfo, feeRange, distLabel, gmapsLink, relevantDoctors, isHighlighted, isOpen, cardRef, onSelect, onBook, onQueue, onViewDoctor
+  clinic, waitInfo, feeRange, distLabel, gmapsLink, relevantDoctors, isHighlighted, isOpen, cardRef, onSelect, onBook, onQueue
 }) => {
   const canBook = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
   const canQueueOnline = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
@@ -61,90 +60,110 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
         className={`bg-white rounded-[1.5rem] border p-0 shadow-sm hover:shadow-xl transition-all duration-500 flex flex-col group relative overflow-visible mb-2 sm:mb-4
             ${isHighlighted ? 'border-primary-500 ring-4 ring-primary-500/10 scale-[1.02] z-20' : 'border-slate-200'}`}
     >
-        <div className="p-4 flex flex-col cursor-pointer" onClick={onSelect}>
+        {/* Map Link Button - Top Right */}
+        <div className="absolute top-3 right-3 z-10">
+            <Tooltip text="Open in Google Maps">
+                <a 
+                    href={gmapsLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-8 h-8 bg-blue-600 text-white hover:bg-blue-700 rounded-lg shadow-lg shadow-blue-200 transition-all flex items-center justify-center active:scale-95"
+                >
+                    <Navigation className="h-3.5 w-3.5" />
+                </a>
+            </Tooltip>
+        </div>
+
+        <div className="p-3 flex flex-col cursor-pointer" onClick={onSelect}>
             {/* Status Badges Row */}
-            <div className="flex flex-wrap gap-1.5 mb-3.5">
+            <div className="flex flex-wrap gap-1.5 mb-2">
                 {isOpen ? (
-                    <span className="bg-emerald-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-lg shadow-sm">Open</span>
+                    <span className="bg-emerald-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md shadow-sm">Open</span>
                 ) : (
-                    <span className="bg-slate-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-lg shadow-sm">Closed</span>
+                    <span className="bg-slate-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md shadow-sm">Closed</span>
                 )}
                 
                 {isDirectWalkInOnly && (
-                    <span className="bg-orange-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-lg shadow-sm flex items-center gap-1">
+                    <span className="bg-orange-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md shadow-sm flex items-center gap-1">
                         At Clinic Only
                     </span>
                 )}
                 {canQueueOnline && (
-                    <span className="bg-primary-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-lg shadow-sm flex items-center gap-1">
+                    <span className="bg-primary-600 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md shadow-sm flex items-center gap-1">
                         Live Token
                     </span>
                 )}
                 
                 {clinic.subscriptionStatus === 'ACTIVE' && (
-                    <span className="bg-primary-50 text-primary-600 border border-primary-100 text-[9px] font-black uppercase px-2 py-0.5 rounded-lg shadow-sm flex items-center gap-0.5 ml-auto">
-                        <ShieldCheck className="h-3 w-3 fill-current" /> Verified
+                    <span className="bg-primary-50 text-primary-600 border border-primary-100 text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md shadow-sm flex items-center gap-0.5 ml-auto">
+                        <ShieldCheck className="h-2.5 w-2.5 fill-current" /> Verified
                     </span>
                 )}
             </div>
 
-            <div className="flex gap-4 mb-4">
-                <div className="w-20 h-20 bg-slate-100 rounded-2xl flex-shrink-0 flex items-center justify-center relative overflow-hidden shadow-inner group-hover:shadow-md transition-all border border-slate-100">
+            <div className="flex gap-3 mb-3">
+                <div className="w-16 h-16 bg-slate-100 rounded-xl flex-shrink-0 flex items-center justify-center relative overflow-hidden shadow-inner group-hover:shadow-md transition-all border border-slate-100">
                     {clinic.imageUrl ? (
                         <img src={clinic.imageUrl} alt={clinic.name} className="w-full h-full object-cover" />
                     ) : (
-                        <Building2 className="h-10 w-10 text-slate-300" />
+                        <Building2 className="h-8 w-8 text-slate-300" />
                     )}
                 </div>
                 
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    <h3 className="font-black text-slate-900 text-base leading-tight group-hover:text-primary-600 transition-colors mb-1 truncate">
+                    <h3 className="font-black text-slate-900 text-sm leading-tight group-hover:text-primary-600 transition-colors mb-0.5">
                         {clinic.name}
                     </h3>
 
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-bold mb-2">
-                        <MapPin className="h-3 w-3 text-slate-400 flex-shrink-0" />
+                    <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold mb-1.5">
+                        <MapPin className="h-2.5 w-2.5 text-slate-400 flex-shrink-0" />
                         <span className="truncate">{clinic.address}</span>
+                        {distLabel && (
+                            <span className="text-blue-600 font-bold flex items-center gap-1 ml-auto">
+                                <Navigation className="h-2.5 w-2.5" />
+                                {distLabel}
+                            </span>
+                        )}
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1 text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded-lg border border-amber-100">
-                            <Star className="h-3 w-3 fill-current" />
-                            <span className="text-[11px] font-black">{avgRating}</span>
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 text-amber-500 bg-amber-50 px-1 py-0.5 rounded-md border border-amber-100">
+                            <Star className="h-2.5 w-2.5 fill-current" />
+                            <span className="text-[9px] font-black">{avgRating}</span>
                         </div>
-                        <span className="text-[10px] bg-slate-100 text-slate-500 font-black px-2 py-0.5 rounded-lg uppercase tracking-tight border border-slate-200">
+                        <span className="text-[8px] bg-slate-100 text-slate-500 font-black px-1.5 py-0.5 rounded-md uppercase tracking-tight border border-slate-200">
                             {clinic.type?.replace('_', ' ') || 'General'}
                         </span>
                     </div>
                 </div>
             </div>
             
-            <div className="space-y-3">
-                <div className="flex flex-wrap gap-2 items-center">
-                    <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Doctors:</span>
+            <div className="space-y-2">
+                <div className="flex flex-wrap gap-1.5 items-center">
+                    <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Doctors:</span>
                     {relevantDoctors.slice(0, 2).map(d => (
-                        <span key={d.id} className="text-[11px] font-bold text-slate-700 bg-slate-50 px-2 py-1 rounded-xl border border-slate-100 truncate max-w-[90px]">Dr. {d.name.split(' ').pop()}</span>
+                        <span key={d.id} className="text-[10px] font-bold text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded-lg border border-slate-100 truncate max-w-[80px]">Dr. {d.name.split(' ').pop()}</span>
                     ))}
-                    {relevantDoctors.length > 2 && <span className="text-primary-600 text-[10px] font-black">+{relevantDoctors.length - 2}</span>}
+                    {relevantDoctors.length > 2 && <span className="text-primary-600 text-[9px] font-black">+{relevantDoctors.length - 2}</span>}
                 </div>
 
-                <div className="flex items-center justify-between pt-1">
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${waitInfo.bgColor} ${waitInfo.borderColor} shadow-sm`}>
-                        <div className={`w-2 h-2 rounded-full ${waitInfo.dotColor} animate-pulse flex-shrink-0`} />
-                        <span className={`text-[11px] font-black uppercase tracking-tight ${waitInfo.textColor}`}>
+                <div className="flex items-center justify-between">
+                    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border ${waitInfo.bgColor} ${waitInfo.borderColor} shadow-sm`}>
+                        <div className={`w-1.5 h-1.5 rounded-full ${waitInfo.dotColor} animate-pulse flex-shrink-0`} />
+                        <span className={`text-[10px] font-black uppercase tracking-tight ${waitInfo.textColor}`}>
                             {isDirectWalkInOnly ? 'Reception Queue' : `${waitInfo.raw}m Wait`}
                         </span>
                     </div>
-                    <div className="flex items-center gap-1 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
-                        <IndianRupeeIcon className="h-3 w-3 text-slate-400" />
-                        <span className="text-[11px] font-black text-slate-700">{feeRange}</span>
+                    <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
+                        <IndianRupeeIcon className="h-2.5 w-2.5 text-slate-400" />
+                        <span className="text-[10px] font-black text-slate-700">{feeRange}</span>
                     </div>
                 </div>
             </div>
         </div>
-        
         {/* Actions Footer */}
-        <div className="bg-slate-50 p-3 flex flex-col sm:flex-row items-stretch gap-2 mt-auto border-t border-slate-100 rounded-b-[1.5rem] overflow-visible">
+        <div className="bg-slate-50 p-2 flex flex-col sm:flex-row items-stretch gap-2 mt-auto border-t border-slate-100 rounded-b-[1.5rem] overflow-visible">
             {canBook && (
                 <div className="flex-1 overflow-visible">
                     <Tooltip text={canQueueOnline ? "Schedule a specific date and time for your consultation" : "Book your appointment slot"}>

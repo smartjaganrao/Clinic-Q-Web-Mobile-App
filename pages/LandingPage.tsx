@@ -464,7 +464,7 @@ function Benefit({ icon: Icon, title, subtitle }: { icon: React.ElementType; tit
   );
 }
 
-function ClinicCard({ clinic, onClick }: { clinic: Clinic; onClick: () => void }) {
+const ClinicCard: React.FC<{ clinic: Clinic; onClick: () => void }> = ({ clinic, onClick }) => {
   const avgRating = useMemo(() => {
     const rs = clinic.doctors.map((d) => d.rating || 0);
     return rs.length ? Math.round((rs.reduce((a, b) => a + b, 0) / rs.length) * 10) / 10 : 4.5;

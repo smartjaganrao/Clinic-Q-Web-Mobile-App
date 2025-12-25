@@ -120,7 +120,8 @@ const generateClinics = (): Clinic[] => {
             city: 'Chennai',
             address: `${ADDRESSES[idx]}, Chennai`,
             pincode: `6000${(idx + 1).toString().padStart(2, '0')}`,
-            operatingHours: '09:00 AM - 09:00 PM',
+            timezone: 'Asia/Kolkata', // IST timezone for Chennai clinics
+            operatingHours: idx % 4 === 0 ? '24 hours' : '09:00 AM - 09:00 PM', // Make every 4th clinic 24 hours
             imageUrl: `https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=300&sig=${idx}`,
             geoLocation: { 
                 lat: 13.0827 + (Math.random() - 0.5) * 0.1, 

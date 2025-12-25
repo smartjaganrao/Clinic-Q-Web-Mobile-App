@@ -31,6 +31,40 @@ const getLocalToday = () => {
     return `${year}-${month}-${day}`;
 };
 
+// Utility to get clinic's current time in their timezone
+const getClinicCurrentTime = (timezone?: string) => {
+    const now = new Date();
+    // For now, handle common timezones. In production, use a proper timezone library
+    let offsetHours = 0;
+    if (timezone === 'Asia/Kolkata') {
+        offsetHours = 5.5; // IST is UTC+5:30
+    } else if (timezone === 'Asia/Dubai') {
+        offsetHours = 4; // GST is UTC+4
+    } else if (timezone === 'Europe/London') {
+        offsetHours = 0; // GMT/BST
+    } else if (timezone === 'America/New_York') {
+        offsetHours = -5; // EST, simplified
+    } else if (timezone === 'Asia/Shanghai') {
+        offsetHours = 8; // CST
+    } else {
+        // Default to client's local time if timezone not recognized
+        return now;
+    }
+
+    // Calculate the time in clinic timezone
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    return new Date(utc + (offsetHours * 3600000));
+};
+
+// Utility to get clinic's current date in YYYY-MM-DD format
+const getClinicToday = (timezone?: string) => {
+    const d = getClinicCurrentTime(timezone);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 // Helper Component to Sync URL Params with State
 const RouteSyncer = ({ currentClinicId, onSync }: { currentClinicId: string | null, onSync: (id: string) => void }) => {
     const params = useParams();
@@ -613,13 +647,16 @@ export default function App() {
                 {currentClinic && (
                     <div className="flex flex-col h-screen">
                         <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm z-20">
-                            <div className="flex items-center gap-3">
+                            <button 
+                                onClick={() => navigate('/')} 
+                                className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                            >
                                 <Logo className="h-8 w-8" />
                                 <div>
                                     <h1 className="text-xl font-bold text-slate-900 leading-none">SmartQFlow</h1>
                                     <span className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">Reception Console</span>
                                 </div>
-                            </div>
+                            </button>
                             <div className="flex items-center gap-4">
                                 <div className="text-right hidden sm:block">
                                     <p className="text-sm font-bold text-slate-900">{currentClinic.name}</p>
@@ -683,13 +720,16 @@ export default function App() {
                     return (
                         <div className="flex flex-col h-screen">
                             <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm z-20">
-                                <div className="flex items-center gap-3">
+                                <button 
+                                    onClick={() => navigate('/')} 
+                                    className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                                >
                                     <Logo className="h-8 w-8" />
                                     <div>
                                         <h1 className="text-xl font-bold text-slate-900 leading-none">SmartQFlow</h1>
                                         <span className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">Doctor Console</span>
                                     </div>
-                                </div>
+                                </button>
                                 <div className="flex items-center gap-4">
                                     <div className="text-right hidden sm:block">
                                         <p className="text-sm font-medium text-slate-900">Dr. {activeDoctor.name}</p>
@@ -738,7 +778,13 @@ export default function App() {
         <Route path="/admin" element={
             <div className="flex flex-col h-screen">
                 <header className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-md z-20">
-                    <div className="flex items-center gap-3"><Logo className="h-8 w-8" /><span className="font-bold text-xl">Super Admin</span></div>
+                    <button 
+                        onClick={() => navigate('/')} 
+                        className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                    >
+                        <Logo className="h-8 w-8" />
+                        <span className="font-bold text-xl">Super Admin</span>
+                    </button>
                     <Button variant="ghost" size="sm" onClick={handleLogout} className="text-white hover:bg-white/10">
                         <LogOut className="h-4 w-4 mr-2" /> Logout
                     </Button>

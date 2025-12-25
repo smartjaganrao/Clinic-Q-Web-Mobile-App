@@ -100,6 +100,22 @@ const createCustomIcon = (colorClass: string, waitTime: string, name: string, is
     });
 };
 
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in km
+};
+
+const deg2rad = (deg: number) => {
+    return deg * (Math.PI / 180);
+};
+
 const userIcon = L.divIcon({
     className: 'user-location-marker',
     html: `<div class="relative cursor-move"><div class="w-5 h-5 bg-blue-600 rounded-full border-2 border-white shadow-xl relative z-10"></div><div class="absolute top-0 left-0 w-5 h-5 bg-blue-500 rounded-full animate-ping opacity-75"></div></div>`,
@@ -148,7 +164,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     };
 
     return (
-        <div className={`w-full md:w-[35%] flex-1 md:flex-none h-full min-h-[400px] md:min-h-0 bg-slate-200 border-l border-slate-200 relative z-0 md:static`}>
+        <div className={`w-full md:w-[40%] flex-none h-[calc(100vh-5rem)] md:h-full bg-slate-200 border-l border-slate-200 relative z-0 md:static pb-0`}>
             <div className="absolute inset-0 md:relative md:h-full md:w-full">
                 <MapContainer 
                     center={initialCenter} 
@@ -177,6 +193,14 @@ export const MapPanel: React.FC<MapPanelProps> = ({
                         const waitInfo = getClinicWaitStats(clinic);
                         const isSelected = selectedClinicId === clinic.id;
                         const icon = createCustomIcon(waitInfo.mapColor, waitInfo.raw, clinic.name, isSelected);
+                        
+                        // Calculate distance if user location is available
+                        let distanceLabel = '';
+                        if (userLocation && !isNaN(userLocation.lat) && !isNaN(userLocation.lng)) {
+                            const distance = calculateDistance(userLocation.lat, userLocation.lng, clinic.geoLocation.lat, clinic.geoLocation.lng);
+                            distanceLabel = `${distance.toFixed(1)} km away`;
+                        }
+                        
                         return (
                             <Marker 
                                 key={clinic.id} 
@@ -191,6 +215,12 @@ export const MapPanel: React.FC<MapPanelProps> = ({
                                     <div className="p-1 min-w-[180px]">
                                         <h3 className="font-bold text-sm mb-1">{clinic.name}</h3>
                                         <p className="text-xs text-slate-500 mb-2">{clinic.address}</p>
+                                        {distanceLabel && (
+                                            <p className="text-xs text-blue-600 font-bold mb-2 flex items-center gap-1">
+                                                <Navigation className="h-3 w-3" />
+                                                {distanceLabel}
+                                            </p>
+                                        )}
                                         <div className="flex justify-between items-center">
                                             <span className={`text-xs font-bold px-1.5 py-0.5 rounded text-white ${waitInfo.mapColor}`}>{waitInfo.raw}m Wait</span>
                                             <button 
@@ -240,6 +270,12 @@ export const MapPanel: React.FC<MapPanelProps> = ({
                                     <p className="text-[11px] text-slate-500 font-bold flex items-center gap-1 mt-1 truncate">
                                         <MapPin className="h-3 w-3 text-slate-400" /> {selectedClinic.address}
                                     </p>
+                                    {userLocation && selectedClinic.geoLocation && (
+                                        <p className="text-[11px] text-blue-600 font-bold flex items-center gap-1 mt-1">
+                                            <Navigation className="h-3 w-3" />
+                                            {calculateDistance(userLocation.lat, userLocation.lng, selectedClinic.geoLocation.lat, selectedClinic.geoLocation.lng).toFixed(1)} km away
+                                        </p>
+                                    )}
                                 </div>
                                 <button 
                                     onClick={() => setSelectedClinicId(null)}
@@ -260,6 +296,16 @@ export const MapPanel: React.FC<MapPanelProps> = ({
                                     <Star className="h-3 w-3 fill-current" />
                                     <span className="text-[10px] font-black">4.8</span>
                                 </div>
+                                <a 
+                                    href={`https://www.google.com/maps/search/?api=1&query=${selectedClinic.geoLocation?.lat},${selectedClinic.geoLocation?.lng}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1 bg-blue-50 text-blue-600 px-3 py-1.5 rounded-xl border border-blue-100 hover:bg-blue-100 transition-colors"
+                                    title="Open in Google Maps"
+                                >
+                                    <Navigation className="h-3 w-3 fill-current" />
+                                    <span className="text-[10px] font-black">Map</span>
+                                </a>
                             </div>
 
                             <button 

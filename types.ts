@@ -213,6 +213,7 @@ export interface Clinic {
   pincode: string;
   coordinates?: { x: number, y: number }; // Mock coordinates for map viz (0-100%)
   geoLocation?: { lat: number, lng: number }; // Real GPS coordinates for distance calc
+  timezone?: string; // New: Clinic timezone (e.g., 'Asia/Kolkata', 'Asia/Dubai')
   operatingHours?: string; // e.g. "09:00 AM - 09:00 PM"
   imageUrl?: string; // New: Clinic Image URL
   contactPhone?: string; // New: Clinic Contact Phone
