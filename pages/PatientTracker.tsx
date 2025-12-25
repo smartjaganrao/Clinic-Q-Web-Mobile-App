@@ -356,7 +356,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const [visitType, setVisitType] = useState<'WALK_IN' | 'APPOINTMENT'>('WALK_IN');
   const [apptDate, setApptDate] = useState('');
   const [apptTime, setApptTime] = useState('');
-  const [travelTime, setTravelTime] = useState('15'); 
+  const [travelTime, setTravelTime] = useState('0'); // Default set to 0 mins
   const [bookingFor, setBookingFor] = useState<'MYSELF' | string>('MYSELF'); 
   const [selectedWalkInShiftId, setSelectedWalkInShiftId] = useState<string | null>(null);
   
@@ -450,7 +450,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const travelEstimate = useMemo(() => {
       if (userLocation && selectedClinic?.geoLocation) {
           const dist = calculateDistance(userLocation.lat, userLocation.lng, selectedClinic.geoLocation.lat, selectedClinic.geoLocation.lng);
-          const mins = Math.ceil(dist * 2 + 5);
+          // Only show travel estimate if distance is significant
+          if (dist < 0.2) return { dist: dist.toFixed(2), mins: 0 };
+          const mins = Math.ceil(dist * 2);
           return { dist: dist.toFixed(1), mins };
       }
       return null;
@@ -459,7 +461,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   useEffect(() => {
       if (travelEstimate) {
           const mins = travelEstimate.mins;
-          if (mins <= 10) setTravelTime('5');
+          if (mins <= 2) setTravelTime('0');
+          else if (mins <= 10) setTravelTime('5');
           else if (mins <= 20) setTravelTime('15');
           else if (mins <= 40) setTravelTime('30');
           else if (mins <= 55) setTravelTime('45');
@@ -1048,7 +1051,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           // Fix: Accessing totalWaitMins from inside stats property
           const estimatedWaitMins = shiftStats?.stats.totalWaitMins || 0;
           
-          if (travelMins > estimatedWaitMins + 15) { 
+          if (travelMins > estimatedWaitMins + 15 && travelMins > 0) { 
               setShowLateWarningModal(true); 
               return; 
           }
@@ -1770,7 +1773,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                     {visit.diagnosis && ( <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100"> <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Diagnosis</p> <p className="text-sm text-slate-700">{visit.diagnosis}</p> </div> )} {visit.notes && ( <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100"> <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Notes</p> <p className="text-sm text-slate-700 text-ellipsis overflow-hidden line-clamp-3">{visit.notes}</p> </div> )} </div> </div> <div className="pt-3 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400 italic">
                      Visit records are private and secure.
                 </div> </div> ))} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><History className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No past visits</h3><p className="text-slate-500 mb-6 text-center max-sm">Your completed appointment history will appear here.</p></div> )} </div> ) )}
-                {activeTab === 'PROFILE' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full max-w-3xl mx-auto px-4 py-0"> <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6"> <div className="bg-slate-900 p-6 text-white flex justify-between items-center"> <div className="flex items-center gap-4"> <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold backdrop-blur-sm border-2 border-white/30"> {userName.charAt(0)} </div> <div> <h2 className="text-2xl font-bold">{userName}</h2> <p className="opacity-80 font-mono">{userPhone}</p> </div> </div> <button onClick={onBack} className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-colors"> <LogOut className="h-5 w-5" /> </button> </div> <div className="p-6"> <div className="grid md:grid-cols-2 gap-6"> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Full Name</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.name}</div> </div> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Mobile Number</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.phone}</div> </div> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Age</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.age || '-'}</div> </div> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Gender</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.gender || '-'}</div> </div> </div> </div> </div> <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"> <div className="p-6 border-b border-slate-100 flex justify-between items-center"> <div> <h3 className="font-bold text-lg text-slate-900">Family Members</h3> <p className="text-sm text-slate-500">Manage profiles for your family</p> </div> <Button size="sm" onClick={() => { setNewMember({ name: '', age: '', gender: 'Male', relation: '' }); setEditingMemberIndex(null); setIsCustomRelation(false); setShowAddMember(true); }}> <Plus className="h-4 w-4 mr-2" /> Add Member </Button> </div> <div className="divide-y divide-slate-100"> {userProfile?.familyMembers && userProfile.familyMembers.length > 0 ? ( userProfile.familyMembers.map((member, idx) => ( <div key={idx} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"> <div className="flex items-center gap-4"> <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold"> {member.name.charAt(0)} </div> <div> <div className="font-bold text-slate-900">{member.name}</div> <div className="text-xs text-slate-500">{member.relation} • {member.age} Yrs • {member.gender}</div> </div> </div> <div className="flex gap-2"> <button onClick={() => handleEditMember(idx)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="h-4 w-4" /></button> <button onClick={() => setMemberToDeleteIndex(idx)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="h-4 w-4" /></button> </div> </div> )) ) : ( <div className="p-8 text-center text-slate-400 italic">No family members added.</div> )} </div> </div> </div> ) )}
+                {activeTab === 'PROFILE' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full max-w-3xl mx-auto px-4 py-0"> <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6"> <div className="bg-slate-900 p-6 text-white flex justify-between items-center"> <div className="flex items-center gap-4"> <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold backdrop-blur-sm border-2 border-white/30"> {userName.charAt(0)} </div> <div> <h2 className="text-2xl font-bold">{userName}</h2> <p className="opacity-80 font-mono">{userPhone}</p> </div> </div> <button onClick={onBack} className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-colors"> <LogOut className="h-5 w-5" /> </button> </div> <div className="p-6"> <div className="grid md:grid-cols-2 gap-6"> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Full Name</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.name}</div> </div> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Mobile Number</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.phone}</div> </div> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Age</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.age || '-'}</div> </div> <div className="space-y-1"> <label className="text-xs font-bold text-slate-500 uppercase">Gender</label> <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">{userProfile?.gender || '-'}</div> </div> </div> </div> </div> <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"> <div className="p-6 border-b border-slate-100 flex justify-between items-center"> <div> <h3 className="font-bold text-lg text-slate-900">Family Members</h3> <p className="text-sm text-slate-500">Manage profiles for your family</p> </div> <Button size="sm" onClick={() => { setNewMember({ name: '', age: '', gender: 'Male', relation: '' }); setEditingMemberIndex(null); setIsCustomRelation(false); setShowAddMember(true); }}> <Plus className="h-4 w-4 mr-2" /> Add Member </button> </div> <div className="divide-y divide-slate-100"> {userProfile?.familyMembers && userProfile.familyMembers.length > 0 ? ( userProfile.familyMembers.map((member, idx) => ( <div key={idx} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"> <div className="flex items-center gap-4"> <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold"> {member.name.charAt(0)} </div> <div> <div className="font-bold text-slate-900">{member.name}</div> <div className="text-xs text-slate-500">{member.relation} • {member.age} Yrs • {member.gender}</div> </div> </div> <div className="flex gap-2"> <button onClick={() => handleEditMember(idx)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="h-4 w-4" /></button> <button onClick={() => setMemberToDeleteIndex(idx)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="h-4 w-4" /></button> </div> </div> )) ) : ( <div className="p-8 text-center text-slate-400 italic">No family members added.</div> )} </div> </div> </div> ) )}
 
                 {/* BOOK TAB (SEARCH & CLINIC VIEW) */}
                 {activeTab === 'BOOK' && (
@@ -2208,10 +2211,10 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                         <p className="text-[9px] text-slate-600 leading-tight">{selectedClinic.address}, {selectedClinic.city}</p>
                                                                     </div>
                                                                 </div>
-                                                                {selectedClinic.phone && (
+                                                                {selectedClinic.contactPhone && (
                                                                     <div className="flex items-center gap-2">
                                                                         <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                                                                        <p className="text-[10px] font-bold text-slate-700">{selectedClinic.phone}</p>
+                                                                        <p className="text-[10px] font-bold text-slate-700">{selectedClinic.contactPhone}</p>
                                                                     </div>
                                                                 )}
                                                                 {selectedClinic.operationMode && (
@@ -2330,18 +2333,20 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                 {/* Travel Time & Arrival Analysis - Side by Side */}
                                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                                     {/* Travel Time Selector */}
-                                                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col">
+                                                                    <div className={`bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col ${!isWalkInAllowed ? 'opacity-50 grayscale' : ''}`}>
                                                                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Your Travel Time</label>
                                                                         <select
                                                                             value={travelTime}
+                                                                            disabled={!isWalkInAllowed}
                                                                             onChange={(e) => {
                                                                                 setTravelTime(e.target.value);
                                                                                 setShowTravelTimeWarning(true);
                                                                                 // Auto-hide warning after 3 seconds
                                                                                 setTimeout(() => setShowTravelTimeWarning(false), 3000);
                                                                             }}
-                                                                            className="w-full p-2 text-sm font-bold border border-slate-200 rounded-lg bg-white focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                                                                            className="w-full p-2 text-sm font-bold border border-slate-200 rounded-lg bg-white focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                                                         >
+                                                                            <option value="0">0 minutes (At Clinic)</option>
                                                                             <option value="5">5 minutes</option>
                                                                             <option value="10">10 minutes</option>
                                                                             <option value="15">15 minutes</option>
@@ -2353,7 +2358,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                         <p className="text-[9px] text-slate-500 mt-1 flex-1">Estimated time to reach the clinic</p>
 
                                                                         {/* Travel Time Warning */}
-                                                                        {showTravelTimeWarning && (
+                                                                        {showTravelTimeWarning && isWalkInAllowed && (
                                                                             <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 mt-2 animate-in fade-in slide-in-from-top-2 duration-300">
                                                                                 <div className="flex items-center gap-2">
                                                                                     <AlertTriangle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
@@ -2378,7 +2383,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                             const travelMins = parseInt(travelTime);
                                                                             const arrivalTime = new Date(now.getTime() + travelMins * 60000);
                                                                             const estimatedTurn = new Date(now.getTime() + selectedShift.stats.totalWaitMins * 60000);
-                                                                            const isLateRisk = (travelMins + 10) > selectedShift.stats.totalWaitMins;
+                                                                            const isLateRisk = (travelMins + 10) > selectedShift.stats.totalWaitMins && travelMins > 0;
 
                                                                             return (
                                                                                 <div className="flex-1 space-y-3">
@@ -2454,13 +2459,13 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                         <div className="flex flex-col gap-1">
                                                             <button 
                                                                 className={`w-full h-12 text-lg font-black rounded-2xl shadow-xl transition-all text-white disabled:bg-slate-200 disabled:shadow-none disabled:cursor-not-allowed transform active:scale-[0.98] ${visitType === 'APPOINTMENT' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100' : 'bg-primary-600 hover:bg-primary-700 shadow-primary-100'}`} 
-                                                                disabled={(visitType === 'APPOINTMENT' && (!apptDate || !apptTime)) || (visitType === 'WALK_IN' && !selectedWalkInShiftId)} 
+                                                                disabled={(visitType === 'APPOINTMENT' && (!apptDate || !apptTime)) || (visitType === 'WALK_IN' && (!selectedWalkInShiftId || !isWalkInAllowed))} 
                                                                 onClick={() => {
                                                                     if (visitType === 'WALK_IN' && selectedWalkInShiftId) {
                                                                         const selectedShift = walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
                                                                         if (selectedShift) {
                                                                             const travelMins = parseInt(travelTime);
-                                                                            const isLateRisk = (travelMins + 10) > selectedShift.stats.totalWaitMins;
+                                                                            const isLateRisk = (travelMins + 10) > selectedShift.stats.totalWaitMins && travelMins > 0;
                                                                             if (isLateRisk) {
                                                                                 setShowLateWarningModal(true);
                                                                                 return;
@@ -2731,8 +2736,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 <div className="text-center">
                     <p className="text-slate-600 mb-6">Are you sure you want to cancel your visit? This action cannot be undone.</p>
                     <div className="flex gap-3 justify-center">
-                        <Button variant="secondary" onClick={() => setCancelModal({ isOpen: false, visit: null })}>Keep Visit</Button>
-                        {/* Fix: Changed confirmDelete to correctly referenced confirmCancel function */}
+                        <Button variant="secondary" onClick={setCancelModal.bind(null, { isOpen: false, visit: null })}>Keep Visit</Button>
                         <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={confirmCancel}>Yes, Cancel</Button>
                     </div>
                 </div>
