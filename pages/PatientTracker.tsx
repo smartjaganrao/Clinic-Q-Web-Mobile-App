@@ -25,7 +25,7 @@ import {
     Navigation, Timer, Building2, 
     Info, Lock, History, X, AlertCircle, Sun, Moon,
     User, Users, Plus, LogOut, Coffee, LogIn, CloudSun, List as ListIcon, Crosshair, Zap, ExternalLink, ShieldCheck,
-    CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, ChevronLeft, FileText, MoonStar, MessageSquare, Phone, RefreshCw, Map as MapIcon, Languages, MapPinIcon, ThumbsUp, ArrowUpDown, GraduationCap, Award, SlidersHorizontal, ChevronDown, Medal, CalendarClock, Home, LocateFixed, BriefcaseMedical
+    CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, ChevronLeft, FileText, MoonStar, MessageSquare, Phone, RefreshCw, Map as MapIcon, Languages, MapPinIcon, ThumbsUp, ArrowUpDown, GraduationCap, Award, SlidersHorizontal, ChevronDown, Medal, CalendarClock, Home, LocateFixed, BriefcaseMedical, Menu
 } from 'lucide-react';
 
 // SEO URL Helpers
@@ -226,6 +226,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(window.innerWidth < 1024);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const searchBarContainerRef = useRef<HTMLDivElement>(null);
 
   // Auto-collapse sidebar on smaller screens
@@ -405,6 +406,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
   };
 
   const handleTabSwitch = (newTab: 'ACTIVE' | 'BOOK' | 'HISTORY' | 'PROFILE') => {
+      setIsMobileMenuOpen(false);
       if (newTab === 'ACTIVE') navigate('/patient/visits');
       else if (newTab === 'HISTORY') navigate('/patient/history');
       else if (newTab === 'PROFILE') navigate('/patient/profile');
@@ -1561,20 +1563,38 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row overflow-hidden font-sans">
-        <aside className={`hidden md:flex flex-col bg-white border-r border-slate-200 h-screen sticky top-0 shrink-0 z-30 transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'}`}> 
-            <div className={`h-20 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'px-6 justify-between'} border-b border-slate-100 relative`}>
+        {/* MOBILE MENU OVERLAY */}
+        {isMobileMenuOpen && (
+            <div 
+                className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] md:hidden animate-in fade-in duration-300"
+                onClick={() => setIsMobileMenuOpen(false)}
+            />
+        )}
+
+        <aside className={`
+            fixed md:sticky top-0 left-0 h-screen z-[100] md:z-30 shrink-0 bg-white border-r border-slate-200 transition-all duration-300 flex flex-col
+            ${isMobileMenuOpen ? 'translate-x-0 w-64' : '-translate-x-full md:translate-x-0'}
+            ${isSidebarCollapsed ? 'md:w-20' : 'md:w-64'}
+        `}> 
+            <div className={`h-20 flex items-center ${isSidebarCollapsed ? 'md:justify-center' : 'px-6 justify-between'} px-6 md:px-auto border-b border-slate-100 relative`}>
                 <button 
                     onClick={() => navigate('/')} 
                     className="flex items-center gap-2 overflow-hidden whitespace-nowrap hover:opacity-80 transition-opacity"
                 >
                     <Logo className="h-8 w-8 flex-shrink-0" />
-                    <span className={`font-bold text-xl text-slate-900 tracking-tight transition-opacity duration-200 ${isSidebarCollapsed ? 'opacity-0 w-0 hidden' : 'opacity-100'}`}>Smart<span className="text-primary-600">QFlow</span></span>
+                    <span className={`font-bold text-xl text-slate-900 tracking-tight transition-opacity duration-200 ${isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:hidden' : 'opacity-100'}`}>Smart<span className="text-primary-600">QFlow</span></span>
                 </button>
                 <button
                     onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                    className={`absolute -right-3 top-1/2 -translate-y-1/2 bg-white border border-slate-200 rounded-full p-1 shadow-sm text-slate-400 hover:text-primary-600 z-50 ${isSidebarCollapsed ? 'rotate-180' : ''}`}
+                    className={`hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 bg-white border border-slate-200 rounded-full p-1 shadow-sm text-slate-400 hover:text-primary-600 z-50 ${isSidebarCollapsed ? 'rotate-180' : ''}`}
                 >
                     <ChevronLeft className="h-3 w-3" />
+                </button>
+                <button
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="md:hidden p-2 text-slate-400 hover:text-slate-600"
+                >
+                    <X className="h-5 w-5" />
                 </button>
             </div>
             <div className="flex-1 py-6 px-3 space-y-2"> 
@@ -1582,14 +1602,14 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                     <button 
                         key={item.id} 
                         onClick={() => handleTabSwitch(item.id as any)} 
-                        className={`relative group w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-4'} py-3 rounded-xl transition-all font-medium whitespace-nowrap overflow-hidden ${activeTab === item.id ? 'bg-primary-50 text-primary-700 shadow-sm ring-1 ring-primary-200' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                        className={`relative group w-full flex items-center ${isSidebarCollapsed ? 'md:justify-center md:px-0' : 'px-4'} px-4 py-3 rounded-xl transition-all font-medium whitespace-nowrap overflow-hidden ${activeTab === item.id ? 'bg-primary-50 text-primary-700 shadow-sm ring-1 ring-primary-200' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
                     > 
                         <item.icon className={`h-5 w-5 flex-shrink-0 ${activeTab === item.id ? 'text-primary-600' : 'text-slate-400'}`} /> 
-                        <span className={`ml-3 transition-all duration-200 overflow-hidden whitespace-nowrap ${isSidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                        <span className={`ml-3 transition-all duration-200 overflow-hidden whitespace-nowrap ${isSidebarCollapsed ? 'md:w-0 md:opacity-0' : 'w-auto opacity-100'}`}>
                             {item.label}
                         </span>
                         {isSidebarCollapsed && (
-                            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
+                            <div className="hidden md:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
                                 {item.label}
                             </div>
                         )}
@@ -1597,18 +1617,18 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 ))} 
             </div> 
             <div className="p-4 border-t border-slate-100"> 
-                <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} px-0 py-2`}> 
+                <div className={`flex items-center ${isSidebarCollapsed ? 'md:justify-center' : 'gap-3'} gap-3 px-0 py-2`}> 
                     <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold flex-shrink-0">{isGuest ? <User className="h-5 w-5" /> : userName.charAt(0)}</div> 
-                    {!isSidebarCollapsed && (
+                    {(!isSidebarCollapsed || isMobileMenuOpen) && (
                         <div className="flex-1 min-w-0 overflow-hidden">
                             <p className="text-sm font-bold text-slate-900 truncate">{userName}</p>
                             <p className="text-xs text-slate-500 truncate">{userPhone}</p>
                         </div>
                     )}
                 </div> 
-                <button onClick={isGuest ? () => onLoginClick && onLoginClick() : onBack} className={`w-full mt-2 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-center gap-2'} p-2 text-sm ${isGuest ? 'bg-slate-900 text-white hover:bg-slate-800' : 'text-red-600 hover:bg-red-50'} rounded-lg transition-colors`}>
+                <button onClick={isGuest ? () => onLoginClick && onLoginClick() : onBack} className={`w-full mt-2 flex items-center ${isSidebarCollapsed ? 'md:justify-center' : 'justify-center gap-2'} justify-center gap-2 p-2 text-sm ${isGuest ? 'bg-slate-900 text-white hover:bg-slate-800' : 'text-red-600 hover:bg-red-50'} rounded-lg transition-colors`}>
                     {isGuest ? <LogIn className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}
-                    {!isSidebarCollapsed && <span>{isGuest ? 'Login' : 'Logout'}</span>}
+                    {(!isSidebarCollapsed || isMobileMenuOpen) && <span>{isGuest ? 'Login' : 'Logout'}</span>}
                 </button>
             </div> 
         </aside>
@@ -1618,19 +1638,28 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
             <header className="bg-white border-b border-slate-200 px-4 md:px-8 py-3 sticky top-0 z-[60] shadow-sm shrink-0">
                 <div className="flex flex-col gap-3">
-                    {/* Top Row on Mobile: Location, QR, User */}
+                    {/* Top Row on Mobile: Menu, Location, QR, User */}
                     <div className="flex items-center justify-between lg:hidden">
-                        <div className="relative flex items-center gap-1.5 text-xs text-slate-600 font-bold bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
-                            <MapPin className="h-3.5 w-3.5 text-slate-400" />
-                            <select 
-                                className="absolute inset-0 opacity-0 cursor-pointer" 
-                                value={selectedCity} 
-                                onChange={(e) => setSelectedCity(e.target.value)}
+                        <div className="flex items-center gap-3">
+                            <button 
+                                onClick={() => setIsMobileMenuOpen(true)}
+                                className="p-2 text-slate-500 hover:text-primary-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                title="Open Menu"
                             >
-                                {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
-                            </select>
-                            <span className="truncate max-w-[120px]">{selectedCity}</span>
-                            <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+                                <Menu className="h-6 w-6" />
+                            </button>
+                            <div className="relative flex items-center gap-1.5 text-xs text-slate-600 font-bold bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                                <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                                <select 
+                                    className="absolute inset-0 opacity-0 cursor-pointer" 
+                                    value={selectedCity} 
+                                    onChange={(e) => setSelectedCity(e.target.value)}
+                                >
+                                    {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
+                                </select>
+                                <span className="truncate max-w-[120px]">{selectedCity}</span>
+                                <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+                            </div>
                         </div>
                         
                         <div className="flex items-center gap-2">

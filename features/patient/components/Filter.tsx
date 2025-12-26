@@ -68,6 +68,7 @@ export const Filter: React.FC<FilterProps> = ({
             {/* Integrated Filters for Desktop and Mobile */}
             {bookingView === 'LIST' && (
                 <>
+                    {/* Desktop Filters */}
                     <div className="hidden lg:flex items-center gap-2 flex-wrap px-1 pt-3">
                         <div className="relative min-w-[140px] h-11 bg-white rounded-2xl border-2 border-slate-100 shadow-sm px-4 flex items-center gap-2 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-all">
                             <ArrowUpDown className="h-3.5 w-3.5 text-primary-500" />
@@ -97,7 +98,6 @@ export const Filter: React.FC<FilterProps> = ({
                             <ChevronDown className="h-3 w-3 ml-1 opacity-40" />
                         </div>
 
-                        {/* REFINED EXPERIENCE FILTER PILL */}
                         <div className={`relative h-11 rounded-2xl border-2 px-5 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest cursor-pointer transition-all shadow-sm ${selectedMinExperience > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-100 text-slate-600 hover:border-primary-400'}`}>
                             <Award className={`h-4 w-4 ${selectedMinExperience > 0 ? 'text-indigo-600' : 'text-slate-400'}`} />
                             <select className="absolute inset-0 opacity-0 cursor-pointer" value={selectedMinExperience} onChange={(e) => setSelectedMinExperience(Number(e.target.value))}>
@@ -132,19 +132,46 @@ export const Filter: React.FC<FilterProps> = ({
                         </button>
                     </div>
 
-                    <div className="lg:hidden flex flex-wrap gap-2 mt-2">
-                        <div className="relative h-9 bg-white border border-slate-200 rounded-xl px-3 flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase">
+                    {/* Mobile Filters: ALL IN ONE LINE (Scrollable) */}
+                    <div className="lg:hidden flex flex-nowrap overflow-x-auto no-scrollbar gap-2 mt-3 pb-3 -mx-2 px-2 scroll-smooth">
+                        {/* SPECIALIZATION FILTER (Integrated into same line) */}
+                        <div className="relative flex-shrink-0">
+                            <div className="relative flex items-center gap-1.5 h-10 px-3 bg-white rounded-xl border border-slate-200 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-all shadow-sm">
+                                <LayoutGrid className="h-3.5 w-3.5 text-primary-500 shrink-0" />
+                                <select 
+                                    className="absolute inset-0 opacity-0 cursor-pointer w-full" 
+                                    value={selectedCategory} 
+                                    onChange={(e) => setSelectedCategory(e.target.value)}
+                                >
+                                    {CATEGORIES.map(cat => (
+                                        <option key={cat.id} value={cat.id}>
+                                            {cat.label}
+                                        </option>
+                                    ))}
+                                </select>
+                                <span className="truncate max-w-[80px]">
+                                    {CATEGORIES.find(c => c.id === selectedCategory)?.label.replace(' All Specializations', 'All').replace(' Specializations', '') || 'All'}
+                                </span>
+                                <ChevronDown className="h-2.5 w-2.5 opacity-40 shrink-0" />
+                            </div>
+                        </div>
+
+                        <div className="relative flex-shrink-0 h-10 bg-white border border-slate-200 rounded-xl px-3 flex items-center gap-1.5 text-[9px] font-black text-slate-500 uppercase shadow-sm">
+                            <ArrowUpDown className="h-3 w-3 text-primary-500" />
                             <select className="absolute inset-0 opacity-0" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}><option value="NEAR">Near</option><option value="WAIT">Wait</option><option value="FEE">Fee</option></select>
                             <span>{sortBy === 'NEAR' ? 'Near' : sortBy === 'WAIT' ? 'Wait' : 'Fee'}</span>
                             <ChevronDown className="h-2.5 w-2.5 opacity-50" />
                         </div>
+
                         <button
                             onClick={() => setShowOpenOnly(!showOpenOnly)}
-                            className={`h-9 px-3 rounded-xl border transition-all text-[9px] font-black uppercase flex items-center gap-1.5 ${showOpenOnly ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-200 text-slate-500'}`}
+                            className={`flex-shrink-0 h-10 px-3 rounded-xl border transition-all text-[9px] font-black uppercase flex items-center gap-1.5 shadow-sm ${showOpenOnly ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-200 text-slate-500'}`}
                         >
-                            <Clock className="h-3 w-3" /> Open
+                            <Clock className={`h-3 w-3 ${showOpenOnly ? 'fill-current' : ''}`} /> Open
                         </button>
-                        <div className="relative h-9 bg-white border border-slate-200 rounded-xl px-3 flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase">
+
+                        <div className="relative flex-shrink-0 h-10 bg-white border border-slate-200 rounded-xl px-3 flex items-center gap-1.5 text-[9px] font-black text-slate-500 uppercase shadow-sm">
+                            <User className="h-3 w-3 text-primary-500" />
                             <select className="absolute inset-0 opacity-0 cursor-pointer" value={selectedDoctorGender} onChange={(e) => setSelectedDoctorGender(e.target.value)}>
                                 <option value="ALL">Gender</option>
                                 <option value="Male">Male</option>
@@ -153,7 +180,9 @@ export const Filter: React.FC<FilterProps> = ({
                             <span>{selectedDoctorGender === 'ALL' ? 'Gender' : selectedDoctorGender}</span>
                             <ChevronDown className="h-2.5 w-2.5 opacity-50" />
                         </div>
-                        <div className="relative h-9 bg-white border border-slate-200 rounded-xl px-3 flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase">
+
+                        <div className="relative flex-shrink-0 h-10 bg-white border border-slate-200 rounded-xl px-3 flex items-center gap-1.5 text-[9px] font-black text-slate-500 uppercase shadow-sm">
+                            <Award className="h-3.5 w-3.5 text-primary-500" />
                             <select className="absolute inset-0 opacity-0 cursor-pointer" value={selectedMinExperience} onChange={(e) => setSelectedMinExperience(Number(e.target.value))}>
                                 <option value={0}>Exp</option>
                                 <option value={5}>5+ Yrs</option>
@@ -162,44 +191,22 @@ export const Filter: React.FC<FilterProps> = ({
                             <span className="truncate">{selectedMinExperience === 0 ? 'Exp' : `${selectedMinExperience}+ Yrs`}</span>
                             <ChevronDown className="h-2.5 w-2.5 opacity-50" />
                         </div>
+
                         <button 
                             onClick={() => setShowMap(!showMap)} 
-                            className={`h-9 px-3 flex items-center gap-2 rounded-xl border transition-all ${showMap ? 'bg-primary-600 text-white border-primary-600 shadow-sm' : 'bg-white text-slate-500 border-slate-200'}`}
+                            className={`flex-shrink-0 h-10 px-4 flex items-center gap-2 rounded-xl border transition-all shadow-sm ${showMap ? 'bg-primary-600 border-primary-600 text-white' : 'bg-white border-slate-200 text-slate-500'}`}
                         >
-                            {showMap ? <ListIcon className="h-4 w-4" /> : <MapIcon className="h-4 w-4" />}
+                            {showMap ? <ListIcon className="h-3.5 w-3.5" /> : <MapIcon className="h-3.5 w-3.5" />}
                             <span className="text-[9px] font-black uppercase tracking-widest">{showMap ? 'List' : 'Map'}</span>
                         </button>
                     </div>
                 </>
             )}
 
-            {/* Specialization Filter: Dropdown on Mobile/Tablet, Pills on Desktop */}
+            {/* Desktop-only Specialization Category row */}
             {bookingView === 'LIST' && (
-                <div className="mt-3 pb-2">
-                    {/* Mobile/Tablet Dropdown */}
-                    <div className="lg:hidden relative">
-                        <div className="relative flex items-center gap-2 h-10 px-4 bg-white rounded-xl border border-slate-200 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-all shadow-sm">
-                            <LayoutGrid className="h-4 w-4 text-primary-500 shrink-0" />
-                            <select 
-                                className="absolute inset-0 opacity-0 cursor-pointer w-full" 
-                                value={selectedCategory} 
-                                onChange={(e) => setSelectedCategory(e.target.value)}
-                            >
-                                {CATEGORIES.map(cat => (
-                                    <option key={cat.id} value={cat.id}>
-                                        {cat.label}
-                                    </option>
-                                ))}
-                            </select>
-                            <span className="truncate flex-1">
-                                {CATEGORIES.find(c => c.id === selectedCategory)?.label || 'All Specializations'}
-                            </span>
-                            <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
-                        </div>
-                    </div>
-
-                    {/* Desktop Pills */}
-                    <div className="hidden lg:flex gap-2 overflow-x-auto no-scrollbar pt-1 pb-1">
+                <div className="hidden lg:block mt-3 pb-2">
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar pt-1 pb-1">
                         {CATEGORIES.map(cat => (
                             <button
                                 key={cat.id}
