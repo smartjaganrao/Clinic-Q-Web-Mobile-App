@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
     MapPin,
@@ -13,7 +14,8 @@ import {
     User,
     Award,
     X,
-    LayoutGrid
+    LayoutGrid,
+    Clock
 } from 'lucide-react';
 
 interface FilterProps {
@@ -27,6 +29,8 @@ interface FilterProps {
     setSelectedCity: (city: string) => void;
     showMap: boolean;
     setShowMap: (show: boolean) => void;
+    showOpenOnly: boolean;
+    setShowOpenOnly: (show: boolean) => void;
     selectedDoctorGender: string;
     setSelectedDoctorGender: (gender: string) => void;
     selectedMinExperience: number;
@@ -34,7 +38,6 @@ interface FilterProps {
     selectedCategory: string;
     setSelectedCategory: (category: string) => void;
     CATEGORIES: { id: string; label: string; icon: React.ElementType }[];
-    // Fix: Added 'DOCTOR_PROFILE' to the allowed types for bookingView to resolve type mismatch in PatientTracker
     bookingView: 'LIST' | 'CLINIC_DETAILS' | 'DOCTOR_PROFILE' | 'FORM';
 }
 
@@ -49,6 +52,8 @@ export const Filter: React.FC<FilterProps> = ({
     setSelectedCity,
     showMap,
     setShowMap,
+    showOpenOnly,
+    setShowOpenOnly,
     selectedDoctorGender,
     setSelectedDoctorGender,
     selectedMinExperience,
@@ -64,8 +69,8 @@ export const Filter: React.FC<FilterProps> = ({
             {bookingView === 'LIST' && (
                 <>
                     <div className="hidden lg:flex items-center gap-2 flex-wrap px-1 pt-3">
-                        <div className="relative min-w-[140px] h-11 bg-slate-50 rounded-2xl border-2 border-slate-200 px-3 flex items-center gap-2 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-colors">
-                            <ArrowUpDown className="h-3.5 w-3.5" />
+                        <div className="relative min-w-[140px] h-11 bg-white rounded-2xl border-2 border-slate-100 shadow-sm px-4 flex items-center gap-2 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-all">
+                            <ArrowUpDown className="h-3.5 w-3.5 text-primary-500" />
                             <select className="absolute inset-0 opacity-0 cursor-pointer" value={sortBy} onChange={(e) => { const val = e.target.value as any; setSortBy(val); }}>
                                 <option value="NEAR">Nearest</option><option value="WAIT">Shortest Wait</option><option value="FEE">Lowest Fee</option>
                             </select>
@@ -73,42 +78,54 @@ export const Filter: React.FC<FilterProps> = ({
                             <ChevronDown className="h-3 w-3 ml-auto opacity-40" />
                         </div>
 
-                        <div className="relative h-11 bg-slate-50 rounded-2xl border-2 border-slate-200 px-4 flex items-center gap-2 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-colors">
+                        <button
+                            onClick={() => setShowOpenOnly(!showOpenOnly)}
+                            className={`h-11 px-5 rounded-2xl border-2 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${showOpenOnly ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-600 hover:border-emerald-400'}`}
+                        >
+                            <Clock className={`h-3.5 w-3.5 ${showOpenOnly ? 'fill-current' : ''}`} />
+                            Open Now
+                        </button>
+
+                        <div className={`relative h-11 rounded-2xl border-2 px-5 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest cursor-pointer transition-all shadow-sm ${selectedDoctorGender !== 'ALL' ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-100 text-slate-600 hover:border-primary-400'}`}>
                             <User className="h-3.5 w-3.5" />
                             <select className="absolute inset-0 opacity-0 cursor-pointer" value={selectedDoctorGender} onChange={(e) => setSelectedDoctorGender(e.target.value)}>
                                 <option value="ALL">All Genders</option>
                                 <option value="Male">Male Doctor</option>
                                 <option value="Female">Female Doctor</option>
                             </select>
-                            <span className="truncate">{selectedDoctorGender === 'ALL' ? 'Gender' : `${selectedDoctorGender} Doctor`}</span>
+                            <span className="truncate">{selectedDoctorGender === 'ALL' ? 'Gender' : `${selectedDoctorGender}`}</span>
                             <ChevronDown className="h-3 w-3 ml-1 opacity-40" />
                         </div>
 
-                        <div className="relative h-11 bg-slate-50 rounded-2xl border-2 border-slate-200 px-4 flex items-center gap-2 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-colors">
-                            <Award className="h-3.5 w-3.5" />
+                        {/* REFINED EXPERIENCE FILTER PILL */}
+                        <div className={`relative h-11 rounded-2xl border-2 px-5 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest cursor-pointer transition-all shadow-sm ${selectedMinExperience > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-100 text-slate-600 hover:border-primary-400'}`}>
+                            <Award className={`h-4 w-4 ${selectedMinExperience > 0 ? 'text-indigo-600' : 'text-slate-400'}`} />
                             <select className="absolute inset-0 opacity-0 cursor-pointer" value={selectedMinExperience} onChange={(e) => setSelectedMinExperience(Number(e.target.value))}>
                                 <option value={0}>Any Experience</option>
+                                <option value={2}>2+ Years</option>
                                 <option value={5}>5+ Years</option>
                                 <option value={10}>10+ Years</option>
                                 <option value={15}>15+ Years</option>
                                 <option value={20}>20+ Years</option>
                             </select>
-                            <span className="truncate">{selectedMinExperience === 0 ? 'Experience' : `${selectedMinExperience}+ Years`}</span>
-                            <ChevronDown className="h-3 w-3 ml-1 opacity-40" />
+                            <span className="truncate whitespace-nowrap">
+                                {selectedMinExperience === 0 ? 'Experience' : `${selectedMinExperience}+ Yrs Exp`}
+                            </span>
+                            <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-40" />
                         </div>
                         
-                        {(selectedDoctorGender !== 'ALL' || selectedMinExperience > 0 || selectedCategory !== 'ALL') && (
+                        {(selectedDoctorGender !== 'ALL' || selectedMinExperience > 0 || selectedCategory !== 'ALL' || showOpenOnly) && (
                             <button
-                                onClick={() => { setSelectedDoctorGender('ALL'); setSelectedMinExperience(0); setSelectedCategory('ALL'); }}
+                                onClick={() => { setSelectedDoctorGender('ALL'); setSelectedMinExperience(0); setSelectedCategory('ALL'); setShowOpenOnly(false); }}
                                 className="h-11 px-4 rounded-2xl bg-slate-200 text-slate-600 hover:bg-slate-300 transition-all text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5"
                             >
-                                <X className="h-3 w-3" /> Clear Filters
+                                <X className="h-3 w-3" /> Clear
                             </button>
                         )}
 
                         <button 
                             onClick={() => setShowMap(!showMap)} 
-                            className={`h-11 px-5 flex items-center gap-2.5 rounded-2xl border-2 transition-all shrink-0 ml-auto ${showMap ? 'bg-primary-600 border-primary-600 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-500 hover:border-primary-400'}`}
+                            className={`h-11 px-6 flex items-center gap-2.5 rounded-2xl border-2 transition-all shrink-0 ml-auto shadow-md ${showMap ? 'bg-primary-600 border-primary-600 text-white' : 'bg-white border-slate-100 text-slate-500 hover:border-primary-400'}`}
                         >
                             {showMap ? <ListIcon className="h-4 w-4" /> : <MapIcon className="h-4 w-4" />}
                             <span className="text-[10px] font-black uppercase tracking-widest">{showMap ? 'Show List' : 'Show Map'}</span>
@@ -121,6 +138,12 @@ export const Filter: React.FC<FilterProps> = ({
                             <span>{sortBy === 'NEAR' ? 'Near' : sortBy === 'WAIT' ? 'Wait' : 'Fee'}</span>
                             <ChevronDown className="h-2.5 w-2.5 opacity-50" />
                         </div>
+                        <button
+                            onClick={() => setShowOpenOnly(!showOpenOnly)}
+                            className={`h-9 px-3 rounded-xl border transition-all text-[9px] font-black uppercase flex items-center gap-1.5 ${showOpenOnly ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-200 text-slate-500'}`}
+                        >
+                            <Clock className="h-3 w-3" /> Open
+                        </button>
                         <div className="relative h-9 bg-white border border-slate-200 rounded-xl px-3 flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase">
                             <select className="absolute inset-0 opacity-0 cursor-pointer" value={selectedDoctorGender} onChange={(e) => setSelectedDoctorGender(e.target.value)}>
                                 <option value="ALL">Gender</option>
@@ -132,11 +155,11 @@ export const Filter: React.FC<FilterProps> = ({
                         </div>
                         <div className="relative h-9 bg-white border border-slate-200 rounded-xl px-3 flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase">
                             <select className="absolute inset-0 opacity-0 cursor-pointer" value={selectedMinExperience} onChange={(e) => setSelectedMinExperience(Number(e.target.value))}>
-                                <option value={0}>Any Exp</option>
+                                <option value={0}>Exp</option>
                                 <option value={5}>5+ Yrs</option>
                                 <option value={10}>10+ Yrs</option>
                             </select>
-                            <span className="truncate">{selectedMinExperience === 0 ? 'Experience' : `${selectedMinExperience}+ Yrs`}</span>
+                            <span className="truncate">{selectedMinExperience === 0 ? 'Exp' : `${selectedMinExperience}+ Yrs`}</span>
                             <ChevronDown className="h-2.5 w-2.5 opacity-50" />
                         </div>
                         <button 
@@ -146,21 +169,13 @@ export const Filter: React.FC<FilterProps> = ({
                             {showMap ? <ListIcon className="h-4 w-4" /> : <MapIcon className="h-4 w-4" />}
                             <span className="text-[9px] font-black uppercase tracking-widest">{showMap ? 'List' : 'Map'}</span>
                         </button>
-                         {(selectedDoctorGender !== 'ALL' || selectedMinExperience > 0 || selectedCategory !== 'ALL') && (
-                            <button
-                                onClick={() => { setSelectedDoctorGender('ALL'); setSelectedMinExperience(0); setSelectedCategory('ALL'); }}
-                                className="h-9 px-3 rounded-xl bg-slate-200 text-slate-600 transition-all text-[9px] font-black uppercase flex items-center gap-1.5"
-                            >
-                                <X className="h-3 w-3" /> Clear
-                            </button>
-                        )}
                     </div>
                 </>
             )}
 
             {/* Specialization Filter: Dropdown on Mobile/Tablet, Pills on Desktop */}
             {bookingView === 'LIST' && (
-                <div className="mt-3">
+                <div className="mt-3 pb-2">
                     {/* Mobile/Tablet Dropdown */}
                     <div className="lg:hidden relative">
                         <div className="relative flex items-center gap-2 h-10 px-4 bg-white rounded-xl border border-slate-200 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-all shadow-sm">
@@ -189,9 +204,9 @@ export const Filter: React.FC<FilterProps> = ({
                             <button
                                 key={cat.id}
                                 onClick={() => setSelectedCategory(cat.id)}
-                                className={`flex items-center gap-2 px-4 h-9 rounded-full border-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategory === cat.id ? 'bg-primary-600 text-white border-primary-600 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
+                                className={`flex items-center gap-2 px-5 h-9 rounded-full border-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategory === cat.id ? 'bg-primary-600 text-white border-primary-600 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
                             >
-                                <cat.icon className="h-3.5 w-3.5" /> {cat.label.replace(' Specializations', '')}
+                                <cat.icon className={`h-3.5 w-3.5 ${selectedCategory === cat.id ? 'text-white' : 'text-primary-500'}`} /> {cat.label.replace(' Specializations', '')}
                             </button>
                         ))}
                     </div>

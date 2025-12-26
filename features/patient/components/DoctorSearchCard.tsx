@@ -146,7 +146,7 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
                   <h3 className="font-black text-slate-900 text-sm leading-tight truncate group-hover:text-primary-600 transition-colors">
                     {doctor.name}
                   </h3>
-                  <p className="text-[10px] text-primary-600 font-black uppercase tracking-widest flex items-center gap-1 mt-0.5">
+                  <p className="text-[10px] text-primary-600 font-black uppercase tracking-widest flex items-center gap-1 mt-0.5 mb-2">
                     <Stethoscope className="h-3 w-3" />
                     {doctor.specialty}
                   </p>

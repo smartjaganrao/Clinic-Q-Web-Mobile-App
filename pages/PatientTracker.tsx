@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useMatch, useLocation, useSearchParams } from 'react-router-dom';
 import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode, Review, TimeSlot } from '../types';
@@ -131,13 +132,14 @@ const CATEGORIES = [
     { id: 'PEDIATRIC', label: 'Child Care (KIDS)', icon: Baby },
     { id: 'GYNECOLOGY', label: 'Women\'s Health', icon: Heart },
     { id: 'ORTHOPEDIC', label: 'Bone & Joint', icon: Activity },
+    { id: 'ORTHOPEDIC', label: 'Bone & Joint', icon: Activity },
     { id: 'DERMATOLOGY', label: 'Skin Care', icon: Sparkles },
     { id: 'OPHTHALMOLOGY', label: 'Eye Care', icon: Eye },
     { id: 'ENT', label: 'ENT Care', icon: Ear },
 ];
 
 const RELATIONSHIP_OPTIONS = [
-    "Mother", "Father", "Husband", "Wife", "Son", "Daughter", 
+    "Mother", "Father", "Husband", "Wife", "Son", " Daughter", 
     "Brother", "Sister", "Grandfather", "Grandmother", "Friend"
 ];
 
@@ -536,48 +538,81 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     return historyVisits.find(v => v.status === PatientStatus.COMPLETED && !v.rating);
   }, [historyVisits]);
 
+  // COMBINED RELEVANT DOCTORS HELPER (used for list and card display)
+  const getRelevantDoctors = (clinic: Clinic) => {
+      let relevant = clinic.doctors;
+      
+      // Filter by Search Query (if applicable to doctor name or specialty)
+      if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          relevant = relevant.filter(d => 
+              d.name.toLowerCase().includes(q) || 
+              d.specialty.toLowerCase().includes(q)
+          );
+      }
+
+      // Filter by Specialty
+      if (selectedSpecialty !== 'All Specialties') {
+          relevant = relevant.filter(d => d.specialty === selectedSpecialty);
+      } else if (selectedCategory !== 'ALL') {
+          const cat = selectedCategory.toLowerCase();
+          relevant = relevant.filter(d => {
+              const spec = d.specialty.toLowerCase();
+              if (cat === 'dental') return spec.includes('dent');
+              if (cat === 'pediatric') return spec.includes('pedia');
+              if (cat === 'gynecology') return spec.includes('gyne') || spec.includes('women');
+              if (cat === 'orthopedic') return spec.includes('ortho') || spec.includes('bone');
+              if (cat === 'dermatology') return spec.includes('derma') || spec.includes('skin');
+              if (cat === 'ophthalmology') return spec.includes('ophthalm') || spec.includes('eye');
+              if (cat === 'ent') return spec.includes('ent') || spec.includes('ear');
+              return true;
+          });
+      }
+      
+      // Filter by Gender
+      if (selectedDoctorGender !== 'ALL') {
+          relevant = relevant.filter(d => d.gender === selectedDoctorGender);
+      }
+
+      // Filter by Experience (User's specific request)
+      if (selectedMinExperience > 0) {
+          relevant = relevant.filter(d => (d.experience || 0) >= selectedMinExperience);
+      }
+
+      return relevant;
+  };
+
   const filteredClinics = useMemo(() => { 
       let filtered = clinics; 
+
+      // 1. Clinic-Level Text Search (City or Name)
       if (searchQuery) { 
           const q = searchQuery.toLowerCase(); 
-          const matchedTypes: string[] = []; 
-          Object.keys(SYMPTOM_MAP).forEach(key => { if (q.includes(key)) matchedTypes.push(...SYMPTOM_MAP[key]); }); 
-          
+          // Match if clinic name, city, or any of its doctors match
           filtered = filtered.filter(c => 
               c.name.toLowerCase().includes(q) || 
               c.city.toLowerCase().includes(q) || 
-              c.doctors.some(d => d.specialty.toLowerCase().includes(q) || d.name.toLowerCase().includes(q)) || 
-              (matchedTypes.length > 0 && c.type && matchedTypes.includes(c.type))
+              c.doctors.some(d => d.specialty.toLowerCase().includes(q) || d.name.toLowerCase().includes(q))
           ); 
       }
+
+      // 2. City Filter
       if (selectedCity !== 'All Cities') {
           filtered = filtered.filter(c => c.city === selectedCity);
       }
-      if (selectedSpecialty !== 'All Specialties') {
-          filtered = filtered.filter(c => clinics.some(clinic => clinic.id === c.id && clinic.doctors.some(d => d.specialty === selectedSpecialty)));
-      }
-      if (selectedCategory !== 'ALL') { 
-          filtered = filtered.filter(c => { 
-              if (selectedCategory === 'GENERAL') return c.type === 'GENERAL'; 
-              if (selectedCategory === 'DENTAL') return c.type === 'DENTAL'; 
-              if (selectedCategory === 'PEDIATRIC') return c.type === 'PEDIATRIC'; 
-              if (selectedCategory === 'GYNECOLOGY') return c.type === 'GYNECOLOGY'; 
-              if (selectedCategory === 'ORTHOPEDIC') return c.type === 'ORTHOPEDIC'; 
-              if (selectedCategory === 'DERMATOLOGY') return c.type === 'DERMATOLOGY'; 
-              if (selectedCategory === 'OPHTHALMOLOGY') return c.doctors.some(d => d.specialty.includes('Ophthalm') || d.specialty.includes('Eye')); 
-              if (selectedCategory === 'ENT') return c.doctors.some(d => d.specialty.includes('ENT')); 
-              return true; 
-          }); 
-      }
-      if (selectedDoctorGender !== 'ALL') {
-          filtered = filtered.filter(c => c.doctors.some(d => d.gender === selectedDoctorGender));
-      }
-      if (selectedMinExperience > 0) {
-          filtered = filtered.filter(c => c.doctors.some(d => (d.experience || 0) >= selectedMinExperience));
-      }
+
+      // 3. Open Status Filter
       if (showOpenOnly) {
           filtered = filtered.filter(c => isClinicOpen(c.operatingHours, c.timezone));
       }
+
+      // 4. Combined Doctor Filters (SPECIALTY + GENDER + EXPERIENCE)
+      // Hide clinic if NO doctor matches the combination of active filters
+      filtered = filtered.filter(c => {
+          const matchingDoctors = getRelevantDoctors(c);
+          return matchingDoctors.length > 0;
+      });
+
       return filtered.sort((a, b) => {
           if (sortBy === 'NEAR' && userLocation) {
               const distA = a.geoLocation ? calculateDistance(userLocation.lat, userLocation.lng, a.geoLocation.lat, a.geoLocation.lng) : 99999;
@@ -663,8 +698,14 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
           if (selectedCategory !== 'ALL') {
               const cat = selectedCategory.toLowerCase();
-              if (cat === 'dental' && !doc.specialty.toLowerCase().includes('dent')) return false;
-              else if (cat === 'pediatric' && !doc.specialty.toLowerCase().includes('pedia')) return false;
+              const spec = doc.specialty.toLowerCase();
+              if (cat === 'dental' && !spec.includes('dent')) return false;
+              if (cat === 'pediatric' && !spec.includes('pedia')) return false;
+              if (cat === 'gynecology' && !(spec.includes('gyne') || spec.includes('women'))) return false;
+              if (cat === 'orthopedic' && !(spec.includes('ortho') || spec.includes('bone'))) return false;
+              if (cat === 'dermatology' && !(spec.includes('derma') || spec.includes('skin'))) return false;
+              if (cat === 'ophthalmology' && !(spec.includes('ophthalm') || spec.includes('eye'))) return false;
+              if (cat === 'ent' && !(spec.includes('ent') || spec.includes('ear'))) return false;
           }
           
           if (selectedDoctorGender !== 'ALL' && doc.gender !== selectedDoctorGender) return false;
@@ -755,14 +796,11 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
           };
       }
 
-      let relevantDoctors = clinic.doctors;
-      if (selectedCategory !== 'ALL') {
-          const term = selectedCategory.toLowerCase();
-          if (term === 'dental') relevantDoctors = relevantDoctors.filter(d => d.specialty.toLowerCase().includes('dent'));
-          else if (term === 'pediatric') relevantDoctors = relevantDoctors.filter(d => d.specialty.toLowerCase().includes('pedia'));
-          else if (term === 'ent') relevantDoctors = relevantDoctors.filter(d => d.specialty.includes('ENT'));
-          
-          if (relevantDoctors.length === 0) relevantDoctors = clinic.doctors;
+      // Important: Wait stats should reflect the matching doctors if filters are active
+      let relevantDoctors = getRelevantDoctors(clinic);
+      if (relevantDoctors.length === 0) {
+          // Fallback if no relevant docs match filters, but clinic is open
+          relevantDoctors = clinic.doctors;
       }
 
       if (relevantDoctors.length === 0) {
@@ -804,34 +842,15 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       return { min, max, label, bgColor: color.split(' ')[0], textColor: color.split(' ')[1], borderColor: color.split(' ')[2], raw, mapColor, peopleCount: peopleStr, dotColor };
   };
 
-  const getFeeRange = (clinic: Clinic) => { if (!clinic.doctors.length) return 'N/A'; const fees = clinic.doctors.map(d => d.consultationFee); const min = Math.min(...fees); const max = Math.min(...fees) === Math.max(...fees) ? Math.min(...fees) : Math.max(...fees); return min === max ? `₹${min}` : `₹${min} - ₹${max}`; };
-  
-  const getRelevantDoctors = (clinic: Clinic) => {
-      let relevant = clinic.doctors;
-      if (selectedSpecialty !== 'All Specialties') {
-          relevant = relevant.filter(d => d.specialty === selectedSpecialty);
-      } else if (selectedCategory !== 'ALL') {
-          const cat = selectedCategory.toLowerCase();
-          if (cat === 'dental') relevant = relevant.filter(d => d.specialty.toLowerCase().includes('dent'));
-          else if (cat === 'pediatric') relevant = relevant.filter(d => d.specialty.toLowerCase().includes('pedia'));
-          else if (cat === 'ent') relevant = relevant.filter(d => d.specialty.includes('ENT'));
-      }
-      
-      if (selectedDoctorGender !== 'ALL') {
-          relevant = relevant.filter(d => d.gender === selectedDoctorGender);
-      }
-      if (selectedMinExperience > 0) {
-          relevant = relevant.filter(d => (d.experience || 0) >= selectedMinExperience);
-      }
-
-      if (searchQuery) {
-          const q = searchQuery.toLowerCase();
-          const matched = relevant.filter(d => d.name.toLowerCase().includes(q));
-          if (matched.length > 0) relevant = matched;
-      }
-      return relevant;
+  const getFeeRange = (clinic: Clinic) => { 
+      const relevant = getRelevantDoctors(clinic);
+      if (!relevant.length) return 'N/A'; 
+      const fees = relevant.map(d => d.consultationFee); 
+      const min = Math.min(...fees); 
+      const max = Math.max(...fees); 
+      return min === max ? `₹${min}` : `₹${min} - ₹${max}`; 
   };
-
+  
   const getSmartQueueDetails = (visit: any) => { 
       const clinic = clinics.find(c => c.id === visit.clinicId); 
       const doctor = clinic?.doctors.find(d => d.id === visit.doctorId); 
@@ -1084,7 +1103,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       }
   };
 
-  // Address Helper
+  // Address Helper - UPDATED to return City for auto-selection
   const reverseGeocode = async (lat: number, lng: number) => {
       try {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
@@ -1093,11 +1112,11 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
               const addr = data.address;
               const street = addr.road || addr.suburb || addr.neighbourhood || '';
               const city = addr.city || addr.town || addr.village || '';
-              return street ? `${street}, ${city}` : city;
+              return { address: street ? `${street}, ${city}` : city, city: city };
           }
-          return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+          return { address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`, city: '' };
       } catch (e) {
-          return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+          return { address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`, city: '' };
       }
   };
 
@@ -1120,9 +1139,17 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             setIsPickingLocation(false);
             addToast("Location found!", "success");
 
-            // Reverse Geocode to show address "Uber-style"
-            const address = await reverseGeocode(latitude, longitude);
+            // Reverse Geocode to show address "Uber-style" AND auto-select city
+            const { address, city } = await reverseGeocode(latitude, longitude);
             setPinnedAddress(address);
+            
+            // Auto-select city if found in our list
+            if (city) {
+                const matchedCity = uniqueCities.find(c => c.toLowerCase() === city.toLowerCase());
+                if (matchedCity) {
+                    setSelectedCity(matchedCity);
+                }
+            }
         },
         (error) => {
             console.error("Geolocation error details:", error);
@@ -1146,8 +1173,12 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       setUserLocation({ lat: latlng.lat, lng: latlng.lng }); 
       setSortBy('NEAR'); 
       addToast("Location updated!", "success");
-      const address = await reverseGeocode(latlng.lat, latlng.lng);
+      const { address, city } = await reverseGeocode(latlng.lat, latlng.lng);
       setPinnedAddress(address);
+      if (city) {
+          const matchedCity = uniqueCities.find(c => c.toLowerCase() === city.toLowerCase());
+          if (matchedCity) setSelectedCity(matchedCity);
+      }
   };
   
   const handleMapSelection = async (latlng: L.LatLng) => { 
@@ -1155,8 +1186,12 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
       setIsPickingLocation(false); 
       setSortBy('NEAR'); 
       addToast("Location pinned!", "success");
-      const address = await reverseGeocode(latlng.lat, latlng.lng);
+      const { address, city } = await reverseGeocode(latlng.lat, latlng.lng);
       setPinnedAddress(address);
+      if (city) {
+          const matchedCity = uniqueCities.find(c => c.toLowerCase() === city.toLowerCase());
+          if (matchedCity) setSelectedCity(matchedCity);
+      }
   };
 
   const mapCenter: [number, number] = useMemo(() => {
@@ -1217,6 +1252,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
               isFull: stats.isFull,
               statusLabel,
               statusColor,
+              load: stats.load,           // Flattened for easy access
+              totalWaitMins,             // Flattened for easy access
               stats: { ...stats, totalWaitMins }
           };
       });
@@ -1751,8 +1788,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         </Button>
                     </div>
                 )}
-                {activeVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6"> {activeVisits.map(visit => { const queueStats = getSmartQueueDetails(visit); return ( <Card key={visit.id} className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"> <div className="p-5 pb-2"> <div className="flex justify-between items-start mb-2"> <div> <div className="flex items-center gap-2 mb-1"> <h3 className="font-black text-lg text-slate-900 leading-tight truncate max-w-[180px]">{visit.clinicName}</h3> </div> <p className="text-sm text-slate-500 font-bold">Dr. {visit.doctorName}</p> <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><User className="h-3 w-3" /> {visit.name}</p> </div> <div className="flex flex-col items-end gap-2"> <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${visit.visitType === 'APPOINTMENT' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-primary-50 text-primary-700 border-primary-200'}`}> {queueStats.typeLabel} </span> <Badge status={visit.status} /> </div> </div> <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-bold"> <span className="flex items-center gap-1 uppercase tracking-tighter"><Calendar className="h-3 w-3" /> Booked: {queueStats.bookedAt}</span> <span className="text-slate-300">|</span> <span className="flex items-center gap-1 uppercase tracking-tighter"><MapPin className="h-3 w-3" /> Room {visit.room}</span> </div> </div> <div className="bg-white border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center"> <div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Your Token</div><div className="text-4xl font-black text-slate-900">#{visit.tokenNumber}</div></div> <div className="border-x border-slate-100"> <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Now Serving</div> <div className={`text-4xl font-black ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-blue-600 animate-pulse' : 'text-slate-300'}`}> {visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken} </div> </div> <div> <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">People Ahead</div> <div className="text-4xl font-black text-slate-900">{queueStats.peopleAhead}</div> </div> </div> <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold border-b border-slate-100 transition-colors`}> {queueStats.doctorStatus === DoctorStatus.ON_BREAK ? <Coffee className="h-5 w-5 animate-bounce" /> : queueStats.peopleAhead < 3 && !visit.isCheckedIn ? <AlertTriangle className="h-5 w-5 animate-pulse" /> : <Timer className="h-5 w-5" />} <div className="flex-1"> <p className="leading-tight">{queueStats.message}</p> {visit.status === PatientStatus.WAITING && ( <div className="flex gap-2 mt-1"> <span className="text-[10px] opacity-70 font-black uppercase tracking-wide">EST. TIME: {queueStats.expectedTime}</span> {visit.visitType === 'APPOINTMENT' && visit.appointmentTime && ( <span className="text-[10px] font-black text-indigo-700 bg-indigo-100/50 px-1 rounded">Slot: {formatTime12h(visit.appointmentTime)}</span> )} </div> )} </div> </div> <div className="p-4 flex gap-2 mt-auto bg-white"> {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && ( <Button className="flex-1 bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-100" onClick={() => setShowQRScanner(true)}> <QrCode className="h-4 w-4 mr-2" /> Check-In </Button> )} <Button variant="secondary" className={`flex-1 font-bold ${visit.isCheckedIn ? 'w-full' : ''} text-red-600 border-red-100 hover:bg-red-50`} onClick={() => setCancelModal({ isOpen: true, visit })} disabled={visit.status === PatientStatus.WITH_DOCTOR}> Cancel </Button> </div> </Card> ); })} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><Calendar className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No active visits</h3><p className="text-slate-500 mb-6 text-center max-sm">Book an appointment or scan a QR code at a clinic to see your live status here.</p><Button onClick={() => handleTabSwitch('BOOK')} size="lg" className="shadow-lg">Find a Doctor</Button></div> )} </div> ) )}
-                {activeTab === 'HISTORY' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-0 max-w-[1920px] mx-auto"> {historyVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4"> {historyVisits.map(visit => ( <div key={visit.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between gap-4 h-full hover:border-primary-200 transition-colors"> <div className="flex-1"> <div className="flex items-start gap-3 mb-3"> <div className={`p-3 rounded-lg flex-shrink-0 ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}> {visit.status === PatientStatus.COMPLETED ? <CheckCircle2 className="h-6 w-6" /> : <X className="h-6 w-6" />} </div> <div className="min-w-0 flex-1"> <h3 className="font-bold text-slate-900 truncate text-base">{visit.clinicName}</h3> <p className="text-sm text-slate-500 truncate">Dr. {visit.doctorName}</p> <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(visit.timeAdded).toLocaleDateString()} at {new Date(visit.timeAdded).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', hour12: true})}</p> </div> </div> <div className="space-y-2"> 
+                {activeVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6"> {activeVisits.map(visit => { const queueStats = getSmartQueueDetails(visit); return ( <Card key={visit.id} className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"> <div className="p-5 pb-2"> <div className="flex justify-between items-start mb-2"> <div> <div className="flex items-center gap-2 mb-1"> <h3 className="font-black text-lg text-slate-900 leading-tight truncate max-w-[180px]">{visit.clinicName}</h3> </div> <p className="text-sm text-slate-500 font-bold">Dr. {visit.doctorName}</p <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><User className="h-3 w-3" /> {visit.name}</p> </div> <div className="flex flex-col items-end gap-2"> <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${visit.visitType === 'APPOINTMENT' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-primary-50 text-primary-700 border-primary-200'}`}> {queueStats.typeLabel} </span> <Badge status={visit.status} /> </div> </div> <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-bold"> <span className="flex items-center gap-1 uppercase tracking-tighter"><Calendar className="h-3 w-3" /> Booked: {queueStats.bookedAt}</span> <span className="text-slate-300">|</span> <span className="flex items-center gap-1 uppercase tracking-tighter"><MapPin className="h-3 w-3" /> Room {visit.room}</span> </div> </div> <div className="bg-white border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center"> <div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Your Token</div><div className="text-4xl font-black text-slate-900">#{visit.tokenNumber}</div></div> <div className="border-x border-slate-100"> <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Now Serving</div> <div className={`text-4xl font-black ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-blue-600 animate-pulse' : 'text-slate-300'}`}> {visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken} </div> </div> <div> <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">People Ahead</div> <div className="text-4xl font-black text-slate-900">{queueStats.peopleAhead}</div> </div> </div> <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold border-b border-slate-100 transition-colors`}> {queueStats.doctorStatus === DoctorStatus.ON_BREAK ? <Coffee className="h-5 w-5 animate-bounce" /> : queueStats.peopleAhead < 3 && !visit.isCheckedIn ? <AlertTriangle className="h-5 w-5 animate-pulse" /> : <Timer className="h-5 w-5" />} <div className="flex-1"> <p className="leading-tight">{queueStats.message}</p> {visit.status === PatientStatus.WAITING && ( <div className="flex gap-2 mt-1"> <span className="text-[10px] opacity-70 font-black uppercase tracking-wide">EST. TIME: {queueStats.expectedTime}</span> {visit.visitType === 'APPOINTMENT' && visit.appointmentTime && ( <span className="text-[10px] font-black text-indigo-700 bg-indigo-100/50 px-1 rounded">Slot: {formatTime12h(visit.appointmentTime)}</span> )} </div> )} </div> </div> <div className="p-4 flex gap-2 mt-auto bg-white"> {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && ( <Button className="flex-1 bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-100" onClick={() => setShowQRScanner(true)}> <QrCode className="h-4 w-4 mr-2" /> Check-In </Button> )} <Button variant="secondary" className={`flex-1 font-bold ${visit.isCheckedIn ? 'w-full' : ''} text-red-600 border-red-100 hover:bg-red-50`} onClick={() => setCancelModal({ isOpen: true, visit })} disabled={visit.status === PatientStatus.WITH_DOCTOR}> Cancel </Button> </div> </Card> ); })} </div> ) : ( <div className="flex flex-col items-center justify-center h-[60vh] opacity-60"><div className="bg-slate-200 p-6 rounded-full mb-4"><Calendar className="h-12 w-12 text-slate-400" /></div><h3 className="text-xl font-bold text-slate-700">No active visits</h3><p className="text-slate-500 mb-6 text-center max-sm">Book an appointment or scan a QR code at a clinic to see your live status here.</p><Button onClick={() => handleTabSwitch('BOOK')} size="lg" className="shadow-lg">Find a Doctor</Button></div> )} </div> ) )}
+                {activeTab === 'HISTORY' && ( isGuest ? <GuestLoginCard /> : ( <div className="w-full h-full px-4 md:px-8 py-0 max-w-[1920px] mx-auto"> {historyVisits.length > 0 ? ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4"> {historyVisits.map(visit => ( <div key={visit.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between gap-4 h-full hover:border-primary-200 transition-colors"> <div className="flex-1"> <div className="flex items-start gap-3 mb-3"> <div className={`p-3 rounded-lg flex-shrink-0 ${visit.status === PatientStatus.COMPLETED ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}> {visit.status === PatientStatus.COMPLETED ? <CheckCircle2 className="h-6 w-6" /> : <X className="h-6 w-6" />} </div> <div className="min-w-0 flex-1"> <h3 className="font-bold text-slate-900 truncate text-base">{visit.clinicName}</h3> <p className="text-sm text-slate-500 truncate">Dr. {visit.doctorName}</p <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(visit.timeAdded).toLocaleDateString()} at {new Date(visit.timeAdded).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', hour12: true})}</p> </div> </div> <div className="space-y-2"> 
                     {visit.rating ? (
                         <div className="bg-amber-50 p-2 rounded-lg border border-amber-100 flex items-center gap-2">
                             <div className="flex">
@@ -1795,6 +1832,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 setSelectedCity={setSelectedCity}
                                 showMap={showMap}
                                 setShowMap={setShowMap}
+                                showOpenOnly={showOpenOnly}
+                                setShowOpenOnly={setShowOpenOnly}
                                 selectedDoctorGender={selectedDoctorGender}
                                 setSelectedDoctorGender={setSelectedDoctorGender}
                                 selectedMinExperience={selectedMinExperience}
@@ -1978,7 +2017,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                             <div className="flex justify-between items-start">
                                                                                 <div className="min-w-0">
                                                                                     <h4 className="font-bold text-slate-900 text-base group-hover:text-primary-600 transition-colors truncate">{doc.name}</h4>
-                                                                                    <p className="text-[10px] text-primary-600 font-black uppercase tracking-wider">{doc.specialty}</p>
+                                                                                    <p className="text-[10px] text-primary-600 font-black uppercase tracking-wider mb-2">{doc.specialty}</p>
                                                                                 </div>
                                                                                 <div className="text-right flex-shrink-0">
                                                                                     <span className="text-base font-black text-slate-900">₹{doc.consultationFee}</span>
@@ -2073,7 +2112,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                         <span className="text-xs font-black">{selectedProfileDoctor.rating.toFixed(1)}</span>
                                                     </div>
                                                 </div>
-                                                <p className="text-primary-600 font-bold uppercase tracking-widest flex items-center gap-2 text-[15px] mb-3">
+                                                <p className="text-primary-600 font-bold uppercase tracking-widest flex items-center gap-2 text-[15px] mb-5">
                                                     <Stethoscope className="h-5 w-5" /> {selectedProfileDoctor.specialty}
                                                 </p>
                                                 <div className="flex flex-wrap gap-2 mb-3">
@@ -2192,7 +2231,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                 <span className="text-[10px] font-black">{selectedDoctor.rating.toFixed(1)}</span>
                                                             </div>
                                                         </div>
-                                                        <p className="text-primary-600 font-black uppercase tracking-widest flex items-center justify-center gap-1.5 text-[11px] mb-2">
+                                                        <p className="text-primary-600 font-black uppercase tracking-widest flex items-center justify-center gap-1.5 text-[11px] mb-6">
                                                             <Stethoscope className="h-4 w-4" /> {selectedDoctor.specialty}
                                                         </p>
                                                     </div>
@@ -2276,7 +2315,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                     </h3>
                                                                     <div className="flex flex-wrap gap-1">
                                                                         {selectedDoctor.languages.slice(0, 4).map((lang, i) => (
-                                                                            <span key={i} className="text-[9px] font-bold text-primary-600 bg-primary-50 px-2 py-1 rounded-lg border border-primary-100">{lang}</span>
+                                                                            <span key={lang} className="text-[9px] font-bold text-primary-600 bg-primary-50 px-2 py-1 rounded-lg border border-primary-100">{lang}</span>
                                                                         ))}
                                                                     </div>
                                                                 </div>
@@ -2379,7 +2418,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                                 </div>
                                                                             );
 
-                                                                            const now = new Date();
+                                                                            const now = getClinicCurrentTime(selectedClinic?.timezone);
                                                                             const travelMins = parseInt(travelTime);
                                                                             const arrivalTime = new Date(now.getTime() + travelMins * 60000);
                                                                             const estimatedTurn = new Date(now.getTime() + selectedShift.stats.totalWaitMins * 60000);
@@ -2417,12 +2456,12 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                                 </div>
 
                                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                                    {walkInShiftsToday.map(({ shift, statusLabel, statusColor, stats, isEnded, isFull }) => (
+                                                                    {walkInShiftsToday.map(({ shift, statusLabel, statusColor, stats, isEnded, isFull, totalWaitMins, load }) => (
                                                                         <div key={shift.id || shift.startTime} onClick={() => !isEnded && !isFull && setSelectedWalkInShiftId(shift.id || shift.startTime)} className={`p-2 rounded-xl border-2 transition-all ${(!isEnded && !isFull) ? 'cursor-pointer' : 'cursor-not-allowed'} ${selectedWalkInShiftId === (shift.id || shift.startTime) ? 'border-primary-600 bg-white shadow-md' : (isEnded || isFull) ? 'bg-slate-100/50 border-transparent opacity-40 grayscale' : 'bg-white border-slate-200 hover:border-primary-300'}`}>
                                                                             <div className="flex justify-between items-start mb-1"><div className={`p-1.5 rounded-lg ${selectedWalkInShiftId === (shift.id || shift.startTime) ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'}`}><Clock className="h-3 w-3" /></div><span className={`text-[7px] font-black uppercase tracking-wider ${statusColor}`}>{statusLabel}</span></div>
                                                                             <h4 className="font-black text-slate-800 text-xs">{shift.label || 'Regular Shift'}</h4>
                                                                             <p className="text-[8px] text-slate-400 font-bold mb-1">{formatTime12h(shift.startTime)} - {formatTime12h(shift.endTime)}</p>
-                                                                            {!isEnded && <div className="border-t border-slate-50 pt-1 flex justify-between items-center"><span className="text-[8px] font-bold text-slate-500">{stats.load} Waiting</span><span className={`text-[9px] font-black ${stats.totalWaitMins > 30 ? 'text-orange-600' : 'text-emerald-600'}`}>~{stats.totalWaitMins}m Wait</span></div>}
+                                                                            {!isEnded && <div className="border-t border-slate-50 pt-1 flex justify-between items-center"><span className="text-[8px] font-bold text-slate-500">{load} Waiting</span><span className={`text-[9px] font-black ${totalWaitMins > 30 ? 'text-orange-600' : 'text-emerald-600'}`}>~{totalWaitMins}m Wait</span></div>}
                                                                         </div>
                                                                     ))}
                                                                 </div>
@@ -2679,7 +2718,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     const selectedShift = walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
                                     if (!selectedShift) return null;
                                     
-                                    const now = new Date();
+                                    const now = getClinicCurrentTime(selectedClinic?.timezone);
                                     const travelMins = parseInt(travelTime);
                                     const arrivalTime = new Date(now.getTime() + travelMins * 60000);
                                     

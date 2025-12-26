@@ -112,7 +112,7 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                 </div>
                 
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    <h3 className="font-black text-slate-900 text-sm leading-tight group-hover:text-primary-600 transition-colors mb-0.5">
+                    <h3 className="font-black text-slate-900 text-sm leading-tight group-hover:text-primary-600 transition-colors mb-1">
                         {clinic.name}
                     </h3>
 
@@ -139,11 +139,14 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                 </div>
             </div>
             
-            <div className="space-y-2">
+            <div className="space-y-3">
                 <div className="flex flex-wrap gap-1.5 items-center">
                     <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Doctors:</span>
                     {relevantDoctors.slice(0, 2).map(d => (
-                        <span key={d.id} className="text-[10px] font-bold text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded-lg border border-slate-100 truncate max-w-[80px]">Dr. {d.name.split(' ').pop()}</span>
+                        <span key={d.id} className="text-[10px] font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100 truncate max-w-[120px] flex items-center gap-1">
+                            Dr. {d.name.split(' ').pop()}
+                            <span className="text-[8px] text-primary-600 font-black bg-primary-50 px-1 rounded">({d.experience}y)</span>
+                        </span>
                     ))}
                     {relevantDoctors.length > 2 && <span className="text-primary-600 text-[9px] font-black">+{relevantDoctors.length - 2}</span>}
                 </div>
