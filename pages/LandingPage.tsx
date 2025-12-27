@@ -29,13 +29,11 @@ import { Logo } from '../components/Logo';
 interface LandingPageProps {
   onPatientEnter: (mode?: 'DOCTOR' | 'CLINIC', query?: string, location?: string) => void;
   onClinicMarketing: () => void;
-  // Fix: Added missing onStaffLogin prop to satisfy App.tsx requirements
   onStaffLogin: () => void;
   onSimulateQRScan: (clinicId: string) => void;
   clinics: Clinic[];
 }
 
-// Map a subset of specialities to friendly labels and icons
 const SPECIALTIES: { label: string; query: string; icon: React.ElementType }[] = [
   { label: 'General Physician', query: 'General Physician', icon: Stethoscope },
   { label: 'Pediatrician', query: 'Pediatric', icon: Users },
@@ -52,17 +50,13 @@ function HeartIconFallback(props: any) {
 export const LandingPage: React.FC<LandingPageProps> = ({
   onPatientEnter,
   onClinicMarketing,
-  // Fix: Destructured onStaffLogin prop
   onStaffLogin,
   onSimulateQRScan,
   clinics,
 }) => {
-  // Search state
-  const [searchMode, setSearchMode] = useState<'DOCTOR' | 'CLINIC'>('DOCTOR');
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
 
-  // Subtle live-queue simulation to communicate the concept
   const [mockQueue, setMockQueue] = useState(8);
   const [mockEta, setMockEta] = useState(22);
   useEffect(() => {
@@ -74,7 +68,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   }, []);
 
   const topClinics = useMemo(() => {
-    // Heuristic: sort by avg doctor rating and limit
     return [...clinics]
       .map((c) => {
         const ratings = c.doctors.map((d) => d.rating || 0);
@@ -85,14 +78,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       .slice(0, 6)
       .map((x) => x.clinic);
   }, [clinics]);
-
-  const handleSearch = () => {
-    onPatientEnter(searchMode, query || undefined, location || undefined);
-  };
-
-  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') handleSearch();
-  };
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-teal-100 selection:text-teal-900 overflow-x-hidden">
@@ -151,17 +136,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 Experience a hassle-free visit. Join live queues remotely and arrive just in time for your consultation.
               </p>
 
-              {/* NEW HERO ACTION CARDS */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto lg:mx-0 mb-8">
+              {/* ACTION CARDS */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto lg:mx-0 mb-10">
                 <HeroActionCard 
-                  title="Find Clinics"
+                  title="FIND CLINICS"
                   description="Search hospitals nearby and see live wait times before you leave."
                   icon={Building2}
                   onClick={() => onPatientEnter('CLINIC')}
                   variant="primary"
                 />
                 <HeroActionCard 
-                  title="Find Doctors"
+                  title="FIND DOCTORS"
                   description="Book specialists based on experience, rating, and fees."
                   icon={UserSearch}
                   onClick={() => onPatientEnter('DOCTOR')}
@@ -360,7 +345,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
       
       {/* CTA FOOTER */}
-      <section className="py-16 bg-slate-900 text-white relative overflow-hidden">
+      <footer className="py-16 bg-slate-900 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-teal-500/20 rounded-full blur-3xl pointer-events-none -mt-32 -mr-32"></div>
         <div className="max-w-4xl mx-auto px-4 text-center relative z-10">
           <h2 className="text-3xl sm:text-4xl font-black mb-4 tracking-tight">Your time matters. Take control of it.</h2>
@@ -380,7 +365,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </button>
           </div>
         </div>
-      </section>
+      </footer>
     </div>
   );
 };
@@ -398,26 +383,36 @@ function HeroActionCard({
   onClick: () => void;
   variant: 'primary' | 'secondary';
 }) {
+  const colorClasses = variant === 'primary' 
+    ? 'text-teal-600 bg-teal-50 group-hover:bg-teal-600 group-hover:text-white group-hover:shadow-teal-200 shadow-teal-50' 
+    : 'text-indigo-600 bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white group-hover:shadow-indigo-200 shadow-indigo-50';
+  
+  const accentTextClass = variant === 'primary' ? 'text-teal-600 group-hover:text-teal-800' : 'text-indigo-600 group-hover:text-indigo-800';
+
   return (
     <button
       onClick={onClick}
-      className={`group relative bg-white border border-slate-200 p-5 rounded-[2rem] text-left transition-all duration-300 hover:shadow-2xl hover:shadow-teal-900/5 hover:-translate-y-1 overflow-hidden`}
+      className={`group relative bg-white border border-slate-200 p-6 sm:p-8 rounded-[2.5rem] text-left transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 overflow-hidden h-full flex flex-col`}
     >
-      <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full blur-2xl opacity-10 transition-opacity group-hover:opacity-20 ${variant === 'primary' ? 'bg-teal-600' : 'bg-indigo-600'}`}></div>
+      {/* Background Hover Glow */}
+      <div className={`absolute -inset-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-2xl ${variant === 'primary' ? 'bg-teal-100/50' : 'bg-indigo-100/50'}`}></div>
       
-      <div className="flex items-center gap-4 mb-3">
-        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 duration-300 ${variant === 'primary' ? 'bg-teal-50 text-teal-600' : 'bg-indigo-50 text-indigo-600'}`}>
-          <Icon className="h-6 w-6" />
+      <div className="relative z-10 flex flex-col flex-1">
+        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 mb-6 shadow-xl ${colorClasses}`}>
+          <Icon className="h-7 w-7" />
         </div>
-        <h3 className="font-black text-slate-900 text-lg leading-tight uppercase tracking-tight">{title}</h3>
-      </div>
-      
-      <p className="text-xs text-slate-500 font-bold leading-relaxed mb-4">
-        {description}
-      </p>
-      
-      <div className={`inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${variant === 'primary' ? 'text-teal-600' : 'text-indigo-600'}`}>
-        Go to search <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" />
+        
+        <h3 className="font-black text-slate-900 text-xl leading-tight mb-3 tracking-tight">
+          {title}
+        </h3>
+        
+        <p className="text-sm text-slate-500 font-medium leading-relaxed mb-6">
+          {description}
+        </p>
+        
+        <div className={`mt-auto inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest transition-colors duration-300 ${accentTextClass}`}>
+          Go to search <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+        </div>
       </div>
     </button>
   );

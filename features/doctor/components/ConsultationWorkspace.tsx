@@ -364,23 +364,30 @@ export const ConsultationWorkspace: React.FC<ConsultationWorkspaceProps> = ({ cu
                     
                     <div 
                         ref={bodyMapRef}
-                        className={`relative w-full aspect-[3/4] bg-slate-100 rounded-xl overflow-hidden border border-slate-200 ${draggingPointIndex !== null ? 'cursor-grabbing' : 'cursor-crosshair'}`} 
+                        className={`relative w-full aspect-[3/4] bg-slate-50 rounded-xl overflow-hidden border border-slate-200 ${draggingPointIndex !== null ? 'cursor-grabbing' : 'cursor-crosshair'}`} 
                         onClick={handlePainPointClick}
                         onMouseMove={handleMouseMove}
                         onMouseUp={handleMouseUp}
                         onMouseLeave={handleMouseUp}
                     >
-                        {/* Abstract Body Shape Placeholder - In real app, use an SVG/Image */}
-                        <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
-                            <Activity className="w-full h-full text-slate-900 p-8" />
+                        {/* Real Human Structure SVG */}
+                        <div className="absolute inset-0 flex items-center justify-center p-2 opacity-10 pointer-events-none">
+                            <svg viewBox="0 0 100 133" className="w-full h-full fill-slate-900">
+                                <path d="M50 2c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm12 14H38c-3.3 0-6 2.7-6 6v30h4v40c0 3.3 2.7 6 6 6h16c3.3 0 6-2.7 6-6V52h4V22c0-3.3-2.7-6-6-6zM46 128H38v-32h8v32zm16 0h-8v-32h8v32zM32 24c0-1.1.9-2 2-2h32c1.1 0 2 .9 2 2v28h-36V24zM42 56h16v32c0 1.1-.9 2-2 2H44c-1.1 0-2-.9-2-2V56z" />
+                                <path d="M50 16c-8.8 0-16 7.2-16 16v36c0 2.2 1.8 4 4 4h24c2.2 0 4-1.8 4-4V32c0-8.8-7.2-16-16-16zm12 16v32H38V32c0-6.6 5.4-12 12-12s12 5.4 12 12z" opacity="0.5" />
+                            </svg>
                         </div>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-20">
-                            <div className="w-20 h-20 rounded-full bg-slate-400 mb-2"></div>
-                            <div className="w-32 h-40 bg-slate-400 rounded-3xl mb-2"></div>
-                            <div className="flex gap-2">
-                                <div className="w-10 h-40 bg-slate-400 rounded-full"></div>
-                                <div className="w-10 h-40 bg-slate-400 rounded-full"></div>
-                            </div>
+                        
+                        {/* More detailed Anatomical Outline for context */}
+                        <div className="absolute inset-0 flex items-center justify-center p-4 pointer-events-none opacity-20">
+                            <svg viewBox="0 0 100 150" className="w-full h-full stroke-slate-500 fill-none" strokeWidth="0.5">
+                                <path d="M50,5 c-5,0 -9,4 -9,9 c0,5 4,9 9,9 s9,-4 9,-9 c0,-5 -4,-9 -9,-9" /> {/* Head */}
+                                <path d="M35,25 l30,0 c5,0 8,3 8,8 l0,40 c0,5 -3,8 -8,8 l-30,0 c-5,0 -8,-3 -8,-8 l0,-40 c0,-5 3,-8 8,-8" /> {/* Torso */}
+                                <path d="M25,28 l-10,40 c-1,4 2,7 6,6 l4,-30" /> {/* Left Arm */}
+                                <path d="M75,28 l10,40 c1,4 -2,7 -6,6 l-4,-30" /> {/* Right Arm */}
+                                <path d="M40,82 l-5,60 c-1,5 6,5 7,0 l5,-60" /> {/* Left Leg */}
+                                <path d="M60,82 l5,60 c1,5 -6,5 -7,0 l-5,-60" /> {/* Right Leg */}
+                            </svg>
                         </div>
 
                         {/* Pain Points */}
