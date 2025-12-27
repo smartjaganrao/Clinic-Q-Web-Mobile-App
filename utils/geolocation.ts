@@ -15,7 +15,7 @@ export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2
     return R * c; // Distance in km
 };
 
-// Address Helper - UPDATED to return City for auto-selection
+// Address Helper - UPDATED to return City and Postcode for auto-selection
 export const reverseGeocode = async (lat: number, lng: number) => {
     try {
         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
@@ -24,10 +24,15 @@ export const reverseGeocode = async (lat: number, lng: number) => {
             const addr = data.address;
             const street = addr.road || addr.suburb || addr.neighbourhood || '';
             const city = addr.city || addr.town || addr.village || '';
-            return { address: street ? `${street}, ${city}` : city, city: city };
+            const pincode = addr.postcode || '';
+            return { 
+                address: street ? `${street}, ${city}` : city, 
+                city: city,
+                pincode: pincode
+            };
         }
-        return { address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`, city: '' };
+        return { address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`, city: '', pincode: '' };
     } catch (e) {
-        return { address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`, city: '' };
+        return { address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`, city: '', pincode: '' };
     }
 };

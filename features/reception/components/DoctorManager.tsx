@@ -1,7 +1,9 @@
+
 import React from 'react';
 import { Doctor, DoctorStatus } from '../../../types';
 import { Button } from '../../../components/Button';
-import { Plus, Edit2, Trash2, User, Stethoscope, DoorOpen, Coffee, LogOut, CheckCircle2, ChevronDown } from 'lucide-react';
+import { Plus, Edit2, Trash2, User, Stethoscope, DoorOpen, Coffee, LogOut, CheckCircle2, ChevronDown, Clock } from 'lucide-react';
+import { getDoctorTodayShift } from '../../../utils/time';
 
 interface DoctorManagerProps {
   doctors: Doctor[];
@@ -50,12 +52,19 @@ export const DoctorManager: React.FC<DoctorManagerProps> = ({
                             <span className="truncate">{doc.specialty}</span>
                         </div>
                         
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-                                <DoorOpen className="h-3 w-3" /> Room {doc.roomNumber}
+                        <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                                    <DoorOpen className="h-3 w-3" /> Room {doc.roomNumber}
+                                </div>
+                                <div className="text-[10px] font-bold text-slate-400">
+                                    Exp: {doc.experience || 5} Yrs
+                                </div>
                             </div>
-                            <div className="text-[10px] font-bold text-slate-400">
-                                Exp: {doc.experience || 5} Yrs
+                            
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 bg-blue-50/50 px-2 py-1 rounded-lg border border-blue-100/50 w-fit">
+                                <Clock className="h-3 w-3 text-blue-500" />
+                                <span className="uppercase tracking-tight">Today: {getDoctorTodayShift(doc)}</span>
                             </div>
                         </div>
                     </div>

@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { PatientStatus } from '../../../types';
-import { CheckCircle2, X, Calendar, Star, ThumbsUp } from 'lucide-react';
+/* Added missing History import from lucide-react to avoid name collision with browser global History */
+import { CheckCircle2, X, Calendar, Star, ThumbsUp, History } from 'lucide-react';
 import { Button } from '../../../components/Button';
 
 export const HistoryVisitsView = ({ historyVisits, setFeedbackModal }) => {

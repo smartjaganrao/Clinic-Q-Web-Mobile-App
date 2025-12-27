@@ -169,7 +169,7 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
                           )}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        <div className="flex justify-end gap-2 opacity-100 transition-opacity">
                           <button onClick={() => onHistoryClick(patient)} className="flex items-center gap-1.5 px-3 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors">
                               <History className="h-3.5 w-3.5" /> History
                           </button>

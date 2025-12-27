@@ -3,16 +3,19 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Doctor, Patient, PatientStatus, DoctorStatus, PainPoint, Clinic } from '../types';
 import { Button } from '../components/Button';
 import { 
-    Clock12, Coffee, List, X, Building, PlayCircle, User
+    Clock12, Coffee, List, X, Building, PlayCircle, User, LogOut
 } from 'lucide-react';
 import { PatientQueueSidebar } from '../features/doctor/components/PatientQueueSidebar';
 import { ConsultationWorkspace } from '../features/doctor/components/ConsultationWorkspace';
+import { Logo } from '../components/Logo';
 
 interface DoctorProps {
   doctor: Doctor;
   queue: Patient[];
   linkedClinics?: Clinic[];
   currentClinicId?: string;
+  clinicName?: string;
+  clinicCity?: string;
   onSwitchClinic?: (id: string) => void;
   onNextPatient: () => void;
   onCompletePatient: (id: string, notes: string) => void;
@@ -20,11 +23,12 @@ interface DoctorProps {
   onUpdatePatientDetails: (id: string, updates: Partial<Patient>) => void;
   onHoldPatient: (id: string) => void;
   onResumePatient: (id: string) => void;
+  onLogout?: () => void;
 }
 
 export const DoctorDashboard: React.FC<DoctorProps> = ({ 
-    doctor, queue, linkedClinics, currentClinicId, onSwitchClinic,
-    onNextPatient, onCompletePatient, onUpdateStatus, onUpdatePatientDetails, onHoldPatient, onResumePatient 
+    doctor, queue, linkedClinics, currentClinicId, clinicName, clinicCity, onSwitchClinic,
+    onNextPatient, onCompletePatient, onUpdateStatus, onUpdatePatientDetails, onHoldPatient, onResumePatient, onLogout
 }) => {
   const [showMobileQueue, setShowMobileQueue] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -146,13 +150,21 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({
   }, [doctor, currentTime]);
 
   return (
-    <div className="h-full flex flex-col bg-slate-50 overflow-hidden relative">
+    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden relative">
       
-      {/* 1. STATUS & CONTROLS BAR */}
+      {/* 1. STATUS & CONTROLS BAR (Updated with SaaS Integration) */}
       <div className="bg-white border-b border-slate-200 p-3 sm:p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between flex-shrink-0 z-20 gap-3 sm:gap-0">
           <div className="flex items-center gap-3 sm:gap-4">
+              <div className="flex items-center gap-3 mr-4 border-r border-slate-100 pr-4">
+                  <Logo className="h-8 w-8 shrink-0" />
+                  <div className="hidden lg:block">
+                      <h1 className="text-slate-900 font-black text-sm tracking-tight leading-none uppercase">Smart<span className="text-primary-600">QFlow</span></h1>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Medical Console</span>
+                  </div>
+              </div>
+
               <div className="relative">
-                  <img src={doctor.avatarUrl} className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border border-slate-100 object-cover" />
+                  <img src={doctor.avatarUrl} className="w-10 h-10 sm:w-11 sm:h-11 rounded-full border border-slate-100 object-cover" />
                   <div className={`absolute bottom-0 right-0 w-3 h-3 sm:w-3.5 sm:h-3.5 border-2 border-white rounded-full ${doctor.status === DoctorStatus.AVAILABLE ? 'bg-green-500' : doctor.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-400'}`}></div>
               </div>
               <div>
@@ -188,6 +200,11 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+              <div className="hidden xl:block text-right mr-4">
+                  <p className="text-[11px] font-black text-slate-900 leading-tight uppercase tracking-tight">{clinicName}</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">{clinicCity || 'Chennai'}</p>
+              </div>
+
               {/* Break Button */}
               <button 
                   onClick={toggleBreak}
@@ -220,6 +237,14 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({
                           <div className="text-xs sm:text-sm font-bold mt-0.5">15m</div>
                       )}
                   </div>
+              </button>
+
+              <button 
+                  onClick={onLogout}
+                  className="p-3 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all rounded-xl border border-transparent hover:border-red-100"
+                  title="Log out"
+              >
+                  <LogOut className="h-5 w-5" />
               </button>
 
               {/* Mobile Queue Toggle */}
