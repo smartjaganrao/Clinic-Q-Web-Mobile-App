@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Patient, Doctor, PatientStatus } from '../../../types';
 import { History, Edit2, Trash2, CalendarDays, Phone, User, CheckSquare, Square, X, PauseCircle, Star, MessageSquare, AlertTriangle } from 'lucide-react';
@@ -11,11 +10,10 @@ interface PatientDatabaseTableProps {
   onEditClick: (patient: Patient) => void;
   onDeleteClick: (patient: Patient) => void;
   onBulkDelete?: (patients: Patient[]) => void;
-  onBulkStatusChange?: (patients: Patient[], status: PatientStatus) => void;
 }
 
 export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
-  patients, doctors, onHistoryClick, onEditClick, onDeleteClick, onBulkDelete, onBulkStatusChange
+  patients, doctors, onHistoryClick, onEditClick, onDeleteClick, onBulkDelete
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -61,13 +59,6 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
       setIsDeleteModalOpen(false);
   };
 
-  const handleBulkStatusChange = (status: PatientStatus) => {
-      if (onBulkStatusChange && selectedIds.size > 0) {
-          onBulkStatusChange(getSelectedPatients(), status);
-          setSelectedIds(new Set());
-      }
-  };
-
   return (
     <div className="flex-1 overflow-auto bg-slate-50/50 p-2 sm:p-4 relative">
       
@@ -81,12 +72,6 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
                   </button>
               </div>
               <div className="flex items-center gap-2">
-                  <button 
-                      onClick={() => handleBulkStatusChange(PatientStatus.SKIPPED)}
-                      className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-colors"
-                  >
-                      <PauseCircle className="h-3.5 w-3.5" /> Mark Skipped
-                  </button>
                   <button 
                       onClick={handleBulkDeleteInitiate}
                       className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-colors"
@@ -131,7 +116,7 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
                             <div>
                                 <div className="font-bold text-slate-900 text-base">{patient.name}</div>
                                 <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                                    <User className="h-3 w-3" /> {patient.age ? `${patient.age} Yrs` : 'Age --'} • {patient.gender || '--'}
+                                    <User className="h-3.5 w-3.5" /> {patient.age ? `${patient.age} Yrs` : 'Age --'} • {patient.gender || '--'}
                                 </div>
                             </div>
                         </div>
@@ -169,7 +154,7 @@ export const PatientDatabaseTable: React.FC<PatientDatabaseTableProps> = ({
                           )}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2 opacity-100 transition-opacity">
+                        <div className="flex justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                           <button onClick={() => onHistoryClick(patient)} className="flex items-center gap-1.5 px-3 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors">
                               <History className="h-3.5 w-3.5" /> History
                           </button>
