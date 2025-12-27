@@ -242,6 +242,28 @@ export interface AdminProfile {
   lastLogin: string;
 }
 
+export interface FamilyMember {
+    name: string;
+    age: string;
+    gender: string;
+    relation: string;
+}
+
+export interface UserProfile {
+    name: string;
+    phone: string;
+    age: string;
+    gender: string;
+    familyMembers: FamilyMember[];
+}
+
+export interface GroupedSlots {
+    Morning: { value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean }[];
+    Afternoon: { value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean }[];
+    Evening: { value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean }[];
+    Night: { value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean }[];
+}
+
 // Global declaration to fix JSX IntrinsicElements error
 declare global {
   namespace JSX {

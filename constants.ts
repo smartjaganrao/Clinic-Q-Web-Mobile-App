@@ -1,5 +1,6 @@
 
 import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient, TimeSlot, Review, AdminProfile, Staff, ClinicOperationMode } from './types';
+import { Stethoscope, Baby, Smile, Eye, Bone, Accessibility, Heart, Ear, Scissors, Sparkles, LayoutGrid } from 'lucide-react';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const genId = () => Math.random().toString(36).substr(2, 5);
@@ -167,6 +168,35 @@ export const PRICING_PLANS: PricingPlan[] = [
 ];
 
 export const APP_NAME = "SmartQFlow";
+
+export const CATEGORIES = [
+    { id: 'ALL', label: 'All Specializations', icon: LayoutGrid },
+    { id: 'general', label: 'General Physician', icon: Stethoscope },
+    { id: 'pediatric', label: 'Pediatrician', icon: Baby },
+    { id: 'dental', label: 'Dentist', icon: Smile },
+    { id: 'ophthalmology', label: 'Ophthalmologist', icon: Eye },
+    { id: 'orthopedic', label: 'Orthopedic', icon: Bone },
+    { id: 'gynecology', label: 'Gynecologist', icon: Accessibility },
+    { id: 'cardiology', label: 'Cardiologist', icon: Heart },
+    { id: 'dermatology', label: 'Dermatologist', icon: Sparkles },
+    { id: 'ent', label: 'ENT Specialist', icon: Ear },
+    { id: 'surgery', label: 'Surgeon', icon: Scissors },
+];
+
+export const RELATIONSHIP_OPTIONS = ['Self', 'Spouse', 'Child', 'Parent', 'Sibling', 'Other'];
+
+export const SYMPTOM_MAP: { [key: string]: string } = {
+    'Fever, cough, sore throat': 'General Physician',
+    'Child vaccination or illness': 'Pediatrician',
+    'Toothache or dental check-up': 'Dentist',
+    'Eye irritation or vision check': 'Ophthalmologist',
+    'Joint pain or fracture': 'Orthopedic',
+    'Pregnancy or women\'s health': 'Gynecologist',
+    'Chest pain or high BP': 'Cardiologist',
+    'Skin rash or acne': 'Dermatologist',
+    'Ear pain or hearing issues': 'ENT Specialist',
+    'Need for a surgical consultation': 'Surgeon'
+};
 
 export const SUPER_ADMIN_PROFILE: AdminProfile = {
   name: "Arjun Venkat",

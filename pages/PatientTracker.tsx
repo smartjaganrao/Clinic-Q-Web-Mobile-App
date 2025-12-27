@@ -1,190 +1,44 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useMatch, useLocation, useSearchParams } from 'react-router-dom';
-import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode, Review, TimeSlot } from '../types';
+import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode, Review, TimeSlot, FamilyMember, UserProfile, GroupedSlots } from '../types';
 import { Button } from '../components/Button';
-import { Card } from '../components/Card';
 import { Input } from '../components/Input';
-import { Badge } from '../components/Badge';
 import { Logo } from '../components/Logo';
 import { AuthModal } from '../components/AuthModal';
-// Imported Modules - Fixed Paths
-import { ClinicCard } from '../features/patient/components/ClinicCard';
-import { DoctorSearchCard } from '../features/patient/components/DoctorSearchCard';
-import { DoctorProfileModal } from '../features/patient/components/DoctorProfileModal';
 import { MapPanel } from '../features/patient/components/MapPanel';
 import { Filter } from '../features/patient/components/Filter';
 import { Modal } from '../components/Modal';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import L from 'leaflet';
-
 import {
-    ArrowLeft, MapPin, Search, Calendar, QrCode,
-    AlertTriangle, Star, Clock, Stethoscope, Smile,
-    Baby, Heart, Activity, Sparkles, LayoutGrid, Eye, Ear,
+    ArrowLeft, MapPin, Search, QrCode,
+    AlertTriangle, Star, Clock, Stethoscope,
     Navigation, Timer, Building2,
-    Info, Lock, History, X, AlertCircle, Sun, Moon,
-    User, Users, Plus, LogOut, Coffee, LogIn, CloudSun, List as ListIcon, Crosshair, Zap, ExternalLink, ShieldCheck,
-    CheckCircle2, Globe, Edit2, Trash2, Footprints, ChevronRight, ChevronLeft, FileText, MoonStar, MessageSquare, Phone, RefreshCw, Map as MapIcon, Languages, MapPinIcon, ThumbsUp, ArrowUpDown, GraduationCap, Award, SlidersHorizontal, ChevronDown, Medal, CalendarClock, Home, LocateFixed, BriefcaseMedical, Menu
+    Info, Lock, History, X,
+    User, Users, Plus, LogOut, Coffee, LogIn, Menu,
+    ChevronRight, ChevronLeft, Home, LocateFixed,
+    Map as MapIcon, ChevronDown,
+    CalendarClock,
+    Zap,
+    Edit2
 } from 'lucide-react';
-
-// SEO URL Helpers
-const toSlug = (text: string) => text.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
-
-const createDoctorSlug = (doc: Doctor) => {
-    // Format: dr-name-specialty-id
-    return `${toSlug(doc.name)}-${toSlug(doc.specialty)}-${doc.id}`;
-};
-
-const deg2rad = (deg: number) => {
-    return deg * (Math.PI / 180);
-};
-
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; // Radius of the earth in km
-    const dLat = deg2rad(lat2 - lat1);
-    const dLon = deg2rad(lon2 - lon1);
-    const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // Distance in km
-};
-
-const isClinicOpen = (hours?: string, timezone?: string) => {
-    if (!hours) return false;
-    if (hours.toLowerCase() === '24 hours') return true;
-    try {
-        const now = getClinicCurrentTime(timezone);
-        const currentMins = now.getHours() * 60 + now.getMinutes();
-        const [startStr, endStr] = hours.split('-').map(s => s.trim());
-        if (!startStr || !endStr) return false;
-        const parseToMins = (timeStr: string) => {
-            const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-            if (!match) return null;
-            let [_, h, m, p] = match;
-            let hour = parseInt(h);
-            const min = parseInt(m);
-            const isPm = p.toUpperCase() === 'PM';
-            if (isPm && hour !== 12) hour += 12;
-            if (!isPm && hour === 12) hour = 0;
-            return hour * 60 + min;
-        };
-        const startMins = parseToMins(startStr);
-        const endMins = parseToMins(endStr);
-        if (startMins === null || endMins === null) return false;
-        return currentMins >= startMins && currentMins <= endMins;
-    } catch (e) {
-        return false;
-    }
-};
-
-const formatTime12h = (time24: string) => {
-    if (!time24 || !time24.includes(':')) return time24;
-    const [hStr, mStr] = time24.split(':');
-    let h = parseInt(hStr);
-    const m = mStr.padStart(2, '0');
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    h = h % 12;
-    h = h ? h : 12; // the hour '0' should be '12'
-    return `${h}:${m} ${ampm}`;
-};
-
-// Get current time in clinic's timezone
-const getClinicCurrentTime = (timezone?: string) => {
-    const now = new Date();
-    // For now, handle common timezones. In production, use a proper timezone library
-    let offsetHours = 0;
-    if (timezone === 'Asia/Kolkata') {
-        offsetHours = 5.5; // IST is UTC+5:30
-    } else if (timezone === 'Asia/Dubai') {
-        offsetHours = 4; // GST is UTC+4
-    } else if (timezone === 'Europe/London') {
-        offsetHours = 0; // GMT/BST
-    } else if (timezone === 'America/New_York') {
-        offsetHours = -5; // EST, simplified
-    } else if (timezone === 'Asia/Shanghai') {
-        offsetHours = 8; // CST
-    } else {
-        // Default to client's local time if timezone not recognized
-        return now;
-    }
-
-    // Calculate the time in clinic timezone
-    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-    return new Date(utc + (offsetHours * 3600000));
-};
-
-// --- HELPERS ---
-const getLocalToday = (timezone?: string) => {
-    const d = getClinicCurrentTime(timezone);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
-
-const CATEGORIES = [
-    { id: 'ALL', label: 'All Specializations', icon: LayoutGrid },
-    { id: 'GENERAL', label: 'General Practice', icon: Stethoscope },
-    { id: 'DENTAL', label: 'Dental Care', icon: Smile },
-    { id: 'PEDIATRIC', label: 'Child Care (KIDS)', icon: Baby },
-    { id: 'GYNECOLOGY', label: 'Women\'s Health', icon: Heart },
-    { id: 'ORTHOPEDIC', label: 'Bone & Joint', icon: Activity },
-    { id: 'ORTHOPEDIC', label: 'Bone & Joint', icon: Activity },
-    { id: 'DERMATOLOGY', label: 'Skin Care', icon: Sparkles },
-    { id: 'OPHTHALMOLOGY', label: 'Eye Care', icon: Eye },
-    { id: 'ENT', label: 'ENT Care', icon: Ear },
-];
-
-const RELATIONSHIP_OPTIONS = [
-    "Mother", "Father", "Husband", "Wife", "Son", " Daughter",
-    "Brother", "Sister", "Grandfather", "Grandmother", "Friend"
-];
-
-const SYMPTOM_MAP: Record<string, string[]> = {
-    'fever': ['GENERAL', 'PEDIATRIC'],
-    'cold': ['GENERAL', 'PEDIATRIC', 'ENT'],
-    'cough': ['GENERAL', 'PEDIATRIC', 'ENT'],
-    'stomach': ['GENERAL', 'PEDIATRIC'],
-    'tooth': ['DENTAL'],
-    'gum': ['DENTAL'],
-    'skin': ['DERMATOLOGY'],
-    'acne': ['DERMATOLOGY'],
-    'bone': ['ORTHOPEDIC'],
-    'joint': ['ORTHOPEDIC'],
-    'back': ['ORTHOPEDIC', 'GYNECOLOGY'],
-    'pregnancy': ['GYNECOLOGY'],
-    'baby': ['PEDIATRIC'],
-    'heart': ['CARDIOLOGY'],
-    'chest': ['CARDIOLOGY', 'GENERAL'],
-    'eye': ['OPHTHALMOLOGY'],
-    'vision': ['OPHTHALMOLOGY'],
-    'ear': ['ENT'],
-};
-
-interface FamilyMember {
-    name: string;
-    age: string;
-    gender: string;
-    relation: string;
-}
-
-interface UserProfile {
-    name: string;
-    phone: string;
-    age: string;
-    gender: string;
-    familyMembers: FamilyMember[];
-}
-
-interface GroupedSlots {
-    Morning: { value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean }[];
-    Afternoon: { value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean }[];
-    Evening: { value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean }[];
-    Night: { value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean }[];
-}
+import { createDoctorSlug } from '../utils/slugs';
+import { calculateDistance, reverseGeocode } from '../utils/geolocation';
+import { isClinicOpen, getClinicCurrentTime, getLocalToday, formatTime12h } from '../utils/time';
+import { CATEGORIES, RELATIONSHIP_OPTIONS, SYMPTOM_MAP } from '../constants';
+import { Breadcrumbs } from '../components/Breadcrumbs';
+import { GuestLoginCard } from '../features/patient/components/GuestLoginCard';
+import { ActiveVisitsView } from '../features/patient/views/ActiveVisitsView';
+import { HistoryVisitsView } from '../features/patient/views/HistoryVisitsView';
+import { ProfileView } from '../features/patient/views/ProfileView';
+import { ClinicListView } from '../features/patient/views/booking/ClinicListView';
+import { DoctorListView } from '../features/patient/views/booking/DoctorListView';
+import { ClinicDetailView } from '../features/patient/views/booking/ClinicDetailView';
+import { DoctorProfileView } from '../features/patient/views/booking/DoctorProfileView';
+import { BookingFormView } from '../features/patient/views/booking/BookingFormView';
+import { DoctorProfileModal } from '../features/patient/components/DoctorProfileModal';
+import { StarRating } from '../components/StarRating';
+import { Ticket } from '../components/icons';
 
 interface PatientTrackerProps {
     clinics: Clinic[];
@@ -201,22 +55,6 @@ interface PatientTrackerProps {
     preSelectedClinicId?: string;
     onClearPendingAction: () => void;
     initialSearchMode?: 'DOCTOR' | 'CLINIC';
-}
-
-function IndianRupeeIcon(props: React.SVGProps<SVGSVGElement>) {
-    return (
-        <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 3h12" />
-            <path d="M6 8h12" />
-            <path d="m 6 13 8.5 10" />
-            <path d="M6 13h3" />
-            <path d="M9 13c6.667 0 6.667-10 0-10" />
-        </svg>
-    );
-}
-
-function Ticket({ className }: { className?: string }) {
-    return (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}> <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /> <path d="M13 5v2" /> <path d="M13 17v2" /> <path d="M13 11v2" /> </svg>);
 }
 
 export const PatientTracker: React.FC<PatientTrackerProps> = ({
@@ -411,16 +249,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         else if (newTab === 'HISTORY') navigate('/patient/history');
         else if (newTab === 'PROFILE') navigate('/patient/profile');
         else navigate('/patient/find');
-    };
-
-    const handleUIBack = () => {
-        if (bookingView === 'FORM' && selectedClinic) {
-            navigate(`/patient/clinic/${selectedClinic.slug}`);
-        } else if (bookingView === 'CLINIC_DETAILS') {
-            navigate('/patient/find');
-        } else {
-            onBack();
-        }
     };
 
     const globalSuggestions = useMemo(() => {
@@ -779,13 +607,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         return { count: totalCount, time: waitMinutes };
     };
 
-    const waitStats = useMemo(() => {
-        if (selectedClinic && selectedDoctor) {
-            return getDoctorWaitDetails(selectedClinic, selectedDoctor.id);
-        }
-        return { count: 0, time: 0 };
-    }, [selectedClinic, selectedDoctor, clinics]);
-
     const getClinicWaitStats = (clinic: Clinic) => {
         // Check if clinic is open
         const isOpen = isClinicOpen(clinic.operatingHours, clinic.timezone);
@@ -1104,26 +925,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             addToast("Please select a star rating", "warning");
         }
     };
-
-    // Address Helper - UPDATED to return City for auto-selection
-    const reverseGeocode = async (lat: number, lng: number) => {
-        try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
-            const data = await res.json();
-            if (data && data.address) {
-                const addr = data.address;
-                const street = addr.road || addr.suburb || addr.neighbourhood || '';
-                const city = addr.city || addr.town || addr.village || '';
-                return { address: street ? `${street}, ${city}` : city, city: city };
-            }
-            return { address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`, city: '' };
-        } catch (e) {
-            return { address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`, city: '' };
-        }
-    };
-
-    // Map Handlers
-    const handleLocateMe = () => {
+    const handleLocateMe = async () => {
         setIsLocating(true);
         if (!navigator.geolocation) {
             addToast("Geolocation is not supported by your browser", "error");
@@ -1393,172 +1195,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         return (groups as any);
     }, [selectedDoctor, apptDate, bookingDates, selectedClinic]);
 
-    const hasAnySlots = useMemo(() => {
-        return groupedTimeSlots.Morning.length > 0 ||
-            groupedTimeSlots.Afternoon.length > 0 ||
-            groupedTimeSlots.Evening.length > 0 ||
-            groupedTimeSlots.Night.length > 0;
-    }, [groupedTimeSlots]);
-
     const navItems = [{ id: 'BOOK', label: 'Find Care', icon: Search }, { id: 'ACTIVE', label: 'Active Visits', icon: Ticket }, { id: 'HISTORY', label: 'History', icon: History }, { id: 'PROFILE', label: 'Profile', icon: User }];
-    const GuestLoginCard = () => (<div className="flex flex-col items-center justify-center h-[60vh] p-8 text-center"> <div className="bg-slate-100 p-6 rounded-full mb-6"><Lock className="h-10 w-10 text-slate-400" /></div> <h3 className="text-xl font-bold text-slate-800 mb-2">Login Required</h3> <p className="text-slate-500 mb-8 max-w-xs">Please login to access your appointments and medical history.</p> <Button onClick={() => onLoginClick && onLoginClick()} size="lg" className="shadow-lg px-10">Login / Register</Button> </div>);
-
-    const getDoctorTodayShift = (doc: Doctor) => {
-        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const today = days[new Date().getDay()];
-        const schedule = doc.weeklySchedule.find(s => s.day === today);
-        if (!schedule || schedule.isOff || !schedule.slots?.length) return 'Off Today';
-        return schedule.slots
-            .filter(s => s.active !== false)
-            .map(s => `${formatTime12h(s.startTime)} - ${formatTime12h(s.endTime)}`)
-            .join(', ');
-    };
-
-    const isDoctorShiftActive = (doc: Doctor, clinic: Clinic) => {
-        if (!clinic) return false;
-        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const now = getClinicCurrentTime(clinic.timezone);
-        const dayName = days[now.getDay()];
-        const schedule = doc.weeklySchedule.find(s => s.day === dayName);
-
-        if (!schedule || schedule.isOff || !schedule.slots?.length) return false;
-
-        const currentMins = now.getHours() * 60 + now.getMinutes();
-
-        return schedule.slots.some(shift => {
-            if (shift.active === false) return false;
-            const [sh, sm] = shift.startTime.split(':').map(Number);
-            const [eh, em] = shift.endTime.split(':').map(Number);
-            const startTotal = sh * 60 + sm;
-            let endTotal = eh * 60 + em;
-            if (endTotal <= startTotal) endTotal += 1440;
-
-            const isStarted = currentMins >= startTotal;
-            const isEnded = currentMins >= endTotal;
-            return isStarted && !isEnded;
-        });
-    };
-
-    const hasAvailableSlotsTomorrow = (doc: Doctor, clinic: Clinic) => {
-        if (!clinic) return false;
-        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const tomorrow = new Date(getClinicCurrentTime(clinic.timezone));
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowDayName = days[tomorrow.getDay()];
-        const schedule = doc.weeklySchedule.find(s => s.day === tomorrowDayName);
-
-        if (!schedule || schedule.isOff || !schedule.slots?.length) return false;
-
-        return schedule.slots.some(shift => shift.active !== false);
-    };
-
-    const hasShiftsToday = (doc: Doctor, clinic: Clinic) => {
-        if (!clinic) return false;
-        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const today = new Date(getClinicCurrentTime(clinic.timezone));
-        const todayDayName = days[today.getDay()];
-        const schedule = doc.weeklySchedule.find(s => s.day === todayDayName);
-
-        if (!schedule || schedule.isOff || !schedule.slots?.length) return false;
-
-        return schedule.slots.some(shift => shift.active !== false);
-    };
-
-    const StarRating = ({ rating, setRating, interactive = false }: { rating: number, setRating?: (r: number) => void, interactive?: boolean }) => {
-        const [hover, setHover] = useState(0);
-        const labels = ["", "Terrible", "Bad", "Okay", "Good", "Excellent"];
-
-        return (
-            <div className="flex flex-col items-center gap-2">
-                <div className="flex gap-1">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                        <button
-                            key={star}
-                            type="button"
-                            className={`transition-all duration-200 ${interactive ? 'hover:scale-125' : 'cursor-default'}`}
-                            onClick={() => interactive && setRating?.(star)}
-                            onMouseEnter={() => interactive && setHover(star)}
-                            onMouseLeave={() => interactive && setHover(0)}
-                        >
-                            <Star
-                                className={`h-10 w-10 ${star <= (hover || rating)
-                                        ? 'fill-amber-400 text-amber-400'
-                                        : 'text-slate-200'
-                                    }`}
-                            />
-                        </button>
-                    ))}
-                </div>
-                {interactive && <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">{labels[hover || rating] || "Tap to rate"}</span>}
-            </div>
-        );
-    };
 
     const isMapTabVisible = showMap && (bookingView === 'LIST' || bookingView === 'CLINIC_DETAILS');
-
-    /**
-     * REUSABLE BREADCRUMBS COMPONENT
-     * Hierarchy: Home > Tab > Subview (Clinic) > Final View (Doctor)
-     */
-    const Breadcrumbs = () => {
-        const items = useMemo(() => {
-            const list = [{ label: 'Find Care', action: () => navigate('/patient/find'), icon: Search }];
-
-            if (activeTab === 'ACTIVE') {
-                return [{ label: 'My Active Visits', action: null, icon: Ticket }];
-            }
-            if (activeTab === 'HISTORY') {
-                return [{ label: 'Visit History', action: null, icon: History }];
-            }
-            if (activeTab === 'PROFILE') {
-                return [{ label: 'My Health Profile', action: null, icon: User }];
-            }
-
-            // Booking Workflow
-            if (bookingView === 'DOCTOR_PROFILE' && selectedProfileDoctor) {
-                list.push({ label: selectedProfileDoctor.name, action: null, icon: Stethoscope });
-            } else if (bookingView === 'CLINIC_DETAILS' && selectedClinic) {
-                list.push({ label: selectedClinic.name, action: null, icon: Building2 });
-            } else if (bookingView === 'FORM' && selectedClinic && selectedDoctor) {
-                list.push({ label: selectedClinic.name, action: () => navigateToView('CLINIC_DETAILS', selectedClinic), icon: Building2 });
-                list.push({ label: `Book ${selectedDoctor.name}`, action: null, icon: Stethoscope });
-            }
-
-            return list;
-        }, [activeTab, bookingView, selectedClinic, selectedDoctor]);
-
-        return (
-            <nav className="flex items-center gap-2 mb-4 px-1" aria-label="Breadcrumb">
-                <button
-                    onClick={() => navigate('/')}
-                    className="p-1 hover:bg-slate-200 rounded-md text-slate-400 hover:text-primary-600 transition-colors"
-                    title="Exit to Main Site"
-                >
-                    <Home className="h-3 w-3" />
-                </button>
-
-                {items.map((item, idx) => (
-                    <React.Fragment key={idx}>
-                        <ChevronRight className="h-3 w-3 text-slate-300 shrink-0" />
-                        {item.action ? (
-                            <button
-                                onClick={item.action}
-                                className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-primary-600 hover:text-primary-800 transition-colors py-1 px-1.5 hover:bg-primary-50 rounded"
-                            >
-                                {item.icon && <item.icon className="h-2.5 w-2.5" />}
-                                {item.label}
-                            </button>
-                        ) : (
-                            <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 py-1 px-1.5">
-                                {item.icon && <item.icon className="h-2.5 w-2.5" />}
-                                {item.label}
-                            </span>
-                        )}
-                    </React.Fragment>
-                ))}
-            </nav>
-        );
-    };
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row overflow-hidden font-sans">
@@ -1798,545 +1437,61 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 </header>
 
                 <div className={`flex-1 flex flex-col w-full relative ${activeTab !== 'BOOK' ? 'overflow-y-auto overflow-x-hidden scroll-smooth pb-32 md:pb-8' : 'overflow-y-auto'}`}>
-
-
-
-
-
-                    {/* ================= SECTION — ACTIVE ================= */}
                     {activeTab === 'ACTIVE' && (
                         isGuest ? (
-                            <GuestLoginCard />
+                            <GuestLoginCard onLoginClick={onLoginClick} />
                         ) : (
-                            <div className="w-full h-full px-4 md:px-8 py-0 max-w-[1920px] mx-auto">
-
-                                {/* Rating Prompt */}
-                                {unratedCompletedVisit && (
-                                    <div className="mb-8 p-6 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-3xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-4">
-                                        <div className="flex items-center gap-5">
-                                            <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-md">
-                                                <ThumbsUp className="h-7 w-7 text-amber-500" />
-                                            </div>
-                                            <div>
-                                                <h3 className="text-lg font-black text-slate-900">
-                                                    How was your visit with Dr. {unratedCompletedVisit.doctorName}?
-                                                </h3>
-                                                <p className="text-sm text-slate-600">
-                                                    Your feedback helps others find the best care.
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <Button
-                                            onClick={() =>
-                                                setFeedbackModal({
-                                                    isOpen: true,
-                                                    visit: unratedCompletedVisit,
-                                                    rating: 0,
-                                                    text: ''
-                                                })
-                                            }
-                                            className="bg-slate-900 text-white shadow-xl hover:bg-slate-800 px-8 py-3 rounded-2xl font-bold"
-                                        >
-                                            Rate Visit Now
-                                        </Button>
-                                    </div>
-                                )}
-
-                                {/* Active Visits */}
-                                {activeVisits.length > 0 ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
-
-                                        {activeVisits.map(visit => {
-                                            const queueStats = getSmartQueueDetails(visit);
-
-                                            return (
-                                                <Card
-                                                    key={visit.id}
-                                                    className="p-0 border-l-4 border-l-primary-500 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col"
-                                                >
-
-                                                    <div className="p-5 pb-2">
-
-                                                        <div className="flex justify-between items-start mb-2">
-
-                                                            <div>
-                                                                <div className="flex items-center gap-2 mb-1">
-                                                                    <h3 className="font-black text-lg text-slate-900 leading-tight truncate max-w-[180px]">
-                                                                        {visit.clinicName}
-                                                                    </h3>
-                                                                </div>
-
-                                                                <p className="text-sm text-slate-500 font-bold">
-                                                                    Dr. {visit.doctorName}
-                                                                </p>
-
-                                                                <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                                                                    <User className="h-3 w-3" />
-                                                                    {visit.name}
-                                                                </p>
-                                                            </div>
-
-                                                            <div className="flex flex-col items-end gap-2">
-                                                                <span
-                                                                    className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${visit.visitType === 'APPOINTMENT'
-                                                                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                                                                            : 'bg-primary-50 text-primary-700 border-primary-200'
-                                                                        }`}
-                                                                >
-                                                                    {queueStats.typeLabel}
-                                                                </span>
-
-                                                                <Badge status={visit.status} />
-                                                            </div>
-
-                                                        </div>
-
-                                                        {/* Meta */}
-                                                        <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-bold">
-                                                            <span className="flex items-center gap-1 uppercase tracking-tighter">
-                                                                <Calendar className="h-3 w-3" /> Booked: {queueStats.bookedAt}
-                                                            </span>
-
-                                                            <span className="text-slate-300">|</span>
-
-                                                            <span className="flex items-center gap-1 uppercase tracking-tighter">
-                                                                <MapPin className="h-3 w-3" /> Room {visit.room}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Stats */}
-                                                    <div className="bg-white border-y border-slate-100 p-4 grid grid-cols-3 gap-2 text-center">
-
-                                                        <div>
-                                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                                                Your Token
-                                                            </div>
-                                                            <div className="text-4xl font-black text-slate-900">
-                                                                #{visit.tokenNumber}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="border-x border-slate-100">
-                                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                                                Now Serving
-                                                            </div>
-
-                                                            <div
-                                                                className={`text-4xl font-black ${visit.status === PatientStatus.WITH_DOCTOR
-                                                                        ? 'text-blue-600 animate-pulse'
-                                                                        : 'text-slate-300'
-                                                                    }`}
-                                                            >
-                                                                {visit.status === PatientStatus.WITH_DOCTOR
-                                                                    ? `#${visit.tokenNumber}`
-                                                                    : queueStats.currentToken}
-                                                            </div>
-                                                        </div>
-
-                                                        <div>
-                                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                                                                People Ahead
-                                                            </div>
-                                                            <div className="text-4xl font-black text-slate-900">
-                                                                {queueStats.peopleAhead}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Status Bar */}
-                                                    <div className={`px-4 py-3 flex items-center gap-3 ${queueStats.bgColor} ${queueStats.color} text-sm font-bold border-b border-slate-100 transition-colors`}>
-
-                                                        {queueStats.doctorStatus === DoctorStatus.ON_BREAK ? (
-                                                            <Coffee className="h-5 w-5 animate-bounce" />
-                                                        ) : queueStats.peopleAhead < 3 && !visit.isCheckedIn ? (
-                                                            <AlertTriangle className="h-5 w-5 animate-pulse" />
-                                                        ) : (
-                                                            <Timer className="h-5 w-5" />
-                                                        )}
-
-                                                        <div className="flex-1">
-                                                            <p className="leading-tight">{queueStats.message}</p>
-
-                                                            {visit.status === PatientStatus.WAITING && (
-                                                                <div className="flex gap-2 mt-1">
-                                                                    <span className="text-[10px] opacity-70 font-black uppercase tracking-wide">
-                                                                        EST. TIME: {queueStats.expectedTime}
-                                                                    </span>
-
-                                                                    {visit.visitType === 'APPOINTMENT' &&
-                                                                        visit.appointmentTime && (
-                                                                            <span className="text-[10px] font-black text-indigo-700 bg-indigo-100/50 px-1 rounded">
-                                                                                Slot: {formatTime12h(visit.appointmentTime)}
-                                                                            </span>
-                                                                        )}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Actions */}
-                                                    <div className="p-4 flex gap-2 mt-auto bg-white">
-                                                        {!visit.isCheckedIn &&
-                                                            visit.status === PatientStatus.WAITING && (
-                                                                <Button
-                                                                    className="flex-1 bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-100"
-                                                                    onClick={() => setShowQRScanner(true)}
-                                                                >
-                                                                    <QrCode className="h-4 w-4 mr-2" />
-                                                                    Check-In
-                                                                </Button>
-                                                            )}
-
-                                                        <Button
-                                                            variant="secondary"
-                                                            className={`flex-1 font-bold ${visit.isCheckedIn ? 'w-full' : ''
-                                                                } text-red-600 border-red-100 hover:bg-red-50`}
-                                                            onClick={() => setCancelModal({ isOpen: true, visit })}
-                                                            disabled={visit.status === PatientStatus.WITH_DOCTOR}
-                                                        >
-                                                            Cancel
-                                                        </Button>
-                                                    </div>
-
-                                                </Card>
-                                            );
-                                        })}
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center h-[60vh] opacity-60">
-                                        <div className="bg-slate-200 p-6 rounded-full mb-4">
-                                            <Calendar className="h-12 w-12 text-slate-400" />
-                                        </div>
-
-                                        <h3 className="text-xl font-bold text-slate-700">
-                                            No active visits
-                                        </h3>
-
-                                        <p className="text-slate-500 mb-6 text-center">
-                                            Book an appointment or scan a QR code at a clinic to see your live status here.
-                                        </p>
-
-                                        <Button onClick={() => handleTabSwitch('BOOK')} size="lg" className="shadow-lg">
-                                            Find a Doctor
-                                        </Button>
-                                    </div>
-                                )}
-                            </div>
+                            <ActiveVisitsView
+                                activeVisits={activeVisits}
+                                getSmartQueueDetails={getSmartQueueDetails}
+                                setCancelModal={setCancelModal}
+                                setShowQRScanner={setShowQRScanner}
+                                unratedCompletedVisit={unratedCompletedVisit}
+                                setFeedbackModal={setFeedbackModal}
+                                handleTabSwitch={handleTabSwitch}
+                            />
                         )
                     )}
-
-
-                    {/* ================= SECTION — HISTORY ================= */}
                     {activeTab === 'HISTORY' && (
                         isGuest ? (
-                            <GuestLoginCard />
+                            <GuestLoginCard onLoginClick={onLoginClick} />
                         ) : (
-                            <div className="w-full h-full px-4 md:px-8 py-0 max-w-[1920px] mx-auto">
-
-                                {historyVisits.length > 0 ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
-
-                                        {historyVisits.map(visit => (
-                                            <div
-                                                key={visit.id}
-                                                className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between gap-4 h-full hover:border-primary-200 transition-colors"
-                                            >
-
-                                                <div className="flex-1">
-
-                                                    <div className="flex items-start gap-3 mb-3">
-
-                                                        <div
-                                                            className={`p-3 rounded-lg flex-shrink-0 ${visit.status === PatientStatus.COMPLETED
-                                                                    ? 'bg-green-100 text-green-600'
-                                                                    : 'bg-red-100 text-red-600'
-                                                                }`}
-                                                        >
-                                                            {visit.status === PatientStatus.COMPLETED ? (
-                                                                <CheckCircle2 className="h-6 w-6" />
-                                                            ) : (
-                                                                <X className="h-6 w-6" />
-                                                            )}
-                                                        </div>
-
-                                                        <div className="min-w-0 flex-1">
-                                                            <h3 className="font-bold text-slate-900 truncate text-base">
-                                                                {visit.clinicName}
-                                                            </h3>
-
-                                                            <p className="text-sm text-slate-500 truncate">
-                                                                Dr. {visit.doctorName}
-                                                            </p>
-
-                                                            <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                                                                <Calendar className="h-3 w-3" />
-                                                                {new Date(visit.timeAdded).toLocaleDateString()}
-                                                                &nbsp;at&nbsp;
-                                                                {new Date(visit.timeAdded).toLocaleTimeString([], {
-                                                                    hour: 'numeric',
-                                                                    minute: '2-digit',
-                                                                    hour12: true
-                                                                })}
-                                                            </p>
-                                                        </div>
-
-                                                    </div>
-
-                                                    {/* Rating */}
-                                                    <div className="space-y-2">
-                                                        {visit.rating ? (
-                                                            <div className="bg-amber-50 p-2 rounded-lg border border-amber-100 flex items-center gap-2">
-                                                                <div className="flex">
-                                                                    {[1, 2, 3, 4, 5].map(s => (
-                                                                        <Star
-                                                                            key={s}
-                                                                            className={`h-3 w-3 ${s <= visit.rating
-                                                                                    ? 'fill-amber-400 text-amber-400'
-                                                                                    : 'text-slate-200'
-                                                                                }`}
-                                                                        />
-                                                                    ))}
-                                                                </div>
-
-                                                                <span className="text-[10px] font-bold text-amber-700">
-                                                                    You rated this visit
-                                                                </span>
-                                                            </div>
-                                                        ) : (
-                                                            visit.status === PatientStatus.COMPLETED && (
-                                                                <button
-                                                                    onClick={() =>
-                                                                        setFeedbackModal({
-                                                                            isOpen: true,
-                                                                            visit,
-                                                                            rating: 0,
-                                                                            text: ''
-                                                                        })
-                                                                    }
-                                                                    className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-black rounded-lg border border-indigo-100 transition-all uppercase tracking-wider"
-                                                                >
-                                                                    Rate Doctor
-                                                                </button>
-                                                            )
-                                                        )}
-
-                                                        {visit.diagnosis && (
-                                                            <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
-                                                                <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">
-                                                                    Diagnosis
-                                                                </p>
-                                                                <p className="text-sm text-slate-700">{visit.diagnosis}</p>
-                                                            </div>
-                                                        )}
-
-                                                        {visit.notes && (
-                                                            <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
-                                                                <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">
-                                                                    Notes
-                                                                </p>
-                                                                <p className="text-sm text-slate-700 line-clamp-3">
-                                                                    {visit.notes}
-                                                                </p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                </div>
-
-                                                <div className="pt-3 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400 italic">
-                                                    Visit records are private and secure.
-                                                </div>
-
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center h-[60vh] opacity-60">
-                                        <div className="bg-slate-200 p-6 rounded-full mb-4">
-                                            <History className="h-12 w-12 text-slate-400" />
-                                        </div>
-
-                                        <h3 className="text-xl font-bold text-slate-700">
-                                            No past visits
-                                        </h3>
-
-                                        <p className="text-slate-500 mb-6 text-center">
-                                            Your completed appointment history will appear here.
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
+                            <HistoryVisitsView
+                                historyVisits={historyVisits}
+                                setFeedbackModal={setFeedbackModal}
+                            />
                         )
                     )}
-
-
-
-                    {/* ================= SECTION — PROFILE ================= */}
                     {activeTab === 'PROFILE' && (
                         isGuest ? (
-                            <GuestLoginCard />
+                            <GuestLoginCard onLoginClick={onLoginClick} />
                         ) : (
-                            <div className="w-full max-w-3xl mx-auto px-4 py-0">
-
-                                {/* Profile Card */}
-                                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6">
-
-                                    <div className="bg-slate-900 p-6 text-white flex justify-between items-center">
-
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold backdrop-blur-sm border-2 border-white/30">
-                                                {userName.charAt(0)}
-                                            </div>
-
-                                            <div>
-                                                <h2 className="text-2xl font-bold">{userName}</h2>
-                                                <p className="opacity-80 font-mono">{userPhone}</p>
-                                            </div>
-                                        </div>
-
-                                        <button
-                                            onClick={onBack}
-                                            className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-colors"
-                                        >
-                                            <LogOut className="h-5 w-5" />
-                                        </button>
-                                    </div>
-
-                                    <div className="p-6">
-                                        <div className="grid md:grid-cols-2 gap-6">
-
-                                            <div className="space-y-1">
-                                                <label className="text-xs font-bold text-slate-500 uppercase">
-                                                    Full Name
-                                                </label>
-                                                <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">
-                                                    {userProfile?.name}
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <label className="text-xs font-bold text-slate-500 uppercase">
-                                                    Mobile Number
-                                                </label>
-                                                <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">
-                                                    {userProfile?.phone}
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <label className="text-xs font-bold text-slate-500 uppercase">
-                                                    Age
-                                                </label>
-                                                <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">
-                                                    {userProfile?.age || '-'}
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <label className="text-xs font-bold text-slate-500 uppercase">
-                                                    Gender
-                                                </label>
-                                                <div className="font-medium text-slate-900 border-b border-slate-100 pb-2">
-                                                    {userProfile?.gender || '-'}
-                                                </div>
-                                            </div>
-
-                                        </div>
-                                    </div>
-
-                                </div>
-
-                                {/* Family Members */}
-                                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-
-                                    <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-
-                                        <div>
-                                            <h3 className="font-bold text-lg text-slate-900">Family Members</h3>
-                                            <p className="text-sm text-slate-500">Manage profiles for your family</p>
-                                        </div>
-
-                                        <Button
-                                            size="sm"
-                                            onClick={() => {
-                                                setNewMember({ name: '', age: '', gender: 'Male', relation: '' });
-                                                setEditingMemberIndex(null);
-                                                setIsCustomRelation(false);
-                                                setShowAddMember(true);
-                                            }}
-                                        >
-                                            <Plus className="h-4 w-4 mr-2" />
-                                            Add Member
-                                        </Button>
-
-                                    </div>
-
-                                    <div className="divide-y divide-slate-100">
-
-                                        {userProfile?.familyMembers && userProfile.familyMembers.length > 0 ? (
-                                            userProfile.familyMembers.map((member, idx) => (
-                                                <div
-                                                    key={idx}
-                                                    className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"
-                                                >
-
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
-                                                            {member.name.charAt(0)}
-                                                        </div>
-
-                                                        <div>
-                                                            <div className="font-bold text-slate-900">{member.name}</div>
-                                                            <div className="text-xs text-slate-500">
-                                                                {member.relation} • {member.age} Yrs • {member.gender}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex gap-2">
-                                                        <button
-                                                            onClick={() => handleEditMember(idx)}
-                                                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                        >
-                                                            <Edit2 className="h-4 w-4" />
-                                                        </button>
-
-                                                        <button
-                                                            onClick={() => setMemberToDeleteIndex(idx)}
-                                                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </button>
-                                                    </div>
-
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="p-8 text-center text-slate-400 italic">
-                                                No family members added.
-                                            </div>
-                                        )}
-
-                                    </div>
-
-                                </div>
-
-                            </div>
+                            <ProfileView
+                                userName={userName}
+                                userPhone={userPhone}
+                                userProfile={userProfile}
+                                onBack={onBack}
+                                setNewMember={setNewMember}
+                                setEditingMemberIndex={setEditingMemberIndex}
+                                setIsCustomRelation={setIsCustomRelation}
+                                setShowAddMember={setShowAddMember}
+                                handleEditMember={handleEditMember}
+                                setMemberToDeleteIndex={setMemberToDeleteIndex}
+                            />
                         )
                     )}
-
-
-
-
-
-                    {/* BOOK TAB (SEARCH & CLINIC VIEW) */}
                     {activeTab === 'BOOK' && (
                         <div className="flex flex-col min-h-full">
                             {/* BREADCRUMBS AT TOP - Always visible */}
                             <div className="sticky top-0 z-20 px-4 md:px-8 py-2 bg-white border-b border-slate-100">
-                                <Breadcrumbs />
+                                <Breadcrumbs
+                                    activeTab={activeTab}
+                                    bookingView={bookingView}
+                                    selectedClinic={selectedClinic}
+                                    selectedDoctor={selectedDoctor}
+                                    selectedProfileDoctor={selectedProfileDoctor}
+                                    navigateToView={navigateToView}
+                                />
                             </div>
 
                             <div className="sticky top-0 z-20 bg-white border-b border-slate-100 shadow-sm">
@@ -2369,689 +1524,70 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 <div className={`flex-1 overflow-y-auto p-2 sm:p-4 md:p-6 pt-0 custom-scrollbar ${showMap && (bookingView === 'LIST' || bookingView === 'CLINIC_DETAILS') ? 'hidden md:block' : 'block'} pb-32 md:pb-8`}>
                                     {bookingView === 'LIST' ? (
                                         searchMode === 'CLINIC' ? (
-                                            filteredClinics.length > 0 ? (
-                                                <div className={`w-full grid gap-4 mb-4 ${showMap ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'}`}>
-                                                    {filteredClinics.map(clinic => {
-                                                        const waitInfo = getClinicWaitStats(clinic);
-                                                        const relevantDoctors = getRelevantDoctors(clinic);
-                                                        const feeRange = getFeeRange(clinic);
-
-                                                        let distLabel = '---';
-                                                        if (userLocation && clinic.geoLocation) {
-                                                            const dist = calculateDistance(userLocation.lat, userLocation.lng, clinic.geoLocation.lat, clinic.geoLocation.lng).toFixed(1);
-                                                            distLabel = `${dist} km`;
-                                                        }
-
-                                                        return (
-                                                            <ClinicCard
-                                                                key={clinic.id}
-                                                                clinic={clinic}
-                                                                waitInfo={waitInfo}
-                                                                feeRange={feeRange}
-                                                                distLabel={distLabel}
-                                                                gmapsLink={`https://www.google.com/maps/search/?api=1&query=${clinic.geoLocation?.lat},${clinic.geoLocation?.lng}`}
-                                                                relevantDoctors={relevantDoctors}
-                                                                isHighlighted={highlightedClinicId === clinic.id}
-                                                                isOpen={isClinicOpen(clinic.operatingHours, clinic.timezone)}
-                                                                cardRef={el => { clinicCardRefs.current[clinic.id] = el; }}
-                                                                onSelect={() => navigateToView('CLINIC_DETAILS', clinic)}
-                                                                onBook={() => navigateToView('CLINIC_DETAILS', clinic)}
-                                                                onQueue={() => navigateToView('CLINIC_DETAILS', clinic)}
-                                                            />
-                                                        );
-                                                    })}
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-col items-center justify-center min-h-[400px] h-full text-slate-400">
-                                                    <p className="font-black uppercase tracking-[0.2em] text-sm mb-2">No clinics found</p>
-                                                    <p className="text-xs font-bold text-slate-400 mb-8">Try adjusting your filters or location.</p>
-                                                    <Building2 className="h-16 w-16 opacity-10" />
-                                                </div>
-                                            )
+                                            <ClinicListView
+                                                filteredClinics={filteredClinics}
+                                                getClinicWaitStats={getClinicWaitStats}
+                                                getRelevantDoctors={getRelevantDoctors}
+                                                getFeeRange={getFeeRange}
+                                                userLocation={userLocation}
+                                                highlightedClinicId={highlightedClinicId}
+                                                clinicCardRefs={clinicCardRefs}
+                                                navigateToView={navigateToView}
+                                                showMap={showMap}
+                                            />
                                         ) : (
-                                            /* DOCTOR SEARCH RESULTS */
-                                            groupedDoctors.length > 0 ? (
-                                                <div className={`w-full grid gap-6 mb-4 ${showMap ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'}`}>
-                                                    {groupedDoctors.map(({ masterDoc, locations }) => {
-                                                        return (
-                                                            <DoctorSearchCard
-                                                                key={masterDoc.masterId}
-                                                                doctor={masterDoc}
-                                                                locations={locations}
-                                                                onBook={(clinic, doc) => navigateToView(null, clinic, doc)}
-                                                                onClick={() => navigateToView('DOCTOR_PROFILE', null, masterDoc)}
-                                                            />
-                                                        );
-                                                    })}
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-col items-center justify-center min-h-[400px] h-full text-slate-400">
-                                                    <p className="font-black uppercase tracking-[0.2em] text-sm mb-2">No doctors found</p>
-                                                    <p className="text-xs font-bold text-slate-400 mb-8">Try adjusting your filters or location.</p>
-                                                    <Stethoscope className="h-16 w-16 opacity-10" />
-                                                </div>
-                                            )
+                                            <DoctorListView
+                                                groupedDoctors={groupedDoctors}
+                                                navigateToView={navigateToView}
+                                                showMap={showMap}
+                                            />
                                         )
                                     ) : bookingView === 'CLINIC_DETAILS' && selectedClinic ? (
-                                        // CLINIC DETAIL VIEW
-                                        <div className="max-w-5xl mx-auto space-y-6">
-                                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                                                <div className="h-48 bg-slate-200 relative">
-                                                    {selectedClinic.imageUrl ? (
-                                                        <img src={selectedClinic.imageUrl} className="w-full h-full object-cover" alt={selectedClinic.name} />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-slate-400 bg-slate-100">
-                                                            <Building2 className="h-16 w-16" />
-                                                        </div>
-                                                    )}
-                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                                                    <button
-                                                        onClick={() => setShowMap(!showMap)}
-                                                        className={`absolute top-4 right-4 p-2 rounded-xl border-2 transition-all flex items-center gap-2 z-10 ${showMap ? 'bg-primary-600 border-primary-600 text-white' : 'bg-white/10 border-white/20 text-white backdrop-blur-md hover:bg-white/20'}`}
-                                                        title="Locate on Map"
-                                                    >
-                                                        <MapIcon className="h-5 w-5" />
-                                                        <span className="text-xs font-black uppercase tracking-tight hidden sm:inline">{showMap ? 'Info' : 'Map'}</span>
-                                                    </button>
-                                                    <div className="absolute bottom-4 left-6 text-white w-[calc(100%-48px)]">
-                                                        <div>
-                                                            <h1 className="text-3xl font-black shadow-sm">{selectedClinic.name}</h1>
-                                                            <p className="text-sm opacity-90 flex items-center gap-1"><MapPin className="h-3 w-3" /> {selectedClinic.address}</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="p-6">
-                                                    {isClinicDirectWalkInOnly && (
-                                                        <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-2xl flex items-start gap-4">
-                                                            <div className="p-2 bg-orange-100 rounded-full text-orange-600 shrink-0">
-                                                                <MapPinIcon className="h-5 w-5" />
-                                                            </div>
-                                                            <div>
-                                                                <h4 className="font-bold text-orange-900 text-sm">Direct Walk-In Only</h4>
-                                                                <p className="text-xs text-orange-700 leading-relaxed mt-0.5">Please visit the reception for a token.</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    <div className="flex flex-wrap gap-4 mb-6 text-sm text-slate-600">
-                                                        {selectedClinic.operatingHours && <div className="flex items-center gap-1 bg-slate-50 px-3 py-1 rounded-full"><Clock className="h-4 w-4" /> {selectedClinic.operatingHours}</div>}
-                                                        {selectedClinic.contactPhone && <div className="flex items-center gap-1 bg-slate-50 px-3 py-1 rounded-full"><Phone className="h-4 w-4" /> {selectedClinic.contactPhone}</div>}
-                                                        <div className="flex items-center gap-1 bg-primary-50 text-primary-700 px-3 py-1 rounded-full font-bold border border-primary-100 uppercase tracking-tight"><ShieldCheck className="h-4 w-4" /> Verified</div>
-                                                    </div>
-
-                                                    <div className="mb-8">
-                                                        <h3 className="font-bold text-slate-900 mb-2 text-lg">About Clinic</h3>
-                                                        <p className="text-slate-600 leading-relaxed text-sm">
-                                                            {selectedClinic.about || "A premier healthcare facility dedicated to providing comprehensive medical care."}
-                                                        </p>
-                                                    </div>
-
-                                                    {selectedClinic.amenities && (
-                                                        <div className="mb-8">
-                                                            <h3 className="font-bold text-slate-900 mb-3 text-sm uppercase tracking-wide">Facilities</h3>
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {selectedClinic.amenities.map(a => (
-                                                                    <span key={a} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-lg border border-blue-100">{a}</span>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    <div className="border-t border-slate-100 pt-8">
-                                                        <h3 className="font-bold text-slate-900 mb-4 text-xl">Available Doctors</h3>
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                            {selectedClinic.doctors.map(doc => {
-                                                                const canQueueOnline = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(selectedClinic.operationMode);
-                                                                const canBookAppointments = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(selectedClinic.operationMode);
-                                                                const todayShift = getDoctorTodayShift(doc);
-                                                                const isAvailable = doc.status === DoctorStatus.AVAILABLE;
-                                                                const hasSlotsTomorrow = hasAvailableSlotsTomorrow(doc, selectedClinic);
-                                                                const hasDoctorShiftsToday = hasShiftsToday(doc, selectedClinic);
-                                                                const canGetToken = canQueueOnline && hasDoctorShiftsToday;
-                                                                const canBookForTomorrow = canBookAppointments && hasSlotsTomorrow;
-
-                                                                return (
-                                                                    <div
-                                                                        key={doc.id}
-                                                                        className="p-4 rounded-xl border border-slate-200 flex flex-col hover:border-primary-300 hover:shadow-md transition-all cursor-pointer bg-white group"
-                                                                        onClick={() => navigateToView(null, selectedClinic, doc)}
-                                                                    >
-                                                                        {/* Top Section: Avatar & Details */}
-                                                                        <div className="flex gap-4">
-                                                                            {/* Left: Avatar & Status */}
-                                                                            <div className="flex-shrink-0 flex flex-col items-center gap-2">
-                                                                                <div className="relative">
-                                                                                    <img src={doc.avatarUrl} className="w-16 h-16 rounded-xl object-cover bg-slate-50 border border-slate-100 shadow-sm" />
-                                                                                    <div className={`absolute -bottom-1 -right-1 w-4 h-4 border-2 border-white rounded-full ${isAvailable ? 'bg-green-500' : doc.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-400'}`}></div>
-                                                                                </div>
-                                                                                <div className="flex items-center gap-1 text-amber-500 bg-amber-50/50 px-1.5 py-0.5 rounded-lg border border-amber-100/50">
-                                                                                    <Star className="h-2.5 w-2.5 fill-current" />
-                                                                                    <span className="text-[10px] font-black">{doc.rating.toFixed(1)}</span>
-                                                                                </div>
-                                                                            </div>
-
-                                                                            {/* Right: Info */}
-                                                                            <div className="flex-1 min-w-0">
-                                                                                <div className="flex justify-between items-start">
-                                                                                    <div className="min-w-0">
-                                                                                        <h4 className="font-bold text-slate-900 text-base group-hover:text-primary-600 transition-colors truncate">{doc.name}</h4>
-                                                                                        <p className="text-[10px] text-primary-600 font-black uppercase tracking-wider mb-2">{doc.specialty}</p>
-                                                                                    </div>
-                                                                                    <div className="text-right flex-shrink-0">
-                                                                                        <span className="text-base font-black text-slate-900">₹{doc.consultationFee}</span>
-                                                                                        <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">FEE</p>
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                <div className="space-y-1.5 mt-2">
-                                                                                    <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
-                                                                                        <Clock className="h-3 w-3 text-slate-400" />
-                                                                                        <span className="text-[10px]">Today: <span className="font-bold text-slate-900">{todayShift}</span></span>
-                                                                                    </div>
-                                                                                    {doc.experience && (
-                                                                                        <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
-                                                                                            <Award className="h-3 w-3 text-slate-400" />
-                                                                                            <span className="text-[10px]">{doc.experience}+ years experience</span>
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        {/* Middle Section: Languages & Education */}
-                                                                        <div className="mt-3 pt-3 border-t border-slate-50 flex flex-wrap gap-x-4 gap-y-2">
-                                                                            <div className="flex items-center gap-1.5">
-                                                                                <Languages className="h-3 w-3 text-slate-400" />
-                                                                                <div className="flex flex-wrap gap-1">
-                                                                                    {doc.languages?.slice(0, 3).map(lang => (
-                                                                                        <span key={lang} className="text-[9px] font-black text-slate-500 uppercase tracking-wider">{lang}</span>
-                                                                                    ))}
-                                                                                </div>
-                                                                            </div>
-                                                                            {doc.education && doc.education.length > 0 && (
-                                                                                <div className="flex items-center gap-1.5">
-                                                                                    <GraduationCap className="h-3 w-3 text-slate-400" />
-                                                                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">{doc.education[0]}</span>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-
-                                                                        {/* Bottom Section: Action Buttons */}
-                                                                        <div className="flex gap-2 mt-4">
-                                                                            {canBookAppointments && (
-                                                                                <button
-                                                                                    onClick={(e) => { e.stopPropagation(); navigateToView(null, selectedClinic, doc, 'APPOINTMENT'); }}
-                                                                                    className="flex-1 h-9 px-4 rounded-lg font-bold transition-all text-[10px] uppercase tracking-widest bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-100"
-                                                                                >
-                                                                                    Book Slot
-                                                                                </button>
-                                                                            )}
-                                                                            <button
-                                                                                disabled={!canGetToken}
-                                                                                onClick={(e) => { e.stopPropagation(); navigateToView(null, selectedClinic, doc, 'WALK_IN'); }}
-                                                                                className={`flex-1 h-9 px-4 rounded-lg font-bold transition-all text-[10px] uppercase tracking-widest ${canGetToken
-                                                                                        ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-sm shadow-primary-100'
-                                                                                        : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                                                                                    }`}
-                                                                            >
-                                                                                {canGetToken ? 'Get Token' : 'No Live Queue'}
-                                                                            </button>
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <ClinicDetailView
+                                            selectedClinic={selectedClinic}
+                                            setShowMap={setShowMap}
+                                            showMap={showMap}
+                                            navigateToView={navigateToView}
+                                        />
                                     ) : bookingView === 'DOCTOR_PROFILE' && selectedProfileDoctor ? (
-                                        // DOCTOR PROFILE PAGE: Enhanced 2-COLUMN FLEXIBLE LAYOUT
-                                        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-12 py-4">
-                                            {/* Left: Doctor Details */}
-                                            <div className="bg-white rounded-3xl shadow-lg border border-slate-100 overflow-hidden flex flex-col h-fit p-8 relative">
-                                                <div className="h-48 bg-gradient-to-r from-primary-600 to-indigo-600 rounded-2xl relative mb-8">
-                                                    <div className="absolute -bottom-14 left-1/2 -translate-x-1/2 md:left-10 md:translate-x-0">
-                                                        <div className="p-2 bg-white rounded-2xl shadow-2xl ring-4 ring-primary-100">
-                                                            <img
-                                                                src={selectedProfileDoctor.avatarUrl}
-                                                                className="w-28 h-28 md:w-32 md:h-32 rounded-2xl object-cover bg-slate-100 border-2 border-white shadow-lg"
-                                                                alt={selectedProfileDoctor.name}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="pt-16 px-2 pb-2 flex flex-col items-center md:items-start">
-                                                    <div className="flex items-center gap-3 mb-2">
-                                                        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">{selectedProfileDoctor.name}</h2>
-                                                        <div className="bg-amber-50 text-amber-500 px-2 py-1 rounded-lg flex items-center gap-1 border border-amber-100 flex-shrink-0">
-                                                            <Star className="h-4 w-4 fill-current" />
-                                                            <span className="text-xs font-black">{selectedProfileDoctor.rating.toFixed(1)}</span>
-                                                        </div>
-                                                    </div>
-                                                    <p className="text-primary-600 font-bold uppercase tracking-widest flex items-center gap-2 text-[15px] mb-5">
-                                                        <Stethoscope className="h-5 w-5" /> {selectedProfileDoctor.specialty}
-                                                    </p>
-                                                    <div className="flex flex-wrap gap-2 mb-3">
-                                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 flex items-center gap-1">
-                                                            <Award className="h-3.5 w-3.5 text-slate-400" /> {selectedProfileDoctor.experience || 5}+ Years
-                                                        </span>
-                                                        {selectedProfileDoctor.languages && selectedProfileDoctor.languages.length > 0 && (
-                                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 flex items-center gap-1">
-                                                                <Languages className="h-3.5 w-3.5 text-slate-400" /> {selectedProfileDoctor.languages.join(', ')}
-                                                            </span>
-                                                        )}
-                                                        {selectedProfileDoctor.education && selectedProfileDoctor.education.length > 0 && (
-                                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 flex items-center gap-1">
-                                                                <GraduationCap className="h-3.5 w-3.5 text-slate-400" /> {selectedProfileDoctor.education[0]}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    {selectedProfileDoctor.bio && (
-                                                        <>
-                                                            <div className="w-full border-t border-slate-100 my-4"></div>
-                                                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                                                                <FileText className="h-4 w-4 text-primary-500" /> About Doctor
-                                                            </h3>
-                                                            <p className="text-slate-600 text-base leading-relaxed text-center md:text-left">{selectedProfileDoctor.bio}</p>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            {/* Right: Clinics List with Booking */}
-                                            <div className="bg-white rounded-3xl shadow-lg border border-slate-100 overflow-hidden flex flex-col h-fit p-6">
-                                                <div className="pb-4 border-b border-slate-100 mb-4">
-                                                    <h3 className="text-2xl font-bold text-slate-900">Available at Clinics</h3>
-                                                    <p className="text-base text-slate-600 mt-1">Book an appointment at any of these locations</p>
-                                                </div>
-                                                <div className="flex flex-col gap-4">
-                                                    {clinics.filter(clinic => clinic.doctors.some(d => d.masterId === selectedProfileDoctor.masterId)).map(clinic => {
-                                                        const docInstance = clinic.doctors.find(d => d.masterId === selectedProfileDoctor.masterId)!;
-                                                        const canQueueOnline = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
-                                                        const canBookAppointments = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
-                                                        const isClinicOpenNow = isClinicOpen(clinic.operatingHours, clinic.timezone);
-                                                        const isDoctorShiftActiveNow = isDoctorShiftActive(docInstance, clinic);
-                                                        const hasSlotsTomorrow = hasAvailableSlotsTomorrow(docInstance, clinic);
-                                                        const canGetToken = canQueueOnline && isClinicOpenNow && isDoctorShiftActiveNow;
-                                                        const canBookForTomorrow = canBookAppointments && hasSlotsTomorrow;
-                                                        const todayShift = getDoctorTodayShift(docInstance);
-                                                        return (
-                                                            <div key={clinic.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-5 flex flex-col gap-3 shadow-sm">
-                                                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <h4 className="font-bold text-slate-900 text-lg truncate mb-1">{clinic.name}</h4>
-                                                                        <p className="text-sm text-slate-600 flex items-center gap-2 mb-1">
-                                                                            <MapPin className="h-4 w-4 text-slate-400" />
-                                                                            {clinic.address}, {clinic.city}
-                                                                        </p>
-                                                                        <div className="flex flex-wrap items-center gap-3 mt-2">
-                                                                            <span className="flex items-center gap-1.5 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 text-xs font-bold text-slate-700">
-                                                                                <Clock className="h-4 w-4 text-primary-500" />
-                                                                                Today: <span className="font-black">{todayShift}</span>
-                                                                            </span>
-                                                                            <span className="flex items-center gap-1.5 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100 text-xs font-bold text-blue-700">
-                                                                                <IndianRupeeIcon className="h-4 w-4 text-blue-400" />
-                                                                                Fee: <span className="font-black">₹{docInstance.consultationFee}</span>
-                                                                            </span>
-                                                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border shadow-sm ${isDoctorShiftActiveNow ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-100 text-slate-500 border-slate-200'
-                                                                                }`}>
-                                                                                {isDoctorShiftActiveNow ? 'Shift Active' : 'Offline'}
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                    <button
-                                                                        disabled={!(canGetToken || canBookForTomorrow)}
-                                                                        onClick={() => navigateToView(null, clinic, docInstance)}
-                                                                        className={`h-12 px-10 rounded-2xl font-extrabold shadow-lg transition-all text-xs uppercase tracking-widest whitespace-nowrap active:scale-95 ${(canGetToken || canBookForTomorrow)
-                                                                                ? 'bg-gradient-to-r from-primary-600 to-indigo-600 text-white hover:from-primary-700 hover:to-indigo-700 shadow-primary-200'
-                                                                                : 'bg-slate-200 text-slate-500 cursor-not-allowed shadow-none border border-slate-200'
-                                                                            }`}
-                                                                    >
-                                                                        {canGetToken ? 'Get Token' : canBookForTomorrow ? 'Book Tomorrow' : 'Unavailable'}
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <DoctorProfileView
+                                            selectedProfileDoctor={selectedProfileDoctor}
+                                            clinics={clinics}
+                                            navigateToView={navigateToView}
+                                        />
                                     ) : bookingView === 'FORM' && selectedDoctor ? (
-                                        // REFACTORED DOCTOR BOOKING PAGE: HIGH DENSITY & SPLIT VIEW
-                                        <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 pb-16">
-
-                                            {/* LEFT COLUMN: COMPACT DOCTOR PROFILE (4/12) */}
-                                            <div className="lg:col-span-5 xl:col-span-4 space-y-3 h-fit">
-                                                <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden h-full flex flex-col">
-                                                    {/* Enhanced Header Section with Clinic Details */}
-                                                    <div className="h-24 bg-gradient-to-br from-primary-600 via-indigo-600 to-purple-600 relative shrink-0">
-                                                        <div className="absolute -bottom-10 left-1/2 -translate-x-1/2">
-                                                            <div className="p-2 bg-white rounded-[1.5rem] shadow-2xl ring-4 ring-white/30 backdrop-blur-sm">
-                                                                <img
-                                                                    src={selectedDoctor.avatarUrl}
-                                                                    className="w-24 h-24 rounded-[1.5rem] object-cover bg-slate-100 border-2 border-white shadow-lg"
-                                                                    alt={selectedDoctor.name}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="pt-12 px-5 pb-6 flex-1 flex flex-col">
-                                                        {/* Doctor Info */}
-                                                        <div className="text-center mb-4">
-                                                            <div className="flex items-center justify-center gap-2 mb-2">
-                                                                <h2 className="text-xl font-black text-slate-900 tracking-tight">{selectedDoctor.name}</h2>
-                                                                <div className="bg-amber-50 text-amber-500 px-2 py-1 rounded-lg flex items-center gap-1 border border-amber-100 flex-shrink-0">
-                                                                    <Star className="h-3.5 w-3.5 fill-current" />
-                                                                    <span className="text-[10px] font-black">{selectedDoctor.rating.toFixed(1)}</span>
-                                                                </div>
-                                                            </div>
-                                                            <p className="text-primary-600 font-black uppercase tracking-widest flex items-center justify-center gap-1.5 text-[11px] mb-6">
-                                                                <Stethoscope className="h-4 w-4" /> {selectedDoctor.specialty}
-                                                            </p>
-                                                        </div>
-
-                                                        {/* Clinic Details Card */}
-                                                        {selectedClinic && (
-                                                            <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 mb-4">
-                                                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                                                    <Building2 className="h-3.5 w-3.5 text-primary-500" /> Clinic Details
-                                                                </h3>
-                                                                <div className="space-y-2">
-                                                                    <div className="flex items-start gap-2">
-                                                                        <MapPin className="h-3.5 w-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
-                                                                        <div>
-                                                                            <p className="text-[11px] font-bold text-slate-800 leading-tight">{selectedClinic.name}</p>
-                                                                            <p className="text-[9px] text-slate-600 leading-tight">{selectedClinic.address}, {selectedClinic.city}</p>
-                                                                        </div>
-                                                                    </div>
-                                                                    {selectedClinic.contactPhone && (
-                                                                        <div className="flex items-center gap-2">
-                                                                            <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                                                                            <p className="text-[10px] font-bold text-slate-700">{selectedClinic.contactPhone}</p>
-                                                                        </div>
-                                                                    )}
-                                                                    {selectedClinic.operationMode && (
-                                                                        <div className="flex items-center gap-2">
-                                                                            <Clock className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                                                                            <p className="text-[10px] font-bold text-slate-700 capitalize">{selectedClinic.operationMode.replace('_', ' ')}</p>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Enhanced Stats Grid */}
-                                                        <div className="grid grid-cols-3 gap-2 mb-4">
-                                                            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center hover:bg-slate-100 transition-colors">
-                                                                <Medal className="h-4 w-4 mx-auto mb-1 text-primary-600" />
-                                                                <p className="text-[10px] font-black text-slate-800 leading-none">{selectedDoctor.experience || 5}+ Y</p>
-                                                                <p className="text-[8px] text-slate-400 font-black uppercase tracking-tighter mt-0.5">EXP</p>
-                                                            </div>
-                                                            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center hover:bg-slate-100 transition-colors">
-                                                                <IndianRupeeIcon className="h-4 w-4 mx-auto mb-1 text-primary-600" />
-                                                                <p className="text-[10px] font-black text-slate-800 leading-none">₹{selectedDoctor.consultationFee}</p>
-                                                                <p className="text-[8px] text-slate-400 font-black uppercase tracking-tighter mt-0.5">FEE</p>
-                                                            </div>
-                                                            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center hover:bg-slate-100 transition-colors">
-                                                                <Clock className="h-4 w-4 mx-auto mb-1 text-primary-600" />
-                                                                <p className="text-[10px] font-black text-slate-800 leading-none">{selectedDoctor.consultationTime || 15}m</p>
-                                                                <p className="text-[8px] text-slate-400 font-black uppercase tracking-tighter mt-0.5">TIME</p>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Enhanced Profile Summary */}
-                                                        <div className="flex-1 flex flex-col justify-end space-y-4">
-                                                            {selectedDoctor.bio && (
-                                                                <div className="bg-white p-3 rounded-xl border border-slate-100">
-                                                                    <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                                                                        <FileText className="h-3 w-3 text-primary-500" /> About Doctor
-                                                                    </h3>
-                                                                    <p className="text-slate-600 text-[11px] leading-relaxed line-clamp-3 hover:line-clamp-none transition-all cursor-pointer">{selectedDoctor.bio}</p>
-                                                                </div>
-                                                            )}
-                                                            <div className="grid grid-cols-1 gap-3">
-                                                                {selectedDoctor.education && (
-                                                                    <div className="bg-white p-3 rounded-xl border border-slate-100">
-                                                                        <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                                                                            <GraduationCap className="h-3 w-3 text-primary-500" /> Qualifications
-                                                                        </h3>
-                                                                        <div className="flex flex-wrap gap-1">
-                                                                            {selectedDoctor.education.slice(0, 3).map((edu, i) => (
-                                                                                <span key={i} className="text-[9px] font-bold text-slate-700 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">{edu}</span>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                                {selectedDoctor.languages && (
-                                                                    <div className="bg-white p-3 rounded-xl border border-slate-100">
-                                                                        <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                                                                            <Languages className="h-3 w-3 text-primary-500" /> Languages
-                                                                        </h3>
-                                                                        <div className="flex flex-wrap gap-1">
-                                                                            {selectedDoctor.languages.slice(0, 4).map((lang, i) => (
-                                                                                <span key={lang} className="text-[9px] font-bold text-primary-600 bg-primary-50 px-2 py-1 rounded-lg border border-primary-100">{lang}</span>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* RIGHT COLUMN: BOOKING FLOW (8/12) */}
-                                            <div className="lg:col-span-7 xl:col-span-8">
-                                                {!isClinicDirectWalkInOnly ? (
-                                                    <div className="bg-white p-3 md:p-4 rounded-[2rem] shadow-sm border border-slate-200 space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
-                                                        {/* Patient Profile Selection */}
-                                                        <div>
-                                                            <label className="block text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Who are you booking for?</label>
-                                                            <div className="flex flex-wrap gap-2">
-                                                                <button onClick={() => setBookingFor('MYSELF')} className={`px-5 py-2.5 rounded-xl text-xs font-black border transition-all flex items-center gap-2 ${bookingFor === 'MYSELF' ? 'bg-primary-600 text-white border-primary-600 shadow-lg shadow-primary-100' : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'}`}><User className="h-3.5 w-3.5" /> Myself</button>
-                                                                {userProfile?.familyMembers?.map(m => (
-                                                                    <button key={m.name} onClick={() => setBookingFor(m.name)} className={`px-5 py-2.5 rounded-xl text-xs font-black border transition-all flex items-center gap-2 ${bookingFor === m.name ? 'bg-primary-600 text-white border-primary-600 shadow-lg shadow-primary-100' : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'}`}><Users className="h-3.5 w-3.5" /> {m.name}</button>
-                                                                ))}
-                                                                <button onClick={() => setShowAddMember(true)} className="px-5 py-2.5 rounded-xl text-xs font-black border border-dashed border-slate-300 text-slate-500 hover:text-primary-600 transition-all flex items-center gap-2"><Plus className="h-3.5 w-3.5" /> Family</button>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Mode Selection */}
-                                                        <div>
-                                                            <label className="block text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Select Visit Type</label>
-                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                                <div onClick={() => isClinicOnlineWalkInAllowed && isWalkInAllowed && setVisitType('WALK_IN')} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 ${visitType === 'WALK_IN' ? 'border-primary-600 bg-primary-50 ring-1 ring-primary-500/20' : (isClinicOnlineWalkInAllowed && isWalkInAllowed) ? 'border-slate-100 hover:border-slate-200' : 'border-slate-50 opacity-40 grayscale pointer-events-none'}`}>
-                                                                    <div className={`p-2 rounded-xl ${visitType === 'WALK_IN' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'}`}><Zap className="h-5 w-5 fill-current" /></div>
-                                                                    <div>
-                                                                        <div className="flex items-center gap-2"><span className={`font-black uppercase tracking-widest text-[11px] ${visitType === 'WALK_IN' ? 'text-primary-900' : 'text-slate-700'}`}>Live Token</span>{visitType === 'WALK_IN' && <CheckCircle2 className="h-3.5 w-3.5 text-primary-600" />}</div>
-                                                                        <p className="text-[9px] font-bold text-slate-500 mt-0.5">Join the live queue now.</p>
-                                                                    </div>
-                                                                </div>
-                                                                <div onClick={() => isClinicApptAllowed && setVisitType('APPOINTMENT')} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 ${visitType === 'APPOINTMENT' ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-500/20' : isClinicApptAllowed ? 'border-slate-100 hover:border-slate-200' : 'border-slate-50 opacity-40 grayscale pointer-events-none'}`}>
-                                                                    <div className={`p-2 rounded-xl ${visitType === 'APPOINTMENT' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}><CalendarClock className="h-5 w-5" /></div>
-                                                                    <div>
-                                                                        <div className="flex items-center gap-2"><span className={`font-black uppercase tracking-widest text-[11px] ${visitType === 'APPOINTMENT' ? 'text-indigo-900' : 'text-slate-700'}`}>Appointment</span>{visitType === 'APPOINTMENT' && <CheckCircle2 className="h-3.5 w-3.5 text-indigo-600" />}</div>
-                                                                        <p className="text-[9px] font-bold text-slate-500 mt-0.5">Pick a confirmed slot.</p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Slot Selection View (Date/Time or Shifts) */}
-                                                        <div className="bg-slate-50/50 p-3 rounded-[1.5rem] border border-slate-100">
-                                                            {visitType === 'WALK_IN' ? (
-                                                                <div className="space-y-3">
-                                                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Live Availability (Today)</label>
-
-                                                                    {/* Travel Time & Arrival Analysis - Side by Side */}
-                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                                        {/* Travel Time Selector */}
-                                                                        <div className={`bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col ${!isWalkInAllowed ? 'opacity-50 grayscale' : ''}`}>
-                                                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Your Travel Time</label>
-                                                                            <select
-                                                                                value={travelTime}
-                                                                                disabled={!isWalkInAllowed}
-                                                                                onChange={(e) => {
-                                                                                    setTravelTime(e.target.value);
-                                                                                    setShowTravelTimeWarning(true);
-                                                                                    // Auto-hide warning after 3 seconds
-                                                                                    setTimeout(() => setShowTravelTimeWarning(false), 3000);
-                                                                                }}
-                                                                                className="w-full p-2 text-sm font-bold border border-slate-200 rounded-lg bg-white focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                                                                            >
-                                                                                <option value="0">0 minutes (At Clinic)</option>
-                                                                                <option value="5">5 minutes</option>
-                                                                                <option value="10">10 minutes</option>
-                                                                                <option value="15">15 minutes</option>
-                                                                                <option value="20">20 minutes</option>
-                                                                                <option value="30">30 minutes</option>
-                                                                                <option value="45">45 minutes</option>
-                                                                                <option value="60">1 hour</option>
-                                                                            </select>
-                                                                            <p className="text-[9px] text-slate-500 mt-1 flex-1">Estimated time to reach the clinic</p>
-
-                                                                            {/* Travel Time Warning */}
-                                                                            {showTravelTimeWarning && isWalkInAllowed && (
-                                                                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 mt-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
-                                                                                        <p className="text-[9px] font-bold text-amber-800">Travel time updated! Check arrival analysis to ensure you arrive on time.</p>
-                                                                                    </div>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-
-                                                                        {/* Live Arrival Comparison */}
-                                                                        <div className="bg-white p-3 rounded-xl border border-slate-200 flex flex-col">
-                                                                            <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-widest mb-2">Arrival Analysis</h4>
-                                                                            {selectedWalkInShiftId ? (() => {
-                                                                                const selectedShift = walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
-                                                                                if (!selectedShift) return (
-                                                                                    <div className="flex-1 flex items-center justify-center">
-                                                                                        <p className="text-[9px] text-slate-400 text-center">Select a shift to see arrival analysis</p>
-                                                                                    </div>
-                                                                                );
-
-                                                                                const now = getClinicCurrentTime(selectedClinic?.timezone);
-                                                                                const travelMins = parseInt(travelTime);
-                                                                                const arrivalTime = new Date(now.getTime() + travelMins * 60000);
-                                                                                const estimatedTurn = new Date(now.getTime() + selectedShift.stats.totalWaitMins * 60000);
-                                                                                const isLateRisk = (travelMins + 10) > selectedShift.stats.totalWaitMins && travelMins > 0;
-
-                                                                                return (
-                                                                                    <div className="flex-1 space-y-3">
-                                                                                        <div className="grid grid-cols-2 gap-3">
-                                                                                            <div className="text-center">
-                                                                                                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Your Arrival</div>
-                                                                                                <div className="text-sm font-black text-slate-900">{arrivalTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                                                                            </div>
-                                                                                            <div className="text-center">
-                                                                                                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Est. Turn</div>
-                                                                                                <div className="text-sm font-black text-slate-900">{estimatedTurn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                        {isLateRisk && (
-                                                                                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-2">
-                                                                                                <div className="flex items-center gap-2">
-                                                                                                    <AlertTriangle className="h-4 w-4 text-orange-600" />
-                                                                                                    <span className="text-[10px] font-bold text-orange-800">Late Arrival Warning</span>
-                                                                                                </div>
-                                                                                                <p className="text-[9px] text-orange-700 mt-0.5">Your travel time may exceed the estimated wait. You might lose your spot.</p>
-                                                                                            </div>
-                                                                                        )}
-                                                                                    </div>
-                                                                                );
-                                                                            })() : (
-                                                                                <div className="flex-1 flex items-center justify-center">
-                                                                                    <p className="text-[9px] text-slate-400 text-center">Select a shift to see arrival analysis</p>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                                        {walkInShiftsToday.map(({ shift, statusLabel, statusColor, stats, isEnded, isFull, totalWaitMins, load }) => (
-                                                                            <div key={shift.id || shift.startTime} onClick={() => !isEnded && !isFull && setSelectedWalkInShiftId(shift.id || shift.startTime)} className={`p-2 rounded-xl border-2 transition-all ${(!isEnded && !isFull) ? 'cursor-pointer' : 'cursor-not-allowed'} ${selectedWalkInShiftId === (shift.id || shift.startTime) ? 'border-primary-600 bg-white shadow-md' : (isEnded || isFull) ? 'bg-slate-100/50 border-transparent opacity-40 grayscale' : 'bg-white border-slate-200 hover:border-primary-300'}`}>
-                                                                                <div className="flex justify-between items-start mb-1"><div className={`p-1.5 rounded-lg ${selectedWalkInShiftId === (shift.id || shift.startTime) ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'}`}><Clock className="h-3 w-3" /></div><span className={`text-[7px] font-black uppercase tracking-wider ${statusColor}`}>{statusLabel}</span></div>
-                                                                                <h4 className="font-black text-slate-800 text-xs">{shift.label || 'Regular Shift'}</h4>
-                                                                                <p className="text-[8px] text-slate-400 font-bold mb-1">{formatTime12h(shift.startTime)} - {formatTime12h(shift.endTime)}</p>
-                                                                                {!isEnded && <div className="border-t border-slate-50 pt-1 flex justify-between items-center"><span className="text-[8px] font-bold text-slate-500">{load} Waiting</span><span className={`text-[9px] font-black ${totalWaitMins > 30 ? 'text-orange-600' : 'text-emerald-600'}`}>~{totalWaitMins}m Wait</span></div>}
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="space-y-3 animate-in fade-in duration-300">
-                                                                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-                                                                        {bookingDates.map(day => (
-                                                                            <button key={day.dateStr} disabled={day.isOff} onClick={() => { setApptDate(day.dateStr); setApptTime(''); }} className={`flex-shrink-0 w-10 h-14 rounded-xl border-2 flex flex-col items-center justify-center transition-all ${apptDate === day.dateStr ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : day.isOff ? 'bg-slate-100/50 text-slate-300 border-transparent' : 'bg-white border-slate-200 hover:border-indigo-400'}`}><span className="text-[7px] font-black uppercase tracking-tighter mb-0.5">{day.dayShort}</span><span className="text-sm font-black">{day.dayNum}</span></button>
-                                                                        ))}
-                                                                    </div>
-                                                                    {apptDate && (
-                                                                        <div className="space-y-2">
-                                                                            {(Object.entries(groupedTimeSlots) as [string, any[]][]).map(([period, slots]) => slots.length > 0 && (
-                                                                                <div key={period}>
-                                                                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">{period}</span>
-                                                                                    <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-2 flex-wrap">
-                                                                                        {slots.map(slot => (
-                                                                                            <button key={slot.time} disabled={slot.isBlocked || slot.isFull || slot.isBooked} onClick={() => setApptTime(slot.value)} className={`py-1.5 rounded-lg text-[8px] font-black border transition-all ${slot.isBlocked || slot.isFull || slot.isBooked ? 'bg-slate-100 text-slate-300 border-transparent grayscale' : apptTime === slot.value ? 'bg-indigo-600 text-white border-indigo-600 shadow-md z-10' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-400'}`}>{formatTime12h(slot.value)}</button>
-                                                                                        ))}
-                                                                                    </div>
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            )}
-                                                        </div>
-
-                                                        {/* Symptoms Input and Confirm */}
-                                                        <div className="space-y-2">
-                                                            <Input label="Short Summary of Symptoms" placeholder="e.g. Fever since 2 days, Back pain" value={symptoms} onChange={e => setSymptoms(e.target.value)} />
-
-                                                            <div className="flex flex-col gap-1">
-                                                                <button
-                                                                    className={`w-full h-12 text-lg font-black rounded-2xl shadow-xl transition-all text-white disabled:bg-slate-200 disabled:shadow-none disabled:cursor-not-allowed transform active:scale-[0.98] ${visitType === 'APPOINTMENT' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100' : 'bg-primary-600 hover:bg-primary-700 shadow-primary-100'}`}
-                                                                    disabled={(visitType === 'APPOINTMENT' && (!apptDate || !apptTime)) || (visitType === 'WALK_IN' && (!selectedWalkInShiftId || !isWalkInAllowed))}
-                                                                    onClick={() => {
-                                                                        if (visitType === 'WALK_IN' && selectedWalkInShiftId) {
-                                                                            const selectedShift = walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
-                                                                            if (selectedShift) {
-                                                                                const travelMins = parseInt(travelTime);
-                                                                                const isLateRisk = (travelMins + 10) > selectedShift.stats.totalWaitMins && travelMins > 0;
-                                                                                if (isLateRisk) {
-                                                                                    setShowLateWarningModal(true);
-                                                                                    return;
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                        handleBookToken();
-                                                                    }}
-                                                                >
-                                                                    {visitType === 'APPOINTMENT' ? 'Confirm Appointment' : 'Join Live Queue'}
-                                                                </button>
-                                                                <p className="text-center text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-center gap-1.5">
-                                                                    <ShieldCheck className="h-3 w-3" /> Secure & Instant Confirmation
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="bg-orange-50/50 p-12 rounded-[2rem] border-2 border-dashed border-orange-200 text-center space-y-6">
-                                                        <div className="p-4 bg-white rounded-full inline-block shadow-lg border border-orange-100"><MapPinIcon className="h-8 w-8 text-orange-600" /></div>
-                                                        <div>
-                                                            <h3 className="text-lg font-black text-orange-900 uppercase tracking-widest">Visit Clinic for Token</h3>
-                                                            <p className="text-xs text-orange-700 mt-2 font-bold opacity-80">This clinic currently only supports in-person token collection.</p>
-                                                        </div>
-                                                        <button className="h-12 px-8 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-black shadow-lg transition-all transform active:scale-95 flex items-center gap-2 mx-auto text-xs uppercase tracking-widest" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${selectedClinic?.geoLocation?.lat},${selectedClinic?.geoLocation?.lng}`)}>
-                                                            <Navigation className="h-4 w-4" /> Get Directions
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
+                                        <BookingFormView
+                                            selectedDoctor={selectedDoctor}
+                                            selectedClinic={selectedClinic}
+                                            userProfile={userProfile}
+                                            bookingFor={bookingFor}
+                                            setBookingFor={setBookingFor}
+                                            setShowAddMember={setShowAddMember}
+                                            visitType={visitType}
+                                            setVisitType={setVisitType}
+                                            isClinicOnlineWalkInAllowed={isClinicOnlineWalkInAllowed}
+                                            isWalkInAllowed={isWalkInAllowed}
+                                            isClinicApptAllowed={isClinicApptAllowed}
+                                            travelTime={travelTime}
+                                            setTravelTime={setTravelTime}
+                                            setShowTravelTimeWarning={setShowTravelTimeWarning}
+                                            walkInShiftsToday={walkInShiftsToday}
+                                            selectedWalkInShiftId={selectedWalkInShiftId}
+                                            setSelectedWalkInShiftId={setSelectedWalkInShiftId}
+                                            getClinicCurrentTime={getClinicCurrentTime}
+                                            bookingDates={bookingDates}
+                                            apptDate={apptDate}
+                                            setApptDate={setApptDate}
+                                            setApptTime={setApptTime}
+                                            groupedTimeSlots={groupedTimeSlots}
+                                            apptTime={apptTime}
+                                            symptoms={symptoms}
+                                            setSymptoms={setSymptoms}
+                                            handleBookToken={handleBookToken}
+                                            walkInEstimation={walkInEstimation}
+                                            isClinicDirectWalkInOnly={isClinicDirectWalkInOnly}
+                                            formatTime12h={formatTime12h}
+                                        />
                                     ) : null}
                                 </div>
 
