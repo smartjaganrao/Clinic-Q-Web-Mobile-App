@@ -85,7 +85,21 @@ class StorageService {
           };
       }
 
-      // 3. Iterate Clinics to find match
+      // 3. Check Doctor Demo (Specifically handle the 'ravi@demo.com' email from the login page)
+      if (email === 'ravi@demo.com' && pass === 'password') {
+          const firstClinic = this.clinics[0];
+          if (firstClinic && firstClinic.doctors.length > 0) {
+              const demoDoc = firstClinic.doctors[0];
+              return {
+                  role: UserRole.DOCTOR,
+                  clinicId: firstClinic.id,
+                  userId: demoDoc.id,
+                  name: demoDoc.name
+              };
+          }
+      }
+
+      // 4. Iterate Clinics to find match
       for (const clinic of this.clinics) {
           // Check Staff
           const staffMember = clinic.staff.find(s => s.email === email && s.password === pass);
@@ -136,7 +150,7 @@ class StorageService {
   async updatePatientStatus(clinicId: string, patientId: string, status: PatientStatus) {
     await delay(50);
     this.clinics = this.clinics.map(c => 
-        c.id === clinicId 
+      c.id === clinicId 
         ? { ...c, patients: c.patients.map(p => {
             if (p.id !== patientId) return p;
             const updates: Partial<Patient> = { status };
@@ -238,32 +252,36 @@ class StorageService {
 
   // --- STAFF OPERATIONS (NEW) ---
 
+  // Fix: Completed missing addClinicStaff method and added other essential staff operations
   async addClinicStaff(clinicId: string, staff: Staff) {
       await delay(100);
-      this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, staff: [...(c.staff || []), staff] } : c);
+      this.clinics = this.clinics.map(c => 
+          c.id === clinicId ? { ...c, staff: [...(c.staff || []), staff] } : c
+      );
       this.save();
   }
 
   async updateClinicStaff(clinicId: string, staffId: string, updates: Partial<Staff>) {
       await delay(50);
-      this.clinics = this.clinics.map(c => c.id === clinicId ? { 
-          ...c, 
-          staff: (c.staff || []).map(s => s.id === staffId ? { ...s, ...updates } : s) 
-      } : c);
+      this.clinics = this.clinics.map(c => 
+          c.id === clinicId 
+          ? { ...c, staff: (c.staff || []).map(s => s.id === staffId ? { ...s, ...updates } : s) }
+          : c
+      );
       this.save();
   }
 
   async deleteClinicStaff(clinicId: string, staffId: string) {
       await delay(50);
-      this.clinics = this.clinics.map(c => c.id === clinicId ? { 
-          ...c, 
-          staff: (c.staff || []).filter(s => s.id !== staffId) 
-      } : c);
+      this.clinics = this.clinics.map(c => 
+          c.id === clinicId ? { ...c, staff: (c.staff || []).filter(s => s.id !== staffId) } : c
+      );
       this.save();
   }
 
   // --- CLINIC OPERATIONS ---
 
+  // Fix: Added missing clinic operations methods
   async createClinic(clinic: Clinic) {
       await delay(200);
       this.clinics = [...this.clinics, { ...clinic, staff: clinic.staff || [] }];
@@ -284,23 +302,18 @@ class StorageService {
 
   async resetSystem() {
       await delay(500);
-      // Explicitly clear local storage to remove any persistent data
-      localStorage.removeItem('clinicq_db_v2'); 
-      // Re-initialize with a fresh deep copy of INITIAL_CLINICS
-      this.clinics = JSON.parse(JSON.stringify(INITIAL_CLINICS)); 
-      // Save immediately to persist this new state and trigger notify
+      localStorage.removeItem(STORAGE_KEY);
+      this.clinics = JSON.parse(JSON.stringify(INITIAL_CLINICS));
       this.save();
   }
 
   async deleteAllData() {
       await delay(500);
-      // Clear local storage
-      localStorage.removeItem('clinicq_db_v2');
-      // Set to empty array
+      localStorage.removeItem(STORAGE_KEY);
       this.clinics = [];
-      // Save and notify
       this.save();
   }
 }
 
+// Fix: Exporting the storage instance for use in other modules
 export const storage = new StorageService();
