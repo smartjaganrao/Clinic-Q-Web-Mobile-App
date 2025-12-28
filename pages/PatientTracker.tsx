@@ -47,7 +47,7 @@ interface PatientTrackerProps {
     isGuest: boolean;
     onLoginClick?: (phone?: string, name?: string) => void;
     onBack: () => void;
-    onGetToken: (name: string, phone: string, doctorId: string, clinicId: string, time?: string, date?: string, age?: string, gender?: any, symptoms?: string) => void;
+    onGetToken: (name: string, phone: string, doctorId: string, clinicId: string, visitType: 'WALK_IN' | 'APPOINTMENT', time?: string, date?: string, age?: string, gender?: any, symptoms?: string) => void;
     addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
     onUpdateDetails: (id: string, updates: Partial<Patient>) => void;
     onCancelVisit: (clinicId: string, patientId: string) => void;
@@ -864,7 +864,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         }
 
         const clinicNow = getClinicCurrentTime(selectedClinic?.timezone);
-        onGetToken(pName, pPhone, selectedDoctorId!, selectedClinicId!, bookingTime, visitType === 'APPOINTMENT' ? apptDate : getLocalToday(selectedClinic?.timezone), pAge, pGender, symptoms);
+        onGetToken(pName, pPhone, selectedDoctorId!, selectedClinicId!, visitType, bookingTime, visitType === 'APPOINTMENT' ? apptDate : getLocalToday(selectedClinic?.timezone), pAge, pGender, symptoms);
 
         navigate('/patient/visits');
         setSymptoms('');

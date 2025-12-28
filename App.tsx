@@ -466,25 +466,25 @@ export default function App() {
   };
 
   // PATIENT TRACKER: Get token handler
-  const handleGetToken = async (name: string, phone: string, doctorId: string, clinicId: string, time?: string, date?: string, age?: string, gender?: any, symptoms?: string) => {
-      const clinic = clinics.find(c => c.id === clinicId);
-      if (!clinic) return;
-      
-      const newPatient: Patient = {
-          id: `pat_remote_${Date.now()}`,
-          tokenNumber: Math.floor(Math.random() * 1000),
-          name, phone, doctorId,
-          status: PatientStatus.WAITING,
-          timeAdded: Date.now(),
-          visitType: date && time ? 'APPOINTMENT' : 'WALK_IN',
-          appointmentDate: date, appointmentTime: time,
-          age, gender, symptoms,
-          isCheckedIn: false 
-      };
-      
-      await storage.addPatient(clinicId, newPatient);
-      addToast(date ? 'Appointment Booked!' : 'Token Generated!', 'success');
-  };
+    const handleGetToken = async (name: string, phone: string, doctorId: string, clinicId: string, visitType: 'WALK_IN' | 'APPOINTMENT', time?: string, date?: string, age?: string, gender?: any, symptoms?: string) => {
+        const clinic = clinics.find(c => c.id === clinicId);
+        if (!clinic) return;
+        
+        const newPatient: Patient = {
+            id: `pat_remote_${Date.now()}`,
+            tokenNumber: Math.floor(Math.random() * 1000),
+            name, phone, doctorId,
+            status: PatientStatus.WAITING,
+            timeAdded: Date.now(),
+            visitType,
+            appointmentDate: date, appointmentTime: time,
+            age, gender, symptoms,
+            isCheckedIn: false 
+        };
+        
+        await storage.addPatient(clinicId, newPatient);
+        addToast(date ? 'Appointment Booked!' : 'Token Generated!', 'success');
+    };
 
   const handleCancelVisit = async (clinicId: string, patientId: string) => {
       await storage.updatePatientStatus(clinicId, patientId, PatientStatus.CANCELLED);
