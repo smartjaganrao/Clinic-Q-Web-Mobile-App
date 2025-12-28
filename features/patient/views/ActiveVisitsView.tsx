@@ -4,8 +4,9 @@ import { Card } from '../../../components/Card';
 import { Button } from '../../../components/Button';
 import { Badge } from '../../../components/Badge';
 import { PatientStatus, DoctorStatus } from '../../../types';
-import { Calendar, MapPin, User, Coffee, AlertTriangle, Timer, QrCode, ThumbsUp, Clock, ChevronRight, Zap, CheckCircle2 } from 'lucide-react';
+import { Calendar, MapPin, User, Coffee, AlertTriangle, Timer, QrCode, ThumbsUp, Clock, ChevronRight, Zap, CheckCircle2, Navigation } from 'lucide-react';
 import { formatTime12h } from '../../../utils/time';
+import { calculateDistance } from '../../../utils/geolocation';
 
 export const ActiveVisitsView = ({
     activeVisits,
@@ -14,7 +15,8 @@ export const ActiveVisitsView = ({
     setShowQRScanner,
     unratedCompletedVisit,
     setFeedbackModal,
-    handleTabSwitch
+    handleTabSwitch,
+    userLocation
 }: {
     activeVisits: any[],
     getSmartQueueDetails: (visit: any) => any,
@@ -22,7 +24,8 @@ export const ActiveVisitsView = ({
     setShowQRScanner: (show: boolean) => void,
     unratedCompletedVisit: any,
     setFeedbackModal: (modal: any) => void,
-    handleTabSwitch: (tab: string) => void
+    handleTabSwitch: (tab: string) => void,
+    userLocation: { lat: number, lng: number } | null
 }) => {
     return (
         <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto animate-in fade-in duration-500">
@@ -84,6 +87,18 @@ export const ActiveVisitsView = ({
 
                         const isAppointment = visit.visitType === 'APPOINTMENT';
 
+                        // Distance Calculation
+                        let distLabel = null;
+                        let travelAdvice = null;
+                        if (userLocation && visit.clinicGeo && !visit.isCheckedIn && visit.status === PatientStatus.WAITING) {
+                            const dist = calculateDistance(userLocation.lat, userLocation.lng, visit.clinicGeo.lat, visit.clinicGeo.lng);
+                            distLabel = `${dist.toFixed(1)} km`;
+                            
+                            if (dist > 20) travelAdvice = { text: "Long way • Plan ahead", color: "text-amber-600 bg-amber-50 border-amber-100" };
+                            else if (dist > 2) travelAdvice = { text: "Start travelling", color: "text-blue-600 bg-blue-50 border-blue-100" };
+                            else travelAdvice = { text: "You're close", color: "text-emerald-600 bg-emerald-50 border-emerald-100" };
+                        }
+
                         return (
                             <Card
                                 key={visit.id}
@@ -121,15 +136,31 @@ export const ActiveVisitsView = ({
                                     </div>
 
                                     {/* Meta Context Bar (Scheduled Time) */}
-                                    <div className="bg-slate-50/80 p-3 rounded-2xl border border-slate-100 flex items-center justify-between text-[11px] text-slate-600 font-bold">
-                                        <div className="flex items-center gap-2 uppercase tracking-tight">
-                                            <Calendar className={`h-4 w-4 ${isAppointment ? 'text-indigo-500' : 'text-primary-500'}`} /> 
-                                            <span>{scheduledDate}, {scheduledTime}</span>
+                                    <div className="bg-slate-50/80 p-3 rounded-2xl border border-slate-100 flex flex-col gap-2">
+                                        <div className="flex items-center justify-between text-[11px] text-slate-600 font-bold">
+                                            <div className="flex items-center gap-2 uppercase tracking-tight">
+                                                <Calendar className={`h-4 w-4 ${isAppointment ? 'text-indigo-500' : 'text-primary-500'}`} /> 
+                                                <span>{scheduledDate}, {scheduledTime}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 uppercase tracking-tight">
+                                                <MapPin className="h-4 w-4 text-rose-500" /> 
+                                                <span>Room {visit.room}</span>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-2 uppercase tracking-tight">
-                                            <MapPin className="h-4 w-4 text-rose-500" /> 
-                                            <span>Room {visit.room}</span>
-                                        </div>
+                                        
+                                        {/* Distance & Travel Prompt */}
+                                        {distLabel && (
+                                            <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
+                                                <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                                    <Navigation className="h-3 w-3" /> {distLabel} away
+                                                </div>
+                                                {travelAdvice && (
+                                                    <div className={`px-2 py-0.5 rounded-lg border text-[9px] font-bold uppercase tracking-tight flex items-center gap-1 ${travelAdvice.color}`}>
+                                                        <Zap className="h-2.5 w-2.5 fill-current" /> {travelAdvice.text}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 

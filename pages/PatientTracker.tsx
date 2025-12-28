@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useMatch, useLocation, useSearchParams } from 'react-router-dom';
 import { Clinic, Patient, PatientStatus, DoctorStatus, Doctor, ClinicOperationMode, Review, TimeSlot, FamilyMember, UserProfile, GroupedSlots } from '../types';
@@ -361,7 +362,27 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
     const uniqueCities = useMemo(() => ['All Cities', ...Array.from(new Set(clinics.map(c => c.city))).sort()], [clinics]);
 
-    const activeVisits = useMemo(() => { if (isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown', room: doc?.roomNumber || '-' }); } }); }); return visits.sort((a, b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
+    const activeVisits = useMemo(() => { 
+        if (isGuest) return []; 
+        const visits: any[] = []; 
+        clinics.forEach(c => { 
+            c.patients.forEach(p => { 
+                if (p.phone === userPhone && p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED) { 
+                    const doc = c.doctors.find(d => d.id === p.doctorId); 
+                    visits.push({ 
+                        ...p, 
+                        clinicName: c.name, 
+                        clinicId: c.id, 
+                        doctorName: doc?.name || 'Unknown', 
+                        room: doc?.roomNumber || '-',
+                        clinicGeo: c.geoLocation // Pass clinic location for distance calc
+                    }); 
+                } 
+            }); 
+        }); 
+        return visits.sort((a, b) => b.timeAdded - a.timeAdded); 
+    }, [clinics, userPhone, isGuest]);
+
     const historyVisits = useMemo(() => { if (isGuest) return []; const visits: any[] = []; clinics.forEach(c => { c.patients.forEach(p => { if (p.phone === userPhone && (p.status === PatientStatus.COMPLETED || p.status === PatientStatus.CANCELLED)) { const doc = c.doctors.find(d => d.id === p.doctorId); visits.push({ ...p, clinicName: c.name, clinicId: c.id, doctorName: doc?.name || 'Unknown', notes: p.notes }); } }); }); return visits.sort((a, b) => b.timeAdded - a.timeAdded); }, [clinics, userPhone, isGuest]);
 
     const unratedCompletedVisit = useMemo(() => {
@@ -1455,6 +1476,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 unratedCompletedVisit={unratedCompletedVisit}
                                 setFeedbackModal={setFeedbackModal}
                                 handleTabSwitch={handleTabSwitch}
+                                userLocation={userLocation}
                             />
                         )
                     )}

@@ -24,10 +24,15 @@ export const ClinicListView = ({
                     const relevantDoctors = getRelevantDoctors(clinic);
                     const feeRange = getFeeRange(clinic);
 
-                    let distLabel = '---';
+                    let distLabel = undefined;
+                    let travelTime = undefined;
+
                     if (userLocation && clinic.geoLocation) {
-                        const dist = calculateDistance(userLocation.lat, userLocation.lng, clinic.geoLocation.lat, clinic.geoLocation.lng).toFixed(1);
-                        distLabel = `${dist} km`;
+                        const dist = calculateDistance(userLocation.lat, userLocation.lng, clinic.geoLocation.lat, clinic.geoLocation.lng);
+                        distLabel = `${dist.toFixed(1)} km`;
+                        // Estimate travel time: roughly 2.5 mins per km (24 km/h) for city traffic
+                        const mins = Math.ceil(dist * 2.5);
+                        travelTime = `~${mins} min`;
                     }
 
                     return (
@@ -37,6 +42,7 @@ export const ClinicListView = ({
                             waitInfo={waitInfo}
                             feeRange={feeRange}
                             distLabel={distLabel}
+                            travelTime={travelTime}
                             gmapsLink={`https://www.google.com/maps/search/?api=1&query=${clinic.geoLocation?.lat},${clinic.geoLocation?.lng}`}
                             relevantDoctors={relevantDoctors}
                             isHighlighted={highlightedClinicId === clinic.id}

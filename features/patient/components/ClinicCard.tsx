@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Clinic, Doctor, ClinicOperationMode } from '../../../types';
-import { Building2, MapPin, Clock, Calendar, Zap, Navigation, ShieldCheck, Star, CheckCircle2, Info } from 'lucide-react';
+import { Building2, MapPin, Clock, Calendar, Zap, Navigation, ShieldCheck, Star, CheckCircle2, Info, Car } from 'lucide-react';
 import { Tooltip } from '../../../components/Tooltip';
 
 function IndianRupeeIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -29,7 +29,8 @@ interface ClinicCardProps {
       dotColor: string;
   };
   feeRange: string;
-  distLabel: string;
+  distLabel?: string;
+  travelTime?: string;
   gmapsLink: string;
   relevantDoctors: Doctor[];
   isHighlighted: boolean;
@@ -41,7 +42,7 @@ interface ClinicCardProps {
 }
 
 export const ClinicCard: React.FC<ClinicCardProps> = ({
-  clinic, waitInfo, feeRange, distLabel, gmapsLink, relevantDoctors, isHighlighted, isOpen, cardRef, onSelect, onBook, onQueue
+  clinic, waitInfo, feeRange, distLabel, travelTime, gmapsLink, relevantDoctors, isHighlighted, isOpen, cardRef, onSelect, onBook, onQueue
 }) => {
   const canBook = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
   const canQueueOnline = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
@@ -116,14 +117,25 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                         {clinic.name}
                     </h3>
 
-                    <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold mb-1.5">
-                        <MapPin className="h-2.5 w-2.5 text-slate-400 flex-shrink-0" />
-                        <span className="truncate">{clinic.address}</span>
+                    <div className="flex justify-between items-start gap-2 mb-1.5">
+                        <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold min-w-0">
+                            <MapPin className="h-2.5 w-2.5 text-slate-400 flex-shrink-0" />
+                            <span className="truncate">{clinic.address}</span>
+                        </div>
+                        
                         {distLabel && (
-                            <span className="text-blue-600 font-bold flex items-center gap-1 ml-auto">
-                                <Navigation className="h-2.5 w-2.5" />
-                                {distLabel}
-                            </span>
+                            <div className="flex flex-col items-end shrink-0">
+                                <span className="text-blue-600 text-[10px] font-bold flex items-center gap-1">
+                                    <Navigation className="h-2.5 w-2.5" />
+                                    {distLabel}
+                                </span>
+                                {travelTime && (
+                                    <span className="text-[8px] text-slate-500 font-bold uppercase tracking-tight flex items-center gap-1">
+                                        <Car className="h-2 w-2" />
+                                        {travelTime}
+                                    </span>
+                                )}
+                            </div>
                         )}
                     </div>
 
