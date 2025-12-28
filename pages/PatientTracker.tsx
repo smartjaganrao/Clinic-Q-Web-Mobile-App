@@ -1129,6 +1129,12 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         }
     }, [selectedClinic, isClinicDirectWalkInOnly, isClinicOnlineWalkInAllowed, isClinicApptAllowed, visitType]);
 
+    const handleUpdateProfile = (updatedProfile: UserProfile) => {
+        setUserProfile(updatedProfile);
+        localStorage.setItem(`clinicq_patient_${userPhone}`, JSON.stringify(updatedProfile));
+        addToast("Profile updated successfully!", "success");
+    };
+
     const confirmCancel = () => { if (cancelModal.visit) { onCancelVisit(cancelModal.visit.clinicId, cancelModal.visit.id); addToast("Appointment Cancelled", "info"); setCancelModal({ isOpen: false, visit: null }); } };
 
     const groupedTimeSlots = useMemo<GroupedSlots>(() => {
@@ -1477,6 +1483,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 setShowAddMember={setShowAddMember}
                                 handleEditMember={handleEditMember}
                                 setMemberToDeleteIndex={setMemberToDeleteIndex}
+                                handleUpdateProfile={handleUpdateProfile}
                             />
                         )
                     )}
