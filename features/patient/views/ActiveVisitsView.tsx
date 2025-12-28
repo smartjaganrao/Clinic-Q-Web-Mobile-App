@@ -7,6 +7,7 @@ import { PatientStatus, DoctorStatus } from '../../../types';
 import { Calendar, MapPin, User, Coffee, AlertTriangle, Timer, QrCode, ThumbsUp, Clock, ChevronRight, Zap, CheckCircle2, Navigation } from 'lucide-react';
 import { formatTime12h, getClinicCurrentTime, getLocalToday } from '../../../utils/time';
 import { calculateDistance } from '../../../utils/geolocation';
+import { Tooltip } from '../../../components/Tooltip';
 
 export const ActiveVisitsView = ({
     activeVisits,
@@ -50,19 +51,21 @@ export const ActiveVisitsView = ({
                             </div>
                         </div>
 
-                        <Button
-                            onClick={() =>
-                                setFeedbackModal({
-                                    isOpen: true,
-                                    visit: unratedCompletedVisit,
-                                    rating: 0,
-                                    text: ''
-                                })
-                            }
-                            className="bg-slate-900 text-white shadow-2xl hover:bg-slate-800 px-10 h-14 rounded-2xl font-black uppercase tracking-widest text-xs transition-all active:scale-95"
-                        >
-                            Rate Doctor Now
-                        </Button>
+                        <Tooltip text="Provide feedback to help other patients">
+                            <Button
+                                onClick={() =>
+                                    setFeedbackModal({
+                                        isOpen: true,
+                                        visit: unratedCompletedVisit,
+                                        rating: 0,
+                                        text: ''
+                                    })
+                                }
+                                className="bg-slate-900 text-white shadow-2xl hover:bg-slate-800 px-10 h-14 rounded-2xl font-black uppercase tracking-widest text-xs transition-all active:scale-95"
+                            >
+                                Rate Doctor Now
+                            </Button>
+                        </Tooltip>
                     </div>
                 </div>
             )}
@@ -212,15 +215,17 @@ export const ActiveVisitsView = ({
                                         <Navigation className="h-3 w-3 mr-1" />
                                         {distance ? `${distance.toFixed(1)} km away` : 'Calculating...'}
                                     </Badge>
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${clinic?.geoLocation?.lat},${clinic?.geoLocation?.lng}`, '_blank')}
-                                        disabled={!clinic?.geoLocation}
-                                    >
-                                        <Zap className="h-4 w-4 mr-2" />
-                                        Start Travelling
-                                    </Button>
+                                    <Tooltip text="Get directions to the clinic">
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${clinic?.geoLocation?.lat},${clinic?.geoLocation?.lng}`, '_blank')}
+                                            disabled={!clinic?.geoLocation}
+                                        >
+                                            <Zap className="h-4 w-4 mr-2" />
+                                            Start Travelling
+                                        </Button>
+                                    </Tooltip>
                                 </div>
                                 )}
 
@@ -260,26 +265,30 @@ export const ActiveVisitsView = ({
                                     {/* Actions */}
                                     <div className="flex gap-2 mt-1">
                                         {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (
-                                            <button
-                                                className="flex-[2] bg-[#1a2332] hover:bg-[#111827] text-white h-12 rounded-xl font-black uppercase tracking-widest text-xs shadow-xl shadow-slate-200 transition-all active:scale-95 flex items-center justify-center gap-2"
-                                                onClick={() => setShowQRScanner(true)}
-                                            >
-                                                <QrCode className="h-5 w-5" />
-                                                Check-In
-                                            </button>
+                                            <Tooltip text="Scan QR code at the clinic to confirm arrival" className="flex-[2]">
+                                                <button
+                                                    className="w-full bg-[#1a2332] hover:bg-[#111827] text-white h-12 rounded-xl font-black uppercase tracking-widest text-xs shadow-xl shadow-slate-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                    onClick={() => setShowQRScanner(true)}
+                                                >
+                                                    <QrCode className="h-5 w-5" />
+                                                    Check-In
+                                                </button>
+                                            </Tooltip>
                                         )}
 
-                                        <button
-                                            className={`flex-1 h-12 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all border active:scale-95 ${
-                                                visit.status === PatientStatus.WITH_DOCTOR 
-                                                ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed' 
-                                                : 'text-rose-500 border-rose-200 bg-white hover:bg-rose-50'
-                                            }`}
-                                            onClick={() => setCancelModal({ isOpen: true, visit })}
-                                            disabled={visit.status === PatientStatus.WITH_DOCTOR}
-                                        >
-                                            Cancel
-                                        </button>
+                                        <Tooltip text="Cancel this visit" className="flex-1">
+                                            <button
+                                                className={`w-full h-12 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all border active:scale-95 ${
+                                                    visit.status === PatientStatus.WITH_DOCTOR 
+                                                    ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed' 
+                                                    : 'text-rose-500 border-rose-200 bg-white hover:bg-rose-50'
+                                                }`}
+                                                onClick={() => setCancelModal({ isOpen: true, visit })}
+                                                disabled={visit.status === PatientStatus.WITH_DOCTOR}
+                                            >
+                                                Cancel
+                                            </button>
+                                        </Tooltip>
                                     </div>
                                     
                                     {/* Transaction Record - Ultra Subtle */}

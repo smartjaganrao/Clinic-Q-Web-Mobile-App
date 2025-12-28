@@ -1,3 +1,13 @@
+import React from 'react';
+
+// Fix for missing JSX.IntrinsicElements definition in environment
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      [elemName: string]: any;
+    }
+  }
+}
 
 export enum UserRole {
   ADMIN = 'ADMIN',
@@ -85,7 +95,7 @@ export interface Doctor {
   name: string;
   mobile: string; // NEW: Unique identifier for linking
   registrationNumber?: string; // NEW: Medical Reg No
-  email?: string; // NEW: Auth
+  email?: string; // NEW: Auth (In real app, this would be hashed)
   password?: string; // NEW: Auth (In real app, this would be hashed)
   specialty: string;
   roomNumber: string;
@@ -262,50 +272,4 @@ export interface GroupedSlots {
     Afternoon: { value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean }[];
     Evening: { value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean }[];
     Night: { value: string, label: string, isBlocked?: boolean, isFull?: boolean, isBooked?: boolean }[];
-}
-
-// Global declaration to fix JSX IntrinsicElements error
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      [elemName: string]: any;
-      div: any;
-      span: any;
-      p: any;
-      button: any;
-      input: any;
-      label: any;
-      select: any;
-      option: any;
-      img: any;
-      form: any;
-      h1: any;
-      h2: any;
-      h3: any;
-      h4: any;
-      h5: any;
-      h6: any;
-      br: any;
-      nav: any;
-      header: any;
-      main: any;
-      section: any;
-      table: any;
-      thead: any;
-      tbody: any;
-      tr: any;
-      th: any;
-      td: any;
-      ul: any;
-      li: any;
-      textarea: any;
-      a: any;
-      svg: any;
-      path: any;
-      circle: any;
-      rect: any;
-      g: any;
-      aside: any;
-    }
-  }
 }

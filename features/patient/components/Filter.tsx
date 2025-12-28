@@ -128,7 +128,7 @@ export const Filter: React.FC<FilterProps> = ({
                             className={`h-11 px-6 flex items-center gap-2.5 rounded-2xl border-2 transition-all shrink-0 ml-auto shadow-md ${showMap ? 'bg-primary-600 border-primary-600 text-white' : 'bg-white border-slate-100 text-slate-500 hover:border-primary-400'}`}
                         >
                             {showMap ? <ListIcon className="h-4 w-4" /> : <MapIcon className="h-4 w-4" />}
-                            <span className="text-[10px] font-black uppercase tracking-widest">{showMap ? 'Show List' : 'Show Map'}</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest">{showMap ? 'List View' : 'Map View'}</span>
                         </button>
                     </div>
 
@@ -191,14 +191,6 @@ export const Filter: React.FC<FilterProps> = ({
                             <span className="truncate">{selectedMinExperience === 0 ? 'Exp' : `${selectedMinExperience}+ Yrs`}</span>
                             <ChevronDown className="h-2.5 w-2.5 opacity-50" />
                         </div>
-
-                        <button 
-                            onClick={() => setShowMap(!showMap)} 
-                            className={`flex-shrink-0 h-10 px-4 flex items-center gap-2 rounded-xl border transition-all shadow-sm ${showMap ? 'bg-primary-600 border-primary-600 text-white' : 'bg-white border-slate-200 text-slate-500'}`}
-                        >
-                            {showMap ? <ListIcon className="h-3.5 w-3.5" /> : <MapIcon className="h-3.5 w-3.5" />}
-                            <span className="text-[9px] font-black uppercase tracking-widest">{showMap ? 'List' : 'Map'}</span>
-                        </button>
                     </div>
                 </>
             )}

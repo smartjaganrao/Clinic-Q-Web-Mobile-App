@@ -2,7 +2,8 @@
 import React from 'react';
 import { Doctor, Clinic, ClinicOperationMode, DoctorStatus } from '../../../types';
 import { Button } from '../../../components/Button';
-import { Clock, Building2, Stethoscope, ShieldCheck, ChevronRight, Star, Languages, GraduationCap } from 'lucide-react';
+import { Clock, Building2, Stethoscope, ShieldCheck, ChevronRight, Star, Languages, GraduationCap, Zap, Calendar, MapPin } from 'lucide-react';
+import { Tooltip } from '../../../components/Tooltip';
 
 // Helper functions for clinic and shift availability
 const getClinicCurrentTime = (timezone?: string) => {
@@ -126,8 +127,8 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
 
   return (
     <div className={`bg-white rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group cursor-pointer mb-2 sm:mb-4 ${onClick ? 'hover:border-primary-300' : ''}`} onClick={onClick}>
-      {/* TOP SECTION - DOCTOR HEADER WITH PERFECT ALIGNMENT */}
-      <div className="p-2 pb-2">
+      {/* TOP SECTION - DOCTOR HEADER */}
+      <div className="p-3 pb-2">
         {/* TOP ROW: AVATAR + NAME + RATING */}
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -159,7 +160,7 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
                 </div>
               </div>
 
-              {/* EXPERIENCE & QUALIFICATIONS - Moved below specialty */}
+              {/* EXPERIENCE & QUALIFICATIONS */}
               <div className="flex flex-wrap items-center gap-1">
                 <span className="text-[8px] font-black text-slate-600 uppercase tracking-wider bg-slate-50 px-1.5 py-0.5 rounded-md border border-slate-200 flex items-center gap-1">
                   <Clock className="h-2.5 w-2.5 text-slate-400" />
@@ -182,7 +183,7 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
           </div>
         </div>
 
-        {/* CLINIC LOCATIONS - More prominent */}
+        {/* CLINIC LOCATIONS */}
         <div className="mb-2">
           <div className="flex items-center gap-2 mb-1.5">
             <Building2 className="h-3.5 w-3.5 text-slate-400" />
@@ -211,14 +212,14 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
         </div>
 
         {/* BOTTOM ROW: PRICING + AVAILABILITY + CTA */}
-        <div className="flex items-center justify-between pt-1.5 border-t border-slate-100">
+        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
           <div className="flex items-center gap-2">
             <div className="text-[10px] font-black text-slate-700 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
               ₹{summary.minFee}{summary.minFee !== summary.maxFee ? ` - ₹${summary.maxFee}` : ''}
             </div>
             {summary.availableClinics > 0 ? (
-              <span className="text-[8px] font-black text-green-600 bg-green-50 px-1.5 py-0.5 rounded-md border border-green-100">
-                {summary.availableClinics} Available Now
+              <span className="text-[8px] font-black text-green-600 bg-green-50 px-1.5 py-0.5 rounded-md border border-green-100 flex items-center gap-1">
+                  <Zap className="h-2.5 w-2.5 fill-current" /> {summary.availableClinics} Live
               </span>
             ) : (
               <span className="text-[8px] font-black text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-md border border-orange-100">
@@ -228,10 +229,31 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
           </div>
 
           <div className="flex items-center gap-1 text-primary-600 group-hover:text-primary-700 transition-colors">
-            <span className="text-[10px] font-bold">View Details</span>
+            <span className="text-[10px] font-bold">View Options</span>
             <ChevronRight className="h-3.5 w-3.5" />
           </div>
         </div>
+      </div>
+      
+      {/* Footer Actions */}
+      <div className="bg-slate-50 p-2 border-t border-slate-100 flex gap-2">
+            <Tooltip text="View detailed doctor profile" className="flex-1">
+               <button 
+                 className="w-full flex items-center justify-center bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-sm transition-all"
+                 onClick={(e) => { e.stopPropagation(); onClick && onClick(); }}
+               >
+                 View Profile
+               </button>
+           </Tooltip>
+           <Tooltip text={summary.availableClinics > 0 ? "Join live queue" : "Schedule for later"} className="flex-1">
+               <button 
+                 className="w-full flex items-center justify-center bg-primary-600 hover:bg-primary-700 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-md shadow-primary-200 transition-all active:scale-95 gap-2"
+                 onClick={(e) => { e.stopPropagation(); onClick && onClick(); }}
+               >
+                 {summary.availableClinics > 0 ? <Zap className="h-3 w-3 fill-current" /> : <Calendar className="h-3 w-3" />}
+                 {summary.availableClinics > 0 ? 'Get Token' : 'Book Appointment'}
+               </button>
+           </Tooltip>
       </div>
     </div>
   );

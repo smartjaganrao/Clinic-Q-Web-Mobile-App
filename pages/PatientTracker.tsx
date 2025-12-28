@@ -21,7 +21,8 @@ import {
     Map as MapIcon, ChevronDown,
     CalendarClock,
     Zap,
-    Edit2
+    Edit2,
+    List
 } from 'lucide-react';
 import { createDoctorSlug } from '../utils/slugs';
 import { calculateDistance, reverseGeocode } from '../utils/geolocation';
@@ -202,7 +203,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     const [bookingFor, setBookingFor] = useState<'MYSELF' | string>('MYSELF');
     const [selectedWalkInShiftId, setSelectedWalkInShiftId] = useState<string | null>(null);
 
-    const [showMap, setShowMap] = useState(true);
+    // Initialize showMap based on screen width
+    const [showMap, setShowMap] = useState(window.innerWidth >= 768);
+    
     const clinicCardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const [highlightedClinicId, setHighlightedClinicId] = useState<string | null>(null);
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -1091,7 +1094,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             const firstFuture = walkInShiftsToday.find(s => !s.isActive && !s.isEnded && !s.isFull);
             const anyAvailable = active || firstFuture;
             if (anyAvailable) {
-                setSelectedWalkInShiftId(anyAvailable.shift.id || anyAvailable.shift.startTime);
+                setSelectedWalkInShiftId(anyAvailable.shift.id || anyAvailable.shift.startTime || walkInShiftsToday[0].shift.startTime);
             }
         }
     }, [walkInShiftsToday, selectedWalkInShiftId]);
@@ -1513,15 +1516,31 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                     {activeTab === 'BOOK' && (
                         <div className="flex flex-col min-h-full">
                             {/* BREADCRUMBS AT TOP - Always visible */}
-                            <div className="sticky top-0 z-20 px-4 md:px-8 py-2 bg-white border-b border-slate-100">
-                                <Breadcrumbs
-                                    activeTab={activeTab}
-                                    bookingView={bookingView}
-                                    selectedClinic={selectedClinic}
-                                    selectedDoctor={selectedDoctor}
-                                    selectedProfileDoctor={selectedProfileDoctor}
-                                    navigateToView={navigateToView}
-                                />
+                            <div className="sticky top-0 z-20 px-4 md:px-8 py-2 bg-white border-b border-slate-100 flex items-center justify-between gap-4">
+                                <div className="flex-1 overflow-hidden">
+                                    <Breadcrumbs
+                                        activeTab={activeTab}
+                                        bookingView={bookingView}
+                                        selectedClinic={selectedClinic}
+                                        selectedDoctor={selectedDoctor}
+                                        selectedProfileDoctor={selectedProfileDoctor}
+                                        navigateToView={navigateToView}
+                                    />
+                                </div>
+                                
+                                {(bookingView === 'LIST' || bookingView === 'CLINIC_DETAILS') && (
+                                    <button
+                                        onClick={() => setShowMap(!showMap)}
+                                        className={`md:hidden flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${
+                                            showMap 
+                                            ? 'bg-slate-100 text-slate-700 border-slate-200' 
+                                            : 'bg-primary-50 text-primary-700 border-primary-100'
+                                        }`}
+                                    >
+                                        {showMap ? <List className="h-4 w-4" /> : <MapIcon className="h-4 w-4" />}
+                                        {showMap ? 'List' : 'Map'}
+                                    </button>
+                                )}
                             </div>
 
                             <div className="sticky top-0 z-20 bg-white border-b border-slate-100 shadow-sm">

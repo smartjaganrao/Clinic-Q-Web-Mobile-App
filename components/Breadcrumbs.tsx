@@ -59,7 +59,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
     }, [activeTab, bookingView, selectedClinic, selectedDoctor, selectedProfileDoctor, navigate, navigateToView]);
 
     return (
-        <nav className="flex items-center gap-2 mb-4 px-1" aria-label="Breadcrumb">
+        <nav className="flex items-center gap-2 px-1" aria-label="Breadcrumb">
             <button
                 onClick={() => navigate('/')}
                 className="p-1 hover:bg-slate-200 rounded-md text-slate-400 hover:text-primary-600 transition-colors"

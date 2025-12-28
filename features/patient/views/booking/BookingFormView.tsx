@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
     Star,
@@ -27,6 +28,7 @@ import { IndianRupeeIcon } from '../../../../components/icons';
 import { Button } from '../../../../components/Button';
 import { Clinic, Doctor, UserProfile, GroupedSlots } from '../../../../types';
 import { Input } from '../../../../components/Input';
+import { Tooltip } from '../../../../components/Tooltip';
 
 export const BookingFormView = ({
     selectedDoctor,
@@ -385,13 +387,15 @@ export const BookingFormView = ({
                             <Input label="Short Summary of Symptoms" placeholder="e.g. Fever since 2 days, Back pain" value={symptoms} onChange={e => setSymptoms(e.target.value)} />
 
                             <div className="flex flex-col gap-1">
-                                <button
-                                    className={`w-full h-12 text-lg font-black rounded-2xl shadow-xl transition-all text-white disabled:bg-slate-200 disabled:shadow-none disabled:cursor-not-allowed transform active:scale-[0.98] ${visitType === 'APPOINTMENT' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100' : 'bg-primary-600 hover:bg-primary-700 shadow-primary-100'}`}
-                                    disabled={(visitType === 'APPOINTMENT' && (!apptDate || !apptTime)) || (visitType === 'WALK_IN' && (!selectedWalkInShiftId || !isWalkInAllowed))}
-                                    onClick={handleBookToken}
-                                >
-                                    {visitType === 'APPOINTMENT' ? 'Confirm Appointment' : 'Join Live Queue'}
-                                </button>
+                                <Tooltip text={visitType === 'APPOINTMENT' ? "Confirm your appointment booking" : "Join the live queue remotely"} className="w-full">
+                                    <button
+                                        className={`w-full h-12 text-lg font-black rounded-2xl shadow-xl transition-all text-white disabled:bg-slate-200 disabled:shadow-none disabled:cursor-not-allowed transform active:scale-[0.98] ${visitType === 'APPOINTMENT' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100' : 'bg-primary-600 hover:bg-primary-700 shadow-primary-100'}`}
+                                        disabled={(visitType === 'APPOINTMENT' && (!apptDate || !apptTime)) || (visitType === 'WALK_IN' && (!selectedWalkInShiftId || !isWalkInAllowed))}
+                                        onClick={handleBookToken}
+                                    >
+                                        {visitType === 'APPOINTMENT' ? 'Confirm Appointment' : 'Join Live Queue'}
+                                    </button>
+                                </Tooltip>
                                 <p className="text-center text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-center gap-1.5">
                                     <ShieldCheck className="h-3 w-3" /> Secure & Instant Confirmation
                                 </p>
@@ -405,9 +409,11 @@ export const BookingFormView = ({
                             <h3 className="text-lg font-black text-orange-900 uppercase tracking-widest">Visit Clinic for Token</h3>
                             <p className="text-xs text-orange-700 mt-2 font-bold opacity-80">This clinic currently only supports in-person token collection.</p>
                         </div>
-                        <button className="h-12 px-8 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-black shadow-lg transition-all transform active:scale-95 flex items-center gap-2 mx-auto text-xs uppercase tracking-widest" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${selectedClinic?.geoLocation?.lat},${selectedClinic?.geoLocation?.lng}`)}>
-                            <Navigation className="h-4 w-4" /> Get Directions
-                        </button>
+                        <Tooltip text="Get directions to the clinic">
+                            <button className="h-12 px-8 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-black shadow-lg transition-all transform active:scale-95 flex items-center gap-2 mx-auto text-xs uppercase tracking-widest" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${selectedClinic?.geoLocation?.lat},${selectedClinic?.geoLocation?.lng}`)}>
+                                <Navigation className="h-4 w-4" /> Get Directions
+                            </button>
+                        </Tooltip>
                     </div>
                 )}
             </div>

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { DoctorSearchCard } from '../../components/DoctorSearchCard';
 import { Stethoscope } from 'lucide-react';
