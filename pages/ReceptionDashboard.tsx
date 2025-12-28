@@ -7,7 +7,7 @@ import { Modal } from '../components/Modal';
 import { Card } from '../components/Card';
 import { 
     Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin, Settings, Footprints, CalendarClock, Shuffle, Building2, ImageIcon, Plus, X, Globe, Crosshair, Trash2, Info, LayoutGrid, Zap, Mail, Shield, Save, Calendar, UserX, CheckCircle2, PauseCircle, LogOut, Upload, Image as LucideImage, Map as LucideMap, Navigation, ArrowRight, Target, LocateFixed, MapPinIcon, Layout, MessageSquare, Sparkles, CalendarDays,
-    Edit2, ChevronLeft, LayoutPanelTop, Monitor, Smartphone, Bell, LifeBuoy, Loader2, ShieldCheck
+    Edit2, ChevronLeft, LayoutPanelTop, Monitor, Smartphone, Bell, LifeBuoy, Loader2, ShieldCheck, Menu
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -151,6 +151,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     const [ke, Me] = useState<DashboardTab>('QUEUE');
     const [O, ee] = useState<'LIVE' | 'HOLD' | 'DONE' | 'ABSENT'>('LIVE');
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     
     const [ve, Ge] = useState('');
     const [Ye, pt] = useState<string>('ALL');
@@ -387,19 +388,42 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
     return (
         <div className="h-screen flex bg-slate-100 overflow-hidden">
-            <aside className={`bg-slate-900 flex flex-col transition-all duration-300 relative z-50 ${isSidebarCollapsed ? 'w-20' : 'w-64'}`}>
-                <div className={`p-6 flex items-center gap-3 overflow-hidden ${isSidebarCollapsed ? 'justify-center' : ''}`}>
-                    <Logo className="h-8 w-8 shrink-0" />
-                    {!isSidebarCollapsed && (
-                        <div className="animate-in fade-in duration-300">
-                            <h1 className="text-white font-black text-lg tracking-tight leading-none">Smart<span className="text-teal-400">QFlow</span></h1>
-                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">OPD System</span>
-                        </div>
-                    )}
+            {/* Mobile Overlay */}
+            {isMobileMenuOpen && (
+                <div 
+                    className="fixed inset-0 bg-slate-900/50 z-[60] lg:hidden backdrop-blur-sm transition-opacity"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                />
+            )}
+
+            <aside className={`
+                fixed inset-y-0 left-0 z-[70] bg-slate-900 flex flex-col transition-all duration-300 
+                ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}
+                lg:translate-x-0 lg:static lg:h-screen lg:shadow-none
+                ${isSidebarCollapsed ? 'lg:w-20' : 'lg:w-64'}
+                w-64
+            `}>
+                <div className={`p-6 flex items-center gap-3 overflow-hidden justify-between lg:justify-start ${isSidebarCollapsed ? 'lg:justify-center' : ''}`}>
+                    <div className="flex items-center gap-3">
+                         <Logo className="h-8 w-8 shrink-0" />
+                         {!isSidebarCollapsed && (
+                            <div className="animate-in fade-in duration-300">
+                                <h1 className="text-white font-black text-lg tracking-tight leading-none">Smart<span className="text-teal-400">QFlow</span></h1>
+                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">OPD System</span>
+                            </div>
+                        )}
+                    </div>
+                    <button 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="lg:hidden text-slate-400 hover:text-white"
+                    >
+                        <X className="h-6 w-6" />
+                    </button>
                 </div>
+                
                 <button 
                     onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                    className="absolute -right-3 top-24 bg-teal-500 text-slate-900 p-1 rounded-full shadow-lg hover:bg-teal-400 transition-all z-[60]"
+                    className="absolute -right-3 top-24 bg-teal-500 text-slate-900 p-1 rounded-full shadow-lg hover:bg-teal-400 transition-all z-[60] hidden lg:block"
                 >
                     {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
                 </button>
@@ -407,7 +431,10 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     {sidebarItems.map(item => (
                         <button
                             key={item.id}
-                            onClick={() => Me(item.id as DashboardTab)}
+                            onClick={() => {
+                                Me(item.id as DashboardTab);
+                                setIsMobileMenuOpen(false);
+                            }}
                             className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${ke === item.id ? 'bg-teal-500 text-slate-900 shadow-xl shadow-teal-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'} ${isSidebarCollapsed ? 'justify-center' : ''}`}
                             title={isSidebarCollapsed ? item.label : undefined}
                         >
@@ -418,7 +445,10 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 </nav>
                 <div className="p-3 mt-auto border-t border-white/5">
                     <button 
-                        onClick={() => setIsSettingsOpen(true)} 
+                        onClick={() => {
+                            setIsSettingsOpen(true);
+                            setIsMobileMenuOpen(false);
+                        }} 
                         className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${isSidebarCollapsed ? 'justify-center' : ''} ${isSettingsOpen ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-white'}`}
                         title={isSidebarCollapsed ? 'Clinic Setup' : undefined}
                     >
@@ -438,10 +468,13 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             </aside>
 
             <main className="flex-1 flex flex-col min-w-0 bg-slate-50 relative h-full overflow-hidden">
-                <header className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between shadow-sm sticky top-0 z-40">
-                    <div className="flex items-center gap-8">
+                <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 flex items-center justify-between shadow-sm sticky top-0 z-40">
+                    <div className="flex items-center gap-4 sm:gap-8">
+                        <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-lg">
+                            <Menu className="h-6 w-6" />
+                        </button>
                         <div>
-                            <h2 className="text-xl font-black text-slate-900 tracking-tight">{ke === 'QUEUE' ? 'Live Mission Control' : ke.replace('_', ' ')}</h2>
+                            <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">{ke === 'QUEUE' ? 'Live Mission Control' : ke.replace('_', ' ')}</h2>
                             <div className="flex items-center gap-2 mt-1">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                 <div className="w-1 h-1 rounded-full bg-slate-300"></div>
@@ -460,13 +493,13 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 sm:gap-4">
                         <div className="hidden md:flex items-center bg-slate-50 border border-slate-200 rounded-2xl h-11 px-4 focus-within:ring-2 focus-within:ring-teal-500/20 transition-all mr-2">
                             <Search className="h-4 w-4 text-slate-400 mr-2" />
                             <input 
                                 type="text" 
                                 placeholder="Patient Name / Phone..." 
-                                className="bg-transparent border-none text-sm font-bold text-slate-700 outline-none w-48 placeholder:text-slate-400"
+                                className="bg-transparent border-none text-sm font-bold text-slate-700 outline-none w-32 lg:w-48 placeholder:text-slate-400"
                                 value={ve}
                                 onChange={e => Ge(e.target.value)}
                             />
@@ -478,9 +511,9 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             </div>
                             <Button 
                                 onClick={() => { setEditingPatient(null); setIsPatientModalOpen(true); }}
-                                className="bg-teal-600 hover:bg-teal-700 shadow-xl shadow-teal-500/10 rounded-2xl h-11 px-6 font-black text-xs uppercase tracking-widest"
+                                className="bg-teal-600 hover:bg-teal-700 shadow-xl shadow-teal-500/10 rounded-2xl h-10 sm:h-11 px-4 sm:px-6 font-black text-xs uppercase tracking-widest whitespace-nowrap"
                             >
-                                <Plus className="h-4 w-4 mr-2" /> Check-in
+                                <Plus className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Check-in</span>
                             </Button>
                             <button onClick={onLogout} className="p-3 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all rounded-2xl border border-transparent hover:border-red-100" title="Log out">
                                 <LogOut className="h-5 w-5" />
@@ -492,12 +525,12 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 <div className="flex-1 overflow-hidden flex flex-col relative">
                     {ke === 'QUEUE' && (
                         <div className="flex-1 flex flex-col min-h-0">
-                            <div className="bg-white border-b border-slate-100 px-6 py-4 flex gap-3 overflow-x-auto no-scrollbar shrink-0">
+                            <div className="bg-white border-b border-slate-100 px-2 sm:px-6 py-2 sm:py-4 flex gap-3 overflow-x-auto no-scrollbar shrink-0">
                                 <button 
                                     onClick={() => pt('ALL')} 
-                                    className={`relative px-6 py-4 h-24 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all whitespace-nowrap border flex flex-col items-center justify-center min-w-[110px] ${Ye === 'ALL' ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-slate-50 text-slate-500 border-slate-100 hover:bg-slate-100'}`}
+                                    className={`relative px-3 py-2 sm:px-6 sm:py-4 h-20 sm:h-24 rounded-xl sm:rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all whitespace-nowrap border flex flex-col items-center justify-center min-w-[90px] sm:min-w-[110px] ${Ye === 'ALL' ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-slate-50 text-slate-500 border-slate-100 hover:bg-slate-100'}`}
                                 >
-                                    <div className={`absolute -top-4 -right-2 w-10 h-10 rounded-full flex items-center justify-center text-base font-black shadow-xl border-2 ${Ye === 'ALL' ? 'bg-white text-slate-900 border-slate-100' : 'bg-slate-900 text-white border-white'}`}>
+                                    <div className={`absolute -top-2 -right-1 sm:-top-4 sm:-right-2 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-base font-black shadow-xl border-2 ${Ye === 'ALL' ? 'bg-white text-slate-900 border-slate-100' : 'bg-slate-900 text-white border-white'}`}>
                                         {totalWaitingCount}
                                     </div>
                                     ALL QUEUES
@@ -509,25 +542,25 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                         <button 
                                             key={doc.id} 
                                             onClick={() => pt(doc.id)} 
-                                            className={`relative px-4 py-3 h-24 rounded-2xl transition-all whitespace-nowrap border flex flex-col items-start gap-1 min-w-[120px] shadow-sm ${isActive ? 'bg-primary-600 text-white border-primary-600 shadow-lg shadow-primary-200 ring-2 ring-primary-500/20' : 'bg-white text-slate-500 border-slate-200 hover:border-primary-300'}`}
+                                            className={`relative px-2 py-2 sm:px-4 sm:py-3 h-20 sm:h-24 rounded-xl sm:rounded-2xl transition-all whitespace-nowrap border flex flex-col items-start gap-1 min-w-[100px] sm:min-w-[120px] shadow-sm ${isActive ? 'bg-primary-600 text-white border-primary-600 shadow-lg shadow-primary-200 ring-2 ring-primary-500/20' : 'bg-white text-slate-500 border-slate-200 hover:border-primary-300'}`}
                                         >
-                                            <div className={`absolute -top-4 -right-2 w-10 h-10 rounded-full flex items-center justify-center text-base font-black shadow-xl border-2 ${isActive ? 'bg-white text-primary-600 border-primary-100' : 'bg-primary-600 text-white border-white'}`}>
+                                            <div className={`absolute -top-2 -right-1 sm:-top-4 sm:-right-2 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-base font-black shadow-xl border-2 ${isActive ? 'bg-white text-primary-600 border-primary-100' : 'bg-primary-600 text-white border-white'}`}>
                                                 {count}
                                             </div>
                                             <div className="flex items-center gap-2 mb-1">
                                                 <div className={`w-2 h-2 rounded-full ${isAvailable ? 'bg-green-400 animate-pulse' : 'bg-slate-300'}`}></div>
-                                                <span className={`text-[12px] font-black truncate max-w-[90px] ${isActive ? 'text-white' : 'text-slate-900'}`}>Dr. {doc.name.split(' ').pop()}</span>
+                                                <span className={`text-[10px] sm:text-[12px] font-black truncate max-w-[80px] sm:max-w-[90px] ${isActive ? 'text-white' : 'text-slate-900'}`}>Dr. {doc.name.split(' ').pop()}</span>
                                             </div>
                                             <div className="flex flex-col gap-0.5 w-full text-left mt-0.5">
                                                 <div className={`flex justify-between items-center ${isActive ? 'text-white' : 'text-slate-500'}`}>
-                                                    <span className="text-[10px] font-extrabold opacity-60">NOW</span>
-                                                    <span className={`text-[15px] font-black leading-none ${isActive ? 'text-white' : 'text-emerald-600'}`}>
+                                                    <span className="text-[9px] sm:text-[10px] font-extrabold opacity-60">NOW</span>
+                                                    <span className={`text-xs sm:text-[15px] font-black leading-none ${isActive ? 'text-white' : 'text-emerald-600'}`}>
                                                         {current ? `#${current.tokenNumber}` : '--'}
                                                     </span>
                                                 </div>
                                                 <div className={`flex justify-between items-center ${isActive ? 'text-white/90' : 'text-slate-500'}`}>
-                                                    <span className="text-[10px] font-extrabold opacity-60">NEXT</span>
-                                                    <span className={`text-[15px] font-black leading-none ${isActive ? 'text-primary-100' : 'text-blue-500'}`}>
+                                                    <span className="text-[9px] sm:text-[10px] font-extrabold opacity-60">NEXT</span>
+                                                    <span className={`text-xs sm:text-[15px] font-black leading-none ${isActive ? 'text-primary-100' : 'text-blue-500'}`}>
                                                         {next ? `#${next.tokenNumber}` : '--'}
                                                     </span>
                                                 </div>
@@ -537,8 +570,8 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 })}
                             </div>
 
-                            <div className="px-8 py-4 flex items-center justify-between shrink-0">
-                                <div className="flex gap-2 p-1.5 bg-slate-200/40 rounded-2xl border border-slate-200/50">
+                            <div className="px-4 sm:px-8 py-4 flex flex-col sm:flex-row sm:items-center justify-between shrink-0 gap-4 sm:gap-0">
+                                <div className="flex gap-2 p-1.5 bg-slate-200/40 rounded-2xl border border-slate-200/50 overflow-x-auto w-full sm:w-auto no-scrollbar">
                                     {(['LIVE', 'HOLD', 'DONE', 'ABSENT'] as const).map(t => {
                                         const isActive = O === t;
                                         const colorSet = queueTabColors[t];
@@ -546,14 +579,14 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                             <button 
                                                 key={t}
                                                 onClick={() => ee(t)}
-                                                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${isActive ? `${colorSet.active} border-transparent shadow-md` : `${colorSet.inactive} border-transparent hover:border-slate-100`}`}
+                                                className={`px-4 sm:px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap flex-1 sm:flex-none ${isActive ? `${colorSet.active} border-transparent shadow-md` : `${colorSet.inactive} border-transparent hover:border-slate-100`}`}
                                             >
                                                 {t}
                                             </button>
                                         );
                                     })}
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
                                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Date Context:</span>
                                     <div className="flex items-center bg-white border-2 border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:border-primary-400 transition-all">
                                         <button 
@@ -581,8 +614,8 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 </div>
                             </div>
 
-                            <div className="flex-1 min-h-0 px-8 pb-8">
-                                <div className="h-full bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden flex flex-col">
+                            <div className="flex-1 min-h-0 px-0 md:px-8 pb-0 md:pb-8">
+                                <div className="h-full bg-slate-50 md:bg-white rounded-none md:rounded-[2.5rem] border-0 md:border border-slate-200 md:shadow-xl md:shadow-slate-200/50 overflow-hidden flex flex-col">
                                     <QueueTable 
                                         patients={filteredPatients} 
                                         doctors={s} 
@@ -602,7 +635,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         </div>
                     )}
 
-                    {ke === 'DATABASE' && <div className="p-8 h-full overflow-hidden"><div className="h-full bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden"><PatientDatabaseTable patients={t} doctors={s} onHistoryClick={(p) => setHistoryPatient(p)} onEditClick={(p) => setEditingPatient(p)} onDeleteClick={(p) => onDeletePatient(p.id)} /></div></div>}
+                    {ke === 'DATABASE' && <div className="p-4 md:p-8 h-full overflow-hidden"><div className="h-full bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden"><PatientDatabaseTable patients={t} doctors={s} onHistoryClick={(p) => setHistoryPatient(p)} onEditClick={(p) => setEditingPatient(p)} onDeleteClick={(p) => onDeletePatient(p.id)} /></div></div>}
                     {ke === 'DOCTORS' && (
                         <DoctorManager 
                             doctors={s} 
@@ -635,10 +668,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             specialty: data.specialty,
                             roomNumber: data.room,
                             weeklySchedule: data.schedule,
-                            mobile: data.mobile,
-                            registrationNumber: data.regNo,
-                            masterId: data.masterId,
-                            avatarUrl: data.avatarUrl,
                             consultationFee: data.fee,
                             consultationTime: data.consultationTime
                         });
@@ -649,7 +678,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             />
 
             <Modal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} title="Clinic Configuration" maxWidth="max-w-5xl">
-                <div className="flex flex-col h-[70vh] overflow-hidden">
+                <div className="flex flex-col h-[80vh] md:h-[70vh] overflow-hidden">
                     <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1.5 rounded-2xl mb-6 self-start shadow-inner border border-slate-200">
                         {(['GENERAL', 'PROFILE', 'LOCATION'] as const).map(tab => (
                             <button

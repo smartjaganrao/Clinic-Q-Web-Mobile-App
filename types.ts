@@ -1,14 +1,5 @@
 import React from 'react';
 
-// Fix for missing JSX.IntrinsicElements definition in environment
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      [elemName: string]: any;
-    }
-  }
-}
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   DOCTOR = 'DOCTOR',
