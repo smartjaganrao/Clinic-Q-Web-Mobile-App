@@ -5,7 +5,7 @@ import { Button } from '../../../components/Button';
 import { Badge } from '../../../components/Badge';
 import { PatientStatus, DoctorStatus } from '../../../types';
 import { Calendar, MapPin, User, Coffee, AlertTriangle, Timer, QrCode, ThumbsUp, Clock, ChevronRight, Zap, CheckCircle2, Navigation } from 'lucide-react';
-import { formatTime12h } from '../../../utils/time';
+import { formatTime12h, getClinicCurrentTime, getLocalToday } from '../../../utils/time';
 import { calculateDistance } from '../../../utils/geolocation';
 
 export const ActiveVisitsView = ({
@@ -16,7 +16,8 @@ export const ActiveVisitsView = ({
     unratedCompletedVisit,
     setFeedbackModal,
     handleTabSwitch,
-    userLocation
+    userLocation,
+    clinics
 }: {
     activeVisits: any[],
     getSmartQueueDetails: (visit: any) => any,
@@ -25,7 +26,8 @@ export const ActiveVisitsView = ({
     unratedCompletedVisit: any,
     setFeedbackModal: (modal: any) => void,
     handleTabSwitch: (tab: string) => void,
-    userLocation: { lat: number, lng: number } | null
+    userLocation: { lat: number, lng: number } | null,
+    clinics: any[]
 }) => {
     return (
         <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto animate-in fade-in duration-500">
@@ -70,7 +72,12 @@ export const ActiveVisitsView = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-8">
 
                     {activeVisits.map(visit => {
+                        const clinic = clinics.find(c => c.id === visit.clinicId);
+                        if (!clinic || !clinic.doctors) return null;
+
                         const queueStats = getSmartQueueDetails(visit);
+                        const doctor = clinic.doctors.find(d => d.id === visit.doctorId);
+                        if (!doctor || !doctor.weeklySchedule) return null;
                         
                         // 1. Scheduled Time (When the visit happens)
                         const scheduledDate = visit.visitType === 'APPOINTMENT' && visit.appointmentDate ? 
@@ -87,17 +94,35 @@ export const ActiveVisitsView = ({
 
                         const isAppointment = visit.visitType === 'APPOINTMENT';
 
-                        // Distance Calculation
-                        let distLabel = null;
-                        let travelAdvice = null;
-                        if (userLocation && visit.clinicGeo && !visit.isCheckedIn && visit.status === PatientStatus.WAITING) {
-                            const dist = calculateDistance(userLocation.lat, userLocation.lng, visit.clinicGeo.lat, visit.clinicGeo.lng);
-                            distLabel = `${dist.toFixed(1)} km`;
-                            
-                            if (dist > 20) travelAdvice = { text: "Long way • Plan ahead", color: "text-amber-600 bg-amber-50 border-amber-100" };
-                            else if (dist > 2) travelAdvice = { text: "Start travelling", color: "text-blue-600 bg-blue-50 border-blue-100" };
-                            else travelAdvice = { text: "You're close", color: "text-emerald-600 bg-emerald-50 border-emerald-100" };
-                        }
+                        // Logic to show travel button only for today's visits
+                        const today = getLocalToday(clinic.timezone);
+                        const isAppointmentForToday = isAppointment && visit.appointmentDate === today;
+                        const shouldShowTravelButton = !isAppointment || isAppointmentForToday;
+
+                        // Shift start logic
+                        const now = getClinicCurrentTime(clinic.timezone);
+                        const currentMins = now.getHours() * 60 + now.getMinutes();
+                        const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
+                        const schedule = doctor.weeklySchedule.find(s => s.day === dayName);
+                        
+                        const visitTime = visit.visitType === 'APPOINTMENT' ? visit.appointmentTime : new Date(visit.timeAdded).toTimeString().slice(0,5);
+
+                        const visitShift = schedule?.slots.find(slot => {
+                            const [sh, sm] = slot.startTime.split(':').map(Number);
+                            const [eh, em] = slot.endTime.split(':').map(Number);
+                            const startTotal = sh * 60 + sm;
+                            let endTotal = eh * 60 + em;
+                            if (endTotal <= startTotal) endTotal += 1440;
+
+                            const [vh, vm] = visitTime.split(':').map(Number);
+                            const visitTotalMins = vh * 60 + vm;
+
+                            return visitTotalMins >= startTotal && visitTotalMins < endTotal;
+                        });
+
+                        const isShiftStarted = visitShift ? currentMins >= (visitShift.startTime.split(':').map(Number)[0] * 60 + visitShift.startTime.split(':').map(Number)[1]) : false;
+                        
+                        const distance = userLocation && clinic?.geoLocation && calculateDistance(userLocation.lat, userLocation.lng, clinic.geoLocation.lat, clinic.geoLocation.lng);
 
                         return (
                             <Card
@@ -105,13 +130,13 @@ export const ActiveVisitsView = ({
                                 className="p-0 border-0 shadow-lg hover:shadow-2xl transition-all duration-500 rounded-[2.5rem] overflow-hidden flex flex-col group bg-white ring-1 ring-slate-100"
                             >
                                 {/* Header Section */}
-                                <div className="p-6 pb-4">
-                                    <div className="flex justify-between items-start mb-4">
+                                <div className="p-4 pb-2">
+                                    <div className="flex justify-between items-start mb-3">
                                         <div className="min-w-0 flex-1">
                                             <h3 className="font-black text-2xl text-slate-900 tracking-tight truncate leading-tight mb-1">
                                                 {visit.clinicName}
                                             </h3>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-1.5">
                                                 <p className="text-[11px] text-primary-600 font-black uppercase tracking-widest">
                                                     Dr. {visit.doctorName}
                                                 </p>
@@ -122,7 +147,7 @@ export const ActiveVisitsView = ({
                                             </div>
                                         </div>
 
-                                        <div className="flex flex-col items-end gap-2 shrink-0 ml-4">
+                                        <div className="flex flex-col items-end gap-1.5 shrink-0 ml-3">
                                             <span
                                                 className={`text-[9px] font-black uppercase px-3 py-1 rounded-full border shadow-sm ${isAppointment
                                                         ? 'bg-indigo-50 text-indigo-700 border-indigo-100'
@@ -131,77 +156,84 @@ export const ActiveVisitsView = ({
                                             >
                                                 {isAppointment ? 'Appointment' : 'Walk-in'}
                                             </span>
-                                            <Badge status={visit.status} />
+                                            <Badge patientStatus={visit.status} />
                                         </div>
                                     </div>
 
                                     {/* Meta Context Bar (Scheduled Time) */}
-                                    <div className="bg-slate-50/80 p-3 rounded-2xl border border-slate-100 flex flex-col gap-2">
-                                        <div className="flex items-center justify-between text-[11px] text-slate-600 font-bold">
-                                            <div className="flex items-center gap-2 uppercase tracking-tight">
-                                                <Calendar className={`h-4 w-4 ${isAppointment ? 'text-indigo-500' : 'text-primary-500'}`} /> 
+                                    <div className="bg-slate-50/80 p-2 rounded-xl border border-slate-100 flex flex-col gap-1">
+                                        <div className="flex items-center justify-between text-[10px] text-slate-600 font-bold">
+                                            <div className="flex items-center gap-1.5 uppercase tracking-tight">
+                                                <Calendar className={`h-3.5 w-3.5 ${isAppointment ? 'text-indigo-500' : 'text-primary-500'}`} /> 
                                                 <span>{scheduledDate}, {scheduledTime}</span>
                                             </div>
-                                            <div className="flex items-center gap-2 uppercase tracking-tight">
-                                                <MapPin className="h-4 w-4 text-rose-500" /> 
+                                            <div className="flex items-center gap-1.5 uppercase tracking-tight">
+                                                <MapPin className="h-3.5 w-3.5 text-rose-500" /> 
                                                 <span>Room {visit.room}</span>
                                             </div>
                                         </div>
-                                        
-                                        {/* Distance & Travel Prompt */}
-                                        {distLabel && (
-                                            <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
-                                                <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-500">
-                                                    <Navigation className="h-3 w-3" /> {distLabel} away
-                                                </div>
-                                                {travelAdvice && (
-                                                    <div className={`px-2 py-0.5 rounded-lg border text-[9px] font-bold uppercase tracking-tight flex items-center gap-1 ${travelAdvice.color}`}>
-                                                        <Zap className="h-2.5 w-2.5 fill-current" /> {travelAdvice.text}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
 
                                 {/* Main Token Dashboard Panel - Fixed for Alignment and Responsiveness */}
-                                <div className="px-6 pb-2">
-                                    <div className="bg-[#1a2332] rounded-[2rem] p-5 grid grid-cols-3 items-center relative overflow-hidden group-hover:bg-[#111827] transition-colors duration-500 shadow-xl">
+                                <div className="px-4 pb-2">
+                                    <div className="bg-[#1a2332] rounded-[1.5rem] p-4 grid grid-cols-3 items-center relative overflow-hidden group-hover:bg-[#111827] transition-colors duration-500 shadow-lg">
                                         {/* Background Decoration */}
-                                        <Timer className="absolute -bottom-4 -right-4 h-20 w-20 text-white/5 rotate-12" />
+                                        <Timer className="absolute -bottom-2 -right-2 h-16 w-16 text-white/5 rotate-12" />
                                         
                                         <div className="relative z-10 text-center border-r border-white/10 pr-2">
-                                            <p className="text-[8px] font-black text-primary-400 uppercase tracking-widest mb-1">Your Token</p>
+                                            <p className="text-[8px] font-black text-primary-400 uppercase tracking-widest mb-0.5">Your Token</p>
                                             <div className="text-4xl font-black text-white tracking-tighter">
                                                 #{visit.tokenNumber}
                                             </div>
                                         </div>
 
                                         <div className="relative z-10 text-center px-1">
-                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Serving</p>
+                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Serving</p>
                                             <div className={`text-3xl font-black truncate ${visit.status === PatientStatus.WITH_DOCTOR ? 'text-primary-400 animate-pulse' : 'text-white'}`}>
                                                 {visit.status === PatientStatus.WITH_DOCTOR ? `#${visit.tokenNumber}` : queueStats.currentToken}
                                             </div>
                                         </div>
 
                                         <div className="relative z-10 text-center border-l border-white/10 pl-2">
-                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Ahead</p>
+                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Ahead</p>
                                             <div className="text-3xl font-black text-white tracking-tighter">
                                                 {queueStats.peopleAhead}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+                                
+                                {isShiftStarted && !visit.isCheckedIn && shouldShowTravelButton && (
+                                <div className="px-4 pt-3 flex justify-between items-center bg-slate-50 border-t border-slate-200">
+                                    <Badge
+                                        className="bg-blue-100 text-blue-700 border-blue-200"
+                                    >
+                                        <Navigation className="h-3 w-3 mr-1" />
+                                        {distance ? `${distance.toFixed(1)} km away` : 'Calculating...'}
+                                    </Badge>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${clinic?.geoLocation?.lat},${clinic?.geoLocation?.lng}`, '_blank')}
+                                        disabled={!clinic?.geoLocation}
+                                    >
+                                        <Zap className="h-4 w-4 mr-2" />
+                                        Start Travelling
+                                    </Button>
+                                </div>
+                                )}
+
 
                                 {/* Settled Status Message Block */}
-                                <div className="p-6 pt-4 flex flex-col gap-4">
-                                    <div className={`flex items-center gap-4 p-4 rounded-3xl border transition-all ${
+                                <div className="p-4 pt-3 flex flex-col gap-3">
+                                    <div className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${
                                         queueStats.color.includes('text-red') ? 'bg-red-50 border-red-100 shadow-sm' :
                                         queueStats.color.includes('text-green') ? 'bg-green-50 border-green-100 shadow-sm' :
                                         queueStats.color.includes('text-blue') ? 'bg-blue-50 border-blue-100 shadow-sm' :
                                         'bg-slate-50 border-slate-100'
                                     }`}>
-                                        <div className={`p-2.5 rounded-2xl ${queueStats.color.replace('text-', 'bg-')} text-white shadow-lg shrink-0`}>
+                                        <div className={`p-2 rounded-xl ${queueStats.color.replace('text-', 'bg-')} text-white shadow-lg shrink-0`}>
                                             {queueStats.doctorStatus === DoctorStatus.ON_BREAK ? (
                                                 <Coffee className="h-5 w-5 animate-pulse" />
                                             ) : queueStats.peopleAhead < 3 && !visit.isCheckedIn ? (
@@ -211,8 +243,8 @@ export const ActiveVisitsView = ({
                                             )}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className={`text-sm font-black leading-tight mb-1.5 ${queueStats.color}`}>{queueStats.message}</p>
-                                            <div className="flex flex-wrap items-center gap-2">
+                                            <p className={`text-sm font-black leading-tight mb-1 ${queueStats.color}`}>{queueStats.message}</p>
+                                            <div className="flex flex-wrap items-center gap-1.5">
                                                 <span className="text-[10px] opacity-70 font-black uppercase tracking-widest flex items-center gap-1.5 text-slate-600">
                                                     <Clock className="h-3 w-3" /> EST: {queueStats.expectedTime}
                                                 </span>
@@ -226,10 +258,10 @@ export const ActiveVisitsView = ({
                                     </div>
 
                                     {/* Actions */}
-                                    <div className="flex gap-3 mt-1">
+                                    <div className="flex gap-2 mt-1">
                                         {!visit.isCheckedIn && visit.status === PatientStatus.WAITING && (
                                             <button
-                                                className="flex-[2] bg-[#1a2332] hover:bg-[#111827] text-white h-14 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-slate-200 transition-all active:scale-95 flex items-center justify-center gap-2.5"
+                                                className="flex-[2] bg-[#1a2332] hover:bg-[#111827] text-white h-12 rounded-xl font-black uppercase tracking-widest text-xs shadow-xl shadow-slate-200 transition-all active:scale-95 flex items-center justify-center gap-2"
                                                 onClick={() => setShowQRScanner(true)}
                                             >
                                                 <QrCode className="h-5 w-5" />
@@ -238,7 +270,7 @@ export const ActiveVisitsView = ({
                                         )}
 
                                         <button
-                                            className={`flex-1 h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all border active:scale-95 ${
+                                            className={`flex-1 h-12 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all border active:scale-95 ${
                                                 visit.status === PatientStatus.WITH_DOCTOR 
                                                 ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed' 
                                                 : 'text-rose-500 border-rose-200 bg-white hover:bg-rose-50'
@@ -251,7 +283,7 @@ export const ActiveVisitsView = ({
                                     </div>
                                     
                                     {/* Transaction Record - Ultra Subtle */}
-                                    <div className="flex items-center justify-center gap-1.5 text-[9px] text-slate-300 font-bold uppercase tracking-widest pt-2 opacity-60">
+                                    <div className="flex items-center justify-center gap-1.5 text-[9px] text-slate-300 font-bold uppercase tracking-widest pt-1 opacity-50">
                                         <Clock className="h-2.5 w-2.5" /> Booked {bookedDate} at {bookedTime}
                                     </div>
                                 </div>

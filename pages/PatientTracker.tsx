@@ -1477,6 +1477,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 setFeedbackModal={setFeedbackModal}
                                 handleTabSwitch={handleTabSwitch}
                                 userLocation={userLocation}
+                                clinics={clinics}
                             />
                         )
                     )}

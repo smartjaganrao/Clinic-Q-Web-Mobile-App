@@ -2,12 +2,14 @@
 import React from 'react';
 import { PatientStatus } from '../types';
 
-interface BadgeProps {
-  status: PatientStatus;
+interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
+  patientStatus?: PatientStatus;
+  children?: React.ReactNode;
+  className?: string;
 }
 
-export const Badge: React.FC<BadgeProps> = ({ status }) => {
-  const styles = {
+export const Badge: React.FC<BadgeProps> = ({ patientStatus, className, children, ...props }) => {
+  const patientStatusStyles: { [key in PatientStatus]: string } = {
     [PatientStatus.WAITING]: 'bg-yellow-100 text-yellow-800',
     [PatientStatus.WITH_DOCTOR]: 'bg-blue-100 text-blue-800 animate-pulse',
     [PatientStatus.COMPLETED]: 'bg-green-100 text-green-800',
@@ -16,7 +18,7 @@ export const Badge: React.FC<BadgeProps> = ({ status }) => {
     [PatientStatus.ON_HOLD]: 'bg-orange-100 text-orange-800 border border-orange-200',
   };
 
-  const labels = {
+  const patientStatusLabels: { [key in PatientStatus]: string } = {
     [PatientStatus.WAITING]: 'Waiting',
     [PatientStatus.WITH_DOCTOR]: 'In Consultation',
     [PatientStatus.COMPLETED]: 'Completed',
@@ -25,9 +27,18 @@ export const Badge: React.FC<BadgeProps> = ({ status }) => {
     [PatientStatus.ON_HOLD]: 'On Hold',
   };
 
+  const badgeStyles = patientStatus
+    ? patientStatusStyles[patientStatus]
+    : className;
+
+  const content = children ?? (patientStatus ? patientStatusLabels[patientStatus] : null);
+
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status]}`}>
-      {labels[status]}
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badgeStyles}`}
+      {...props}
+    >
+      {content}
     </span>
   );
 };
