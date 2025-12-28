@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Doctor, Patient, PatientStatus } from '../../../types';
+import { Doctor, Patient, PatientStatus, ClinicOperationMode } from '../../../types';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { Modal } from '../../../components/Modal';
@@ -12,7 +12,7 @@ interface AddPatientModalProps {
   onClose: () => void;
   mode?: 'ADD' | 'EDIT';
   initialData?: Patient | null;
-  // Fix: Strictly typed gender in onAdd prop
+  operationMode: ClinicOperationMode;
   onAdd: (name: string, phone: string, doctorId: string, date?: string, time?: string, age?: string, gender?: 'Male' | 'Female' | 'Other', symptoms?: string, nextOfKin?: {name: string, phone: string}, address?: string, city?: string, country?: string, location?: {lat: number, lng: number}) => void;
   onEdit?: (id: string, updates: Partial<Patient>) => void;
   doctors: Doctor[];
@@ -56,13 +56,12 @@ const getNextDays = (count: number) => {
 };
 
 export const AddPatientModal: React.FC<AddPatientModalProps> = ({ 
-    isOpen, onClose, mode = 'ADD', initialData, onAdd, onEdit, doctors, patients, addToast 
+    isOpen, onClose, mode = 'ADD', initialData, operationMode, onAdd, onEdit, doctors, patients, addToast 
 }) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [doctorId, setDoctorId] = useState('');
   const [age, setAge] = useState('');
-  // Fix: Strictly typing the gender state to match Patient type requirements
   const [gender, setGender] = useState<'Male' | 'Female' | 'Other'>('Male');
   const [type, setType] = useState<'WALK_IN' | 'APPOINTMENT'>('WALK_IN');
   const [symptoms, setSymptoms] = useState('');
@@ -80,6 +79,8 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
   const [selectedWalkInShiftId, setSelectedWalkInShiftId] = useState<string | null>(null);
   const [availableSlots, setAvailableSlots] = useState<{ time: string, isBooked: boolean, isPast: boolean, shiftName: string, shiftRange: string }[]>([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  const canAppt = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(operationMode);
 
   useEffect(() => {
     if (isOpen) {
@@ -100,18 +101,22 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
             if (initialData.visitType === 'APPOINTMENT') {
                 setSelectedDate(initialData.appointmentDate || getLocalToday());
                 setSelectedSlot(initialData.appointmentTime || '');
-            } else {
-                setSelectedWalkInShiftId(null); // Reset for manual selection or re-calc
             }
         } else {
-            // Reset for ADD mode
-            setName(''); setPhone(''); setDoctorId(''); setAge(''); setSymptoms(''); 
+            setName(''); setPhone(''); setAge(''); setSymptoms(''); 
             setType('WALK_IN'); setSelectedSlot(''); setNokName(''); setNokPhone('');
             setAddress(''); setCity(''); setCountry('India'); setSelectedWalkInShiftId(null);
             setSelectedDate(getLocalToday());
+            
+            // Auto-select first doctor
+            if (doctors.length > 0) {
+                setDoctorId(doctors[0].id);
+            } else {
+                setDoctorId('');
+            }
         }
     }
-  }, [isOpen, mode, initialData]);
+  }, [isOpen, mode, initialData, doctors]);
 
   const bookingDays = useMemo(() => getNextDays(14), []);
   const selectedDoctor = useMemo(() => doctors.find(d => d.id === doctorId), [doctors, doctorId]);
@@ -136,10 +141,10 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
       if (!schedule || schedule.isOff) return [];
       const currentMins = now.getHours() * 60 + now.getMinutes();
 
+      // Fix: Changed 'zt' to 'schedule' as it refers to the resolved doctor's schedule for today
       return schedule.slots.filter(s => s.active !== false).map(shift => {
           const [sh, sm] = shift.startTime.split(':').map(Number);
           const [eh, em] = shift.endTime.split(':').map(Number);
-          // Fixed: using sh and sm instead of non-existent startH and startM
           const startTotal = sh * 60 + sm;
           let endTotal = eh * 60 + em;
           if (endTotal <= startTotal) endTotal += 1440;
@@ -230,7 +235,7 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
       const isToday = selectedDate === getLocalToday();
       const currentMins = now.getHours() * 60 + now.getMinutes();
 
-      daySchedule.slots.forEach((shift, sIdx) => {
+      daySchedule.slots.forEach((shift) => {
           if (!shift.active) return;
           const [startH, startM] = shift.startTime.split(':').map(Number);
           const [endH, endM] = shift.endTime.split(':').map(Number);
@@ -373,14 +378,6 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
                             </div>
                         </div>
 
-                        <div className="bg-white p-4 rounded-xl border border-slate-200">
-                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2"><MapPin className="h-3 w-3" /> Address</h4>
-                            <div className="space-y-3">
-                                <Input label="Street Address" placeholder="e.g. 12/A, Gandhi Road" value={address} onChange={e => setAddress(e.target.value)} />
-                                <div className="grid grid-cols-2 gap-3"><Input label="City" placeholder="City" value={city} onChange={e => setCity(e.target.value)} /><Input label="Country" placeholder="Country" value={country} onChange={e => setCountry(e.target.value)} /></div>
-                            </div>
-                        </div>
-
                         <div className="bg-orange-50/50 p-3 rounded-lg border border-orange-100">
                             <label className="block text-xs font-bold text-orange-800 uppercase tracking-wide mb-2">Emergency Contact</label>
                             <div className="grid grid-cols-2 gap-3"><Input placeholder="Contact Name" value={nokName} onChange={e => setNokName(e.target.value)} className="bg-white text-xs h-9" /><Input placeholder="Contact Phone" value={nokPhone} onChange={e => setNokPhone(e.target.value)} className="bg-white text-xs h-9" /></div>
@@ -391,18 +388,20 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Assign Doctor</label>
-                                <select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-primary-500" value={doctorId} onChange={e => { setDoctorId(e.target.value); setSelectedSlot(''); }} required>
+                                <select className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-primary-500 font-bold" value={doctorId} onChange={e => { setDoctorId(e.target.value); setSelectedSlot(''); }} required>
                                     <option value="">Select Doctor...</option>
                                     {doctors.map(d => <option key={d.id} value={d.id}>{d.name} ({d.specialty})</option>)}
                                 </select>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Visit Type</label>
-                                <div className="flex bg-slate-100 p-1 rounded-lg">
-                                    <button type="button" onClick={() => setType('WALK_IN')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${type === 'WALK_IN' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}>Walk-In</button>
-                                    <button type="button" onClick={() => setType('APPOINTMENT')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${type === 'APPOINTMENT' ? 'bg-white shadow text-purple-700' : 'text-slate-500 hover:text-slate-700'}`}>Appointment</button>
+                            {canAppt && (
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Visit Type</label>
+                                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                                        <button type="button" onClick={() => setType('WALK_IN')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${type === 'WALK_IN' ? 'bg-white shadow text-primary-700' : 'text-slate-500 hover:text-slate-700'}`}>Walk-In</button>
+                                        <button type="button" onClick={() => setType('APPOINTMENT')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${type === 'APPOINTMENT' ? 'bg-white shadow text-purple-700' : 'text-slate-500 hover:text-slate-700'}`}>Appointment</button>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         {type === 'WALK_IN' && doctorId && (
@@ -410,7 +409,7 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
                                 <div className="bg-white p-4 rounded-xl border border-slate-200">
                                     <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Available Walk-In Shifts</label>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        {walkInShiftsToday.map(({ shift, statusLabel, statusColor, load, totalWaitMins, isActive, isEnded, isFull }) => {
+                                        {walkInShiftsToday.map(({ shift, statusLabel, statusColor, load, totalWaitMins, isEnded }) => {
                                             const Icon = getShiftIcon(shift.label);
                                             const shiftId = shift.id || shift.startTime;
                                             const isSelected = selectedWalkInShiftId === shiftId;
@@ -464,7 +463,7 @@ export const AddPatientModal: React.FC<AddPatientModalProps> = ({
                             <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden animate-in fade-in shadow-inner">
                                 <div className="flex overflow-x-auto no-scrollbar border-b border-slate-200 bg-white">
                                     {bookingDays.map((d) => (
-                                        <button key={d.dateStr} type="button" onClick={() => { setSelectedDate(d.dateStr); setSelectedSlot(''); }} className={`flex-shrink-0 w-16 py-3 flex flex-col items-center justify-center border-b-2 transition-colors ${selectedDate === d.dateStr ? 'border-primary-500 bg-primary-50/50' : 'border-transparent hover:bg-slate-50'}`}>
+                                        <button key={d.dateStr} type="button" onClick={() => { setSelectedDate(d.dateStr); setSelectedSlot(''); }} className={`flex-shrink-0 w-16 py-3 flex flex-col items-center justify-center border-b-2 transition-colors ${selectedDate === d.dateStr ? 'border-primary-50 border-b-primary-500 bg-primary-50/50' : 'border-transparent hover:bg-slate-50'}`}>
                                             <span className={`text-[10px] font-bold uppercase ${selectedDate === d.dateStr ? 'text-primary-600' : 'text-slate-400'}`}>{d.dayName}</span>
                                             <span className={`text-lg font-bold leading-none mt-1 ${selectedDate === d.dateStr ? 'text-slate-900' : 'text-slate-600'}`}>{d.dayNum}</span>
                                         </button>

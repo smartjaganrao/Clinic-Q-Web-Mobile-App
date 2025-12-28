@@ -67,7 +67,9 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
             });
         } else {
             const defaultSchedule = DAYS_OF_WEEK.map(d => ({
-                day: d, slots: d === 'Sunday' ? [] : [{ startTime: '09:00', endTime: '17:00', active: true, label: 'Regular' }], isOff: d === 'Sunday'
+                day: d, 
+                slots: [{ startTime: '09:00', endTime: '17:00', active: true, label: 'Regular' }], 
+                isOff: false
             }));
             setForm({ 
                 name: '', specialty: '', room: '', fee: '500', consultationTime: '15', 

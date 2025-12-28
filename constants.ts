@@ -1,4 +1,3 @@
-
 import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient, TimeSlot, Review, AdminProfile, Staff, ClinicOperationMode } from './types';
 import { Stethoscope, Baby, Smile, Eye, Bone, Accessibility, Heart, Ear, Scissors, Sparkles, LayoutGrid } from 'lucide-react';
 
@@ -12,7 +11,7 @@ const createDefaultSchedule = (): DaySchedule[] => {
         { id: genId(), startTime: '09:00', endTime: '13:00', label: 'Morning Shift', active: true },
         { id: genId(), startTime: '17:00', endTime: '21:00', label: 'Evening Shift', active: true }
     ],
-    isOff: day === 'Sunday'
+    isOff: false
   }));
 };
 

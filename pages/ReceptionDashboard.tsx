@@ -7,7 +7,7 @@ import { Modal } from '../components/Modal';
 import { Card } from '../components/Card';
 import { 
     Clock, List, Database, Stethoscope, BarChart3, Search, Filter, UserPlus, XCircle, Activity, ChevronRight, ChevronDown, ChevronUp, Users, MapPin, Settings, Footprints, CalendarClock, Shuffle, Building2, ImageIcon, Plus, X, Globe, Crosshair, Trash2, Info, LayoutGrid, Zap, Mail, Shield, Save, Calendar, UserX, CheckCircle2, PauseCircle, LogOut, Upload, Image as LucideImage, Map as LucideMap, Navigation, ArrowRight, Target, LocateFixed, MapPinIcon, Layout, MessageSquare, Sparkles, CalendarDays,
-    Edit2, ChevronLeft, LayoutPanelTop, Monitor, Smartphone, Bell, LifeBuoy
+    Edit2, ChevronLeft, LayoutPanelTop, Monitor, Smartphone, Bell, LifeBuoy, Loader2, ShieldCheck
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -45,6 +45,16 @@ const getClinicCurrentTime = (timezone?: string) => {
 const getLocalToday = (timezone?: string) => {
     const d = getClinicCurrentTime(timezone);
     return d.toISOString().split('T')[0];
+};
+
+const getPatientDateStr = (timeAdded: number, timezone?: string) => {
+    const d = new Date(timeAdded);
+    let offsetHours = 0;
+    if (timezone === 'Asia/Kolkata') offsetHours = 5.5;
+    else if (timezone === 'Asia/Dubai') offsetHours = 4;
+    const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+    const clinicTime = new Date(utc + (offsetHours * 3600000));
+    return clinicTime.toISOString().split('T')[0];
 };
 
 const format12h = (time24: string) => {
@@ -112,7 +122,7 @@ const MapInvalidator = ({ center, isTabActive }: { center: [number, number], isT
         if (isTabActive) {
             setTimeout(() => {
                 map.invalidateSize();
-                if (!isNaN(center[0]) && !isNaN(center[1])) {
+                if (center && !isNaN(center[0]) && !isNaN(center[1])) {
                     map.setView(center, map.getZoom());
                 }
             }, 100);
@@ -122,22 +132,30 @@ const MapInvalidator = ({ center, isTabActive }: { center: [number, number], isT
 };
 
 export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
-    doctors, patients, staff = [], clinicName, clinicType, operationMode = ClinicOperationMode.HYBRID_FULL, clinicData,
-    onAddPatient, onEditPatient, onDeletePatient, onDeleteMultiplePatients, 
-    onAddDoctor, onCheckMasterDoctor, onEditDoctor, onDeleteDoctor, onUpdateStatus, onCancelPatient, onUpdateClinicSettings, 
-    onToggleEmergency, onManualReorder, onDragDrop, onManualCheckIn, onBulkUpdateStatus, 
-    onAddStaff, onUpdateStaff, onDeleteStaff, onLogout, addToast
+    doctors: s, patients: t, staff: a = [], clinicName: o, clinicType: c, operationMode: f = ClinicOperationMode.HYBRID_FULL, clinicData: m,
+    onAddPatient: y, onEditPatient: b, onDeletePatient: v, onDeleteMultiplePatients: N,
+    onAddDoctor: T, onCheckMasterDoctor: C, onEditDoctor: k, onDeleteDoctor: R, onUpdateStatus: U, onCancelPatient: B, onUpdateClinicSettings: P, 
+    onToggleEmergency: te, onManualReorder: M, onDragDrop: W, onManualCheckIn: G, 
+    onAddStaff: se, onUpdateStaff: Z, onDeleteStaff: De, onLogout, addToast: he
 }) => {
+    const onAddPatient = y;
+    const onEditPatient = b;
+    const onDeletePatient = v;
+    const onUpdateStatus = U;
+    const onManualCheckIn = G;
+    const onEditDoctor = k;
+    const onAddDoctor = T;
+    const onDeleteDoctor = R;
+
     type DashboardTab = 'QUEUE' | 'DATABASE' | 'DOCTORS' | 'REPORTS' | 'APPOINTMENTS';
-    const [activeTab, setActiveTab] = useState<DashboardTab>('QUEUE');
-    const [queueSubTab, setQueueSubTab] = useState<'LIVE' | 'HOLD' | 'DONE' | 'ABSENT'>('LIVE');
+    const [ke, Me] = useState<DashboardTab>('QUEUE');
+    const [O, ee] = useState<'LIVE' | 'HOLD' | 'DONE' | 'ABSENT'>('LIVE');
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     
-    const [searchQuery, setSearchQuery] = useState('');
-    const [filterDoctorId, setFilterDoctorId] = useState<string>('ALL');
-    const [filterDate, setFilterDate] = useState<string>(() => getLocalToday(clinicData?.timezone));
+    const [ve, Ge] = useState('');
+    const [Ye, pt] = useState<string>('ALL');
+    const [ut, Gn] = useState<string>(() => getLocalToday(m?.timezone));
 
-    // Modals
     const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
     const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
     const [vitalsPatient, setVitalsPatient] = useState<Patient | null>(null);
@@ -146,7 +164,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
     const [doctorToDelete, setDoctorToDelete] = useState<Doctor | null>(null);
     
-    // Settings Modal States
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [settingsSubTab, setSettingsSubTab] = useState<'GENERAL' | 'PROFILE' | 'LOCATION'>('GENERAL');
     const [settingsForm, setSettingsForm] = useState<Partial<Clinic>>({});
@@ -155,36 +172,35 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     const [isLocating, setIsLocating] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const [currentTime, setCurrentTime] = useState(() => getClinicCurrentTime(clinicData?.timezone));
+    const [currentTime, setCurrentTime] = useState(() => getClinicCurrentTime(m?.timezone));
 
     useEffect(() => {
-        const timer = setInterval(() => setCurrentTime(getClinicCurrentTime(clinicData?.timezone)), 1000);
+        const timer = setInterval(() => setCurrentTime(getClinicCurrentTime(m?.timezone)), 1000);
         return () => clearInterval(timer);
-    }, [clinicData?.timezone]);
+    }, [m?.timezone]);
 
-    // Populate settings form when opened
     useEffect(() => {
-        if (isSettingsOpen && clinicData) {
+        if (isSettingsOpen && m) {
             setSettingsForm({
-                ...clinicData,
-                amenities: [...(clinicData.amenities || [])],
-                geoLocation: clinicData.geoLocation || { lat: 13.085, lng: 80.21 }
+                ...m,
+                amenities: [...(m.amenities || [])],
+                geoLocation: m.geoLocation || { lat: 13.085, lng: 80.21 }
             });
             
-            if (clinicData.operatingHours) {
-                const shifts = clinicData.operatingHours.split(',').map(s => {
+            if (m.operatingHours) {
+                const shifts = m.operatingHours.split(',').map(s => {
                     const parts = s.trim().split('-').map(p => p.trim());
                     return parts.length === 2 ? { start: parseTimeTo24h(parts[0]), end: parseTimeTo24h(parts[1]) } : { start: '09:00', end: '21:00' };
                 });
                 setOperatingShifts(shifts);
             }
         }
-    }, [isSettingsOpen, clinicData]);
+    }, [isSettingsOpen, m]);
 
     const estimatedTimesMap = useMemo(() => {
         const times: Record<string, number> = {};
-        doctors.forEach(doc => {
-            const docQueue = patients.filter(p => p.doctorId === doc.id && p.status === PatientStatus.WAITING)
+        s.forEach(doc => {
+            const docQueue = t.filter(p => p.doctorId === doc.id && p.status === PatientStatus.WAITING)
                                     .sort((a, b) => a.timeAdded - b.timeAdded);
             let nextAvailable = Date.now();
             if (doc.delayMinutes > 0) nextAvailable += doc.delayMinutes * 60000;
@@ -193,12 +209,12 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             });
         });
         return times;
-    }, [doctors, patients]);
+    }, [s, t]);
 
     const stats = useMemo(() => {
-        const today = getLocalToday(clinicData?.timezone);
-        const todayPatients = patients.filter(p => {
-            const pDate = p.visitType === 'APPOINTMENT' ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
+        const today = ut;
+        const todayPatients = t.filter(p => {
+            const pDate = p.visitType === 'APPOINTMENT' ? p.appointmentDate : getPatientDateStr(p.timeAdded, m?.timezone);
             return pDate === today;
         });
         return {
@@ -206,30 +222,30 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             waiting: todayPatients.filter(p => p.status === PatientStatus.WAITING).length,
             done: todayPatients.filter(p => p.status === PatientStatus.COMPLETED).length,
             revenue: todayPatients.filter(p => p.status === PatientStatus.COMPLETED).reduce((acc, p) => {
-                const doc = doctors.find(d => d.id === p.doctorId);
+                const doc = s.find(d => d.id === p.doctorId);
                 return acc + (doc?.consultationFee || 0);
             }, 0)
         };
-    }, [patients, doctors, clinicData]);
+    }, [t, s, m, ut]);
 
     const filteredPatients = useMemo(() => {
-        let list = patients.filter(p => {
-            const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
-            return pDate === filterDate;
+        let list = t.filter(p => {
+            const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : getPatientDateStr(p.timeAdded, m?.timezone);
+            return pDate === ut;
         });
-        if (filterDoctorId !== 'ALL') list = list.filter(p => p.doctorId === filterDoctorId);
-        if (activeTab === 'QUEUE') {
-            if (queueSubTab === 'LIVE') list = list.filter(p => p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR);
-            else if (queueSubTab === 'HOLD') list = list.filter(p => p.status === PatientStatus.ON_HOLD);
-            else if (queueSubTab === 'DONE') list = list.filter(p => p.status === PatientStatus.COMPLETED);
-            else if (queueSubTab === 'ABSENT') list = list.filter(p => p.status === PatientStatus.SKIPPED);
+        if (Ye !== 'ALL') list = list.filter(p => p.doctorId === Ye);
+        if (ke === 'QUEUE') {
+            if (O === 'LIVE') list = list.filter(p => p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR);
+            else if (O === 'HOLD') list = list.filter(p => p.status === PatientStatus.ON_HOLD);
+            else if (O === 'DONE') list = list.filter(p => p.status === PatientStatus.COMPLETED);
+            else if (O === 'ABSENT') list = list.filter(p => p.status === PatientStatus.SKIPPED);
         }
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase();
+        if (ve) {
+            const q = ve.toLowerCase();
             list = list.filter(p => p.name.toLowerCase().includes(q) || p.phone.includes(q) || p.tokenNumber.toString().includes(q));
         }
         return list.sort((a, b) => a.timeAdded - b.timeAdded);
-    }, [patients, activeTab, queueSubTab, filterDoctorId, searchQuery, filterDate]);
+    }, [t, ke, O, Ye, ve, ut, m?.timezone]);
 
     const sidebarItems = [
         { id: 'QUEUE', label: 'Control Tower', icon: Monitor },
@@ -239,20 +255,20 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     ];
 
     const navigateDate = (direction: 'PREV' | 'NEXT') => {
-        const d = new Date(filterDate);
+        const d = new Date(ut);
         d.setDate(d.getDate() + (direction === 'NEXT' ? 1 : -1));
-        setFilterDate(d.toISOString().split('T')[0]);
+        Gn(d.toISOString().split('T')[0]);
     };
 
     const handleSettingsSave = (e: React.FormEvent) => {
         e.preventDefault();
         const formattedHours = operatingShifts.map(s => `${format12h(s.start)} - ${format12h(s.end)}`).join(', ');
-        onUpdateClinicSettings({
+        P({
             ...settingsForm,
             operatingHours: formattedHours
         });
         setIsSettingsOpen(false);
-        addToast("Clinic settings updated!", "success");
+        he("Clinic settings updated!", "success");
     };
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -265,13 +281,10 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     };
 
     const handleLocationSelected = async (latlng: L.LatLng) => {
-        // Optimistically update markers
         setSettingsForm(prev => ({ 
             ...prev, 
             geoLocation: { lat: latlng.lat, lng: latlng.lng } 
         }));
-        
-        // Fetch full address details
         try {
             const { address, city, pincode } = await reverseGeocode(latlng.lat, latlng.lng);
             setSettingsForm(prev => ({ 
@@ -291,11 +304,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             async (p) => { 
                 const lat = p.coords.latitude;
                 const lng = p.coords.longitude;
-                
-                // Set coordinates
                 setSettingsForm(prev => ({ ...prev, geoLocation: { lat, lng } }));
-                
-                // Fetch Address
                 try {
                     const { address, city, pincode } = await reverseGeocode(lat, lng);
                     setSettingsForm(prev => ({ 
@@ -304,16 +313,15 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         city: city || prev.city,
                         pincode: pincode || prev.pincode
                     }));
-                    addToast("Location and address synced!", "success");
+                    he("Location and address synced!", "success");
                 } catch (e) {
-                    addToast("Location synced, but address lookup failed.", "warning");
+                    he("Location synced, but address lookup failed.", "warning");
                 }
-                
                 setIsLocating(false);
             },
             () => {
                 setIsLocating(false);
-                addToast("Could not access your location.", "error");
+                he("Could not access your location.", "error");
             },
             { enableHighAccuracy: true }
         );
@@ -326,9 +334,59 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         ABSENT: { active: 'bg-rose-600 text-white shadow-rose-200', inactive: 'text-rose-600 hover:bg-rose-50' }
     };
 
+    const doctorQueueStats = useMemo(() => {
+        const statsArray = s.map(F => {
+            const waitingPatients = t.filter(Ze => {
+                const pDateStr = Ze.visitType === "APPOINTMENT" && Ze.appointmentDate 
+                    ? Ze.appointmentDate 
+                    : getPatientDateStr(Ze.timeAdded, m?.timezone);
+                return Ze.doctorId === F.id && (Ze.status === PatientStatus.WAITING || Ze.status === PatientStatus.ON_HOLD) && pDateStr === ut;
+            });
+            const servingPatient = t.find(Ze => Ze.doctorId === F.id && Ze.status === PatientStatus.WITH_DOCTOR);
+            const nextPatient = waitingPatients.length > 0 ? waitingPatients[0] : null;
+            return {
+                doc: F,
+                count: waitingPatients.length,
+                current: servingPatient,
+                next: nextPatient
+            };
+        });
+        // Updated sorting: Descending order (highest count first)
+        return statsArray.sort((a, b) => b.count - a.count);
+    }, [s, t, ut, m?.timezone]);
+
+    // Added missing utility functions for shift management
+    const addShift = () => {
+        setOperatingShifts([...operatingShifts, { start: '09:00', end: '21:00' }]);
+    };
+
+    const updateShift = (idx: number, field: 'start' | 'end', value: string) => {
+        const newShifts = [...operatingShifts];
+        newShifts[idx] = { ...newShifts[idx], [field]: value };
+        setOperatingShifts(newShifts);
+    };
+
+    const removeShift = (idx: number) => {
+        if (operatingShifts.length > 1) {
+            setOperatingShifts(operatingShifts.filter((_, i) => i !== idx));
+        }
+    };
+
+    const handleAddAmenity = (val?: string) => {
+        const amenity = typeof val === 'string' ? val : amenityInput;
+        if (amenity.trim()) {
+            setSettingsForm(prev => ({
+                ...prev,
+                amenities: Array.from(new Set([...(prev.amenities || []), amenity.trim()]))
+            }));
+            setAmenityInput('');
+        }
+    };
+
+    const totalWaitingCount = useMemo(() => doctorQueueStats.reduce((acc, d) => acc + d.count, 0), [doctorQueueStats]);
+
     return (
         <div className="h-screen flex bg-slate-100 overflow-hidden">
-            {/* SaaS Vertical Sidebar */}
             <aside className={`bg-slate-900 flex flex-col transition-all duration-300 relative z-50 ${isSidebarCollapsed ? 'w-20' : 'w-64'}`}>
                 <div className={`p-6 flex items-center gap-3 overflow-hidden ${isSidebarCollapsed ? 'justify-center' : ''}`}>
                     <Logo className="h-8 w-8 shrink-0" />
@@ -339,29 +397,25 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         </div>
                     )}
                 </div>
-
-                {/* Collapse Toggle */}
                 <button 
                     onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                     className="absolute -right-3 top-24 bg-teal-500 text-slate-900 p-1 rounded-full shadow-lg hover:bg-teal-400 transition-all z-[60]"
                 >
                     {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
                 </button>
-
                 <nav className="flex-1 px-3 py-4 space-y-1">
                     {sidebarItems.map(item => (
                         <button
                             key={item.id}
-                            onClick={() => setActiveTab(item.id as DashboardTab)}
-                            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${activeTab === item.id ? 'bg-teal-500 text-slate-900 shadow-xl shadow-teal-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'} ${isSidebarCollapsed ? 'justify-center' : ''}`}
+                            onClick={() => Me(item.id as DashboardTab)}
+                            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group ${ke === item.id ? 'bg-teal-500 text-slate-900 shadow-xl shadow-teal-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'} ${isSidebarCollapsed ? 'justify-center' : ''}`}
                             title={isSidebarCollapsed ? item.label : undefined}
                         >
-                            <item.icon className={`h-5 w-5 shrink-0 ${activeTab === item.id ? 'text-slate-900' : 'text-slate-500 group-hover:text-teal-400'}`} />
+                            <item.icon className={`h-5 w-5 shrink-0 ${ke === item.id ? 'text-slate-900' : 'text-slate-500 group-hover:text-teal-400'}`} />
                             {!isSidebarCollapsed && <span className="font-black text-xs uppercase tracking-widest truncate animate-in fade-in slide-in-from-left-2">{item.label}</span>}
                         </button>
                     ))}
                 </nav>
-
                 <div className="p-3 mt-auto border-t border-white/5">
                     <button 
                         onClick={() => setIsSettingsOpen(true)} 
@@ -383,19 +437,17 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 </div>
             </aside>
 
-            {/* Main Content Area */}
             <main className="flex-1 flex flex-col min-w-0 bg-slate-50 relative h-full overflow-hidden">
                 <header className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between shadow-sm sticky top-0 z-40">
                     <div className="flex items-center gap-8">
                         <div>
-                            <h2 className="text-xl font-black text-slate-900 tracking-tight">{activeTab === 'QUEUE' ? 'Live Mission Control' : activeTab.replace('_', ' ')}</h2>
+                            <h2 className="text-xl font-black text-slate-900 tracking-tight">{ke === 'QUEUE' ? 'Live Mission Control' : ke.replace('_', ' ')}</h2>
                             <div className="flex items-center gap-2 mt-1">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                 <div className="w-1 h-1 rounded-full bg-slate-300"></div>
-                                <span className="text-[10px] font-black text-teal-600 uppercase tracking-widest">{clinicName}</span>
+                                <span className="text-[10px] font-black text-teal-600 uppercase tracking-widest">{o}</span>
                             </div>
                         </div>
-
                         <div className="hidden xl:flex items-center gap-6">
                             <div className="flex flex-col">
                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Today Load</span>
@@ -408,23 +460,21 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             </div>
                         </div>
                     </div>
-
                     <div className="flex items-center gap-4">
                         <div className="hidden md:flex items-center bg-slate-50 border border-slate-200 rounded-2xl h-11 px-4 focus-within:ring-2 focus-within:ring-teal-500/20 transition-all mr-2">
                             <Search className="h-4 w-4 text-slate-400 mr-2" />
                             <input 
                                 type="text" 
                                 placeholder="Patient Name / Phone..." 
-                                className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none w-48 placeholder:text-slate-400"
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
+                                className="bg-transparent border-none text-sm font-bold text-slate-700 outline-none w-48 placeholder:text-slate-400"
+                                value={ve}
+                                onChange={e => Ge(e.target.value)}
                             />
                         </div>
-                        
                         <div className="flex items-center gap-2">
                             <div className="hidden lg:block text-right mr-3">
-                                <p className="text-[11px] font-black text-slate-900 leading-tight uppercase tracking-tight">{clinicName}</p>
-                                <p className="text-[9px] font-bold text-slate-400 uppercase">{clinicData?.city || 'Chennai'}</p>
+                                <p className="text-[11px] font-black text-slate-900 leading-tight uppercase tracking-tight">{o}</p>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase">{m?.city || 'Chennai'}</p>
                             </div>
                             <Button 
                                 onClick={() => { setEditingPatient(null); setIsPatientModalOpen(true); }}
@@ -440,47 +490,47 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 </header>
 
                 <div className="flex-1 overflow-hidden flex flex-col relative">
-                    {activeTab === 'QUEUE' && (
+                    {ke === 'QUEUE' && (
                         <div className="flex-1 flex flex-col min-h-0">
-                            {/* Doctor Select Ribbon */}
-                            <div className="bg-white border-b border-slate-100 px-6 py-3 flex gap-3 overflow-x-auto no-scrollbar shrink-0">
+                            <div className="bg-white border-b border-slate-100 px-6 py-4 flex gap-3 overflow-x-auto no-scrollbar shrink-0">
                                 <button 
-                                    onClick={() => setFilterDoctorId('ALL')} 
-                                    className={`px-6 py-3 h-16 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all whitespace-nowrap border flex flex-col items-center justify-center min-w-[120px] ${filterDoctorId === 'ALL' ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-slate-50 text-slate-500 border-slate-100 hover:bg-slate-100'}`}
+                                    onClick={() => pt('ALL')} 
+                                    className={`relative px-6 py-4 h-24 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all whitespace-nowrap border flex flex-col items-center justify-center min-w-[110px] ${Ye === 'ALL' ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-slate-50 text-slate-500 border-slate-100 hover:bg-slate-100'}`}
                                 >
+                                    <div className={`absolute -top-4 -right-2 w-10 h-10 rounded-full flex items-center justify-center text-base font-black shadow-xl border-2 ${Ye === 'ALL' ? 'bg-white text-slate-900 border-slate-100' : 'bg-slate-900 text-white border-white'}`}>
+                                        {totalWaitingCount}
+                                    </div>
                                     ALL QUEUES
                                 </button>
-                                {doctors.map(doc => {
-                                    const serving = patients.find(p => p.doctorId === doc.id && p.status === PatientStatus.WITH_DOCTOR);
-                                    const nextInQueue = patients
-                                        .filter(p => p.doctorId === doc.id && p.status === PatientStatus.WAITING)
-                                        .sort((a, b) => a.timeAdded - b.timeAdded)[0];
-                                    
-                                    const isActive = filterDoctorId === doc.id;
-
+                                {doctorQueueStats.map(({ doc, count, current, next }) => {
+                                    const isActive = Ye === doc.id;
+                                    const isAvailable = doc.status === DoctorStatus.AVAILABLE;
                                     return (
                                         <button 
                                             key={doc.id} 
-                                            onClick={() => setFilterDoctorId(doc.id)} 
-                                            className={`px-4 py-2.5 h-16 rounded-2xl text-[10px] font-black uppercase tracking-tight transition-all whitespace-nowrap border flex flex-col items-start gap-1 min-w-[140px] shadow-sm ${isActive ? 'bg-primary-600 text-white border-primary-600 shadow-lg shadow-primary-200 ring-2 ring-primary-500/20' : 'bg-white text-slate-500 border-slate-200 hover:border-primary-300'}`}
+                                            onClick={() => pt(doc.id)} 
+                                            className={`relative px-4 py-3 h-24 rounded-2xl transition-all whitespace-nowrap border flex flex-col items-start gap-1 min-w-[120px] shadow-sm ${isActive ? 'bg-primary-600 text-white border-primary-600 shadow-lg shadow-primary-200 ring-2 ring-primary-500/20' : 'bg-white text-slate-500 border-slate-200 hover:border-primary-300'}`}
                                         >
-                                            <div className="flex items-center gap-2">
-                                                <div className={`w-1.5 h-1.5 rounded-full ${doc.status === DoctorStatus.AVAILABLE ? 'bg-green-400 animate-pulse' : 'bg-slate-300'}`}></div>
-                                                <span className={`text-[11px] ${isActive ? 'text-white' : 'text-slate-900'}`}>Dr. {doc.name.split(' ').pop()}</span>
+                                            <div className={`absolute -top-4 -right-2 w-10 h-10 rounded-full flex items-center justify-center text-base font-black shadow-xl border-2 ${isActive ? 'bg-white text-primary-600 border-primary-100' : 'bg-primary-600 text-white border-white'}`}>
+                                                {count}
                                             </div>
-                                            <div className="flex items-center gap-4 text-[9px] mt-1">
-                                                <span className={`flex items-center gap-1 font-black ${isActive ? 'text-white' : 'text-slate-400'}`}>
-                                                    NOW: 
-                                                    <span className={`font-black ${isActive ? 'text-white' : 'text-primary-600'}`}>
-                                                        {serving ? `#${serving.tokenNumber}` : '--'}
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <div className={`w-2 h-2 rounded-full ${isAvailable ? 'bg-green-400 animate-pulse' : 'bg-slate-300'}`}></div>
+                                                <span className={`text-[12px] font-black truncate max-w-[90px] ${isActive ? 'text-white' : 'text-slate-900'}`}>Dr. {doc.name.split(' ').pop()}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-0.5 w-full text-left mt-0.5">
+                                                <div className={`flex justify-between items-center ${isActive ? 'text-white' : 'text-slate-500'}`}>
+                                                    <span className="text-[10px] font-extrabold opacity-60">NOW</span>
+                                                    <span className={`text-[15px] font-black leading-none ${isActive ? 'text-white' : 'text-emerald-600'}`}>
+                                                        {current ? `#${current.tokenNumber}` : '--'}
                                                     </span>
-                                                </span>
-                                                <span className={`flex items-center gap-1 font-black ${isActive ? 'text-white' : 'text-slate-400'}`}>
-                                                    NEXT: 
-                                                    <span className={`font-black ${isActive ? 'text-white' : 'text-indigo-500'}`}>
-                                                        {nextInQueue ? `#${nextInQueue.tokenNumber}` : '--'}
+                                                </div>
+                                                <div className={`flex justify-between items-center ${isActive ? 'text-white/90' : 'text-slate-500'}`}>
+                                                    <span className="text-[10px] font-extrabold opacity-60">NEXT</span>
+                                                    <span className={`text-[15px] font-black leading-none ${isActive ? 'text-primary-100' : 'text-blue-500'}`}>
+                                                        {next ? `#${next.tokenNumber}` : '--'}
                                                     </span>
-                                                </span>
+                                                </div>
                                             </div>
                                         </button>
                                     );
@@ -490,12 +540,12 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             <div className="px-8 py-4 flex items-center justify-between shrink-0">
                                 <div className="flex gap-2 p-1.5 bg-slate-200/40 rounded-2xl border border-slate-200/50">
                                     {(['LIVE', 'HOLD', 'DONE', 'ABSENT'] as const).map(t => {
-                                        const isActive = queueSubTab === t;
+                                        const isActive = O === t;
                                         const colorSet = queueTabColors[t];
                                         return (
                                             <button 
                                                 key={t}
-                                                onClick={() => setQueueSubTab(t)}
+                                                onClick={() => ee(t)}
                                                 className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${isActive ? `${colorSet.active} border-transparent shadow-md` : `${colorSet.inactive} border-transparent hover:border-slate-100`}`}
                                             >
                                                 {t}
@@ -516,8 +566,8 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                             <CalendarDays className="h-3.5 w-3.5 text-primary-500" />
                                             <input 
                                                 type="date" 
-                                                value={filterDate} 
-                                                onChange={e => setFilterDate(e.target.value)} 
+                                                value={ut} 
+                                                onChange={e => Gn(e.target.value)} 
                                                 className="bg-transparent border-none py-2 text-xs font-black text-slate-700 outline-none" 
                                             />
                                         </div>
@@ -535,16 +585,16 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 <div className="h-full bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden flex flex-col">
                                     <QueueTable 
                                         patients={filteredPatients} 
-                                        doctors={doctors} 
+                                        doctors={s} 
                                         estimatedTimes={estimatedTimesMap} 
                                         isFiltered={true}
                                         onUpdateStatus={onUpdateStatus} 
-                                        onManualReorder={onManualReorder} 
-                                        onDragDrop={onDragDrop} 
-                                        onManualCheckIn={onManualCheckIn}
+                                        onManualReorder={M} 
+                                        onDragDrop={W} 
+                                        onManualCheckIn={onManualCheckIn} 
                                         onEditPatient={(p) => setEditingPatient(p)} 
                                         onVitalsClick={(p) => setVitalsPatient(p)} 
-                                        onToggleEmergency={onToggleEmergency}
+                                        onToggleEmergency={te} 
                                         onNoShowPatient={(id) => onUpdateStatus(id, PatientStatus.SKIPPED)}
                                     />
                                 </div>
@@ -552,24 +602,23 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         </div>
                     )}
 
-                    {activeTab === 'DATABASE' && <div className="p-8 h-full overflow-hidden"><div className="h-full bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden"><PatientDatabaseTable patients={patients} doctors={doctors} onHistoryClick={(p) => setHistoryPatient(p)} onEditClick={(p) => setEditingPatient(p)} onDeleteClick={(p) => onDeletePatient(p.id)} /></div></div>}
-                    {activeTab === 'DOCTORS' && (
+                    {ke === 'DATABASE' && <div className="p-8 h-full overflow-hidden"><div className="h-full bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden"><PatientDatabaseTable patients={t} doctors={s} onHistoryClick={(p) => setHistoryPatient(p)} onEditClick={(p) => setEditingPatient(p)} onDeleteClick={(p) => onDeletePatient(p.id)} /></div></div>}
+                    {ke === 'DOCTORS' && (
                         <DoctorManager 
-                            doctors={doctors} 
+                            doctors={s} 
                             onAddDoctor={() => { setEditingDoctor(null); setIsDoctorModalOpen(true); }} 
                             onEditDoctor={(doc) => { setEditingDoctor(doc); setIsDoctorModalOpen(true); }} 
-                            onDeleteDoctor={(id) => { const d = doctors.find(doc => doc.id === id); if(d) setDoctorToDelete(d); }} 
+                            onDeleteDoctor={(id) => { const d = s.find(doc => doc.id === id); if(d) setDoctorToDelete(d); }} 
                             onAddPresetSlot={() => {}} 
                             onStatusChange={(id, status) => onEditDoctor(id, { status })} 
                         />
                     )}
-                    {activeTab === 'REPORTS' && <ReceptionStats patients={patients} doctors={doctors} />}
+                    {ke === 'REPORTS' && <ReceptionStats patients={t} doctors={s} />}
                 </div>
             </main>
 
-            {/* Modals Container */}
-            <AddPatientModal isOpen={isPatientModalOpen || !!editingPatient} onClose={() => { setIsPatientModalOpen(false); setEditingPatient(null); }} mode={editingPatient ? 'EDIT' : 'ADD'} initialData={editingPatient} onAdd={onAddPatient} onEdit={onEditPatient} doctors={doctors} patients={patients} addToast={addToast} />
-            <PatientHistoryModal isOpen={!!historyPatient} onClose={() => setHistoryPatient(null)} patient={historyPatient} allClinicsPatients={patients} doctors={doctors} />
+            <AddPatientModal isOpen={isPatientModalOpen || !!editingPatient} onClose={() => { setIsPatientModalOpen(false); setEditingPatient(null); }} mode={editingPatient ? 'EDIT' : 'ADD'} initialData={editingPatient} operationMode={f} onAdd={onAddPatient} onEdit={onEditPatient} doctors={s} patients={t} addToast={he} />
+            <PatientHistoryModal isOpen={!!historyPatient} onClose={() => setHistoryPatient(null)} patient={historyPatient} allClinicsPatients={t} doctors={s} />
             <VitalsModal isOpen={!!vitalsPatient} onClose={() => setVitalsPatient(null)} patient={vitalsPatient} onSave={(pid, vitals) => onEditPatient(pid, { vitals })} />
             
             <DoctorFormModal 
@@ -577,8 +626,8 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 onClose={() => { setIsDoctorModalOpen(false); setEditingDoctor(null); }} 
                 mode={editingDoctor ? 'EDIT' : 'ADD'} 
                 initialData={editingDoctor || undefined} 
-                onCheckMasterDoctor={onCheckMasterDoctor}
-                addToast={addToast}
+                onCheckMasterDoctor={C}
+                addToast={he}
                 onSave={(data) => {
                     if (editingDoctor) {
                         onEditDoctor(editingDoctor.id, {
@@ -599,7 +648,6 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 }}
             />
 
-            {/* Clinic Settings Modal */}
             <Modal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} title="Clinic Configuration" maxWidth="max-w-5xl">
                 <div className="flex flex-col h-[70vh] overflow-hidden">
                     <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1.5 rounded-2xl mb-6 self-start shadow-inner border border-slate-200">
@@ -607,7 +655,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             <button
                                 key={tab}
                                 onClick={() => setSettingsSubTab(tab)}
-                                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsSubTab === tab ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsSubTab === tab ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-800'}`}
                             >
                                 {tab === 'GENERAL' && <Layout className="h-4 w-4" />}
                                 {tab === 'PROFILE' && <ImageIcon className="h-4 w-4" />}
@@ -620,9 +668,9 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                     <form onSubmit={handleSettingsSave} className="flex-1 flex flex-col overflow-hidden">
                         <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-8">
                             {settingsSubTab === 'GENERAL' && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in duration-300">
                                     <div className="space-y-6">
-                                        <div className="border-b border-slate-100 pb-3"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Clinic Identity</span></div>
+                                        <div className="border-b border-slate-100 pb-3"><span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Clinic Identity</span></div>
                                         <Input label="Clinic Name" value={settingsForm.name || ''} onChange={e => setSettingsForm({ ...settingsForm, name: e.target.value })} required />
                                         <Input label="Contact Phone" value={settingsForm.contactPhone || ''} onChange={e => setSettingsForm({ ...settingsForm, contactPhone: e.target.value })} />
                                         <div>
@@ -639,15 +687,15 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                     <div className="space-y-6">
                                         <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Daily Operating Shifts</span>
-                                            <button type="button" onClick={() => setOperatingShifts([...operatingShifts, { start: '09:00', end: '21:00' }])} className="text-primary-600 font-black text-[10px] uppercase tracking-widest flex items-center gap-1"><Plus className="h-3 w-3" /> Add Shift</button>
+                                            <button type="button" onClick={addShift} className="text-primary-600 font-black text-[10px] uppercase tracking-widest flex items-center gap-1"><Plus className="h-3 w-3" /> Add Shift</button>
                                         </div>
                                         <div className="space-y-3">
                                             {operatingShifts.map((shift, idx) => (
                                                 <div key={idx} className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                                                    <div className="flex-1"><input type="time" value={shift.start} onChange={e => { const newShifts = [...operatingShifts]; newShifts[idx].start = e.target.value; setOperatingShifts(newShifts); }} className="w-full bg-white border border-slate-200 rounded-lg p-2 text-sm font-bold" /></div>
+                                                    <div className="flex-1"><input type="time" value={shift.start} onChange={e => updateShift(idx, 'start', e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg p-2 text-sm font-bold" /></div>
                                                     <div className="text-slate-300">to</div>
-                                                    <div className="flex-1"><input type="time" value={shift.end} onChange={e => { const newShifts = [...operatingShifts]; newShifts[idx].end = e.target.value; setOperatingShifts(newShifts); }} className="w-full bg-white border border-slate-200 rounded-lg p-2 text-sm font-bold" /></div>
-                                                    {operatingShifts.length > 1 && <button type="button" onClick={() => setOperatingShifts(operatingShifts.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>}
+                                                    <div className="flex-1"><input type="time" value={shift.end} onChange={e => updateShift(idx, 'end', e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg p-2 text-sm font-bold" /></div>
+                                                    {operatingShifts.length > 1 && <button type="button" onClick={() => removeShift(idx)} className="text-red-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>}
                                                 </div>
                                             ))}
                                         </div>
@@ -656,16 +704,16 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             )}
 
                             {settingsSubTab === 'PROFILE' && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in duration-300">
                                     <div className="space-y-6">
-                                        <div className="border-b border-slate-100 pb-3"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Branding</span></div>
+                                        <div className="border-b border-slate-100 pb-3"><span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Branding</span></div>
                                         <div className="relative aspect-video bg-slate-100 rounded-[2rem] border-2 border-dashed border-slate-300 overflow-hidden flex items-center justify-center hover:border-primary-400 transition-all group">
                                             {settingsForm.imageUrl ? (
                                                 <>
                                                     <img src={settingsForm.imageUrl} className="w-full h-full object-cover" />
                                                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
                                                         <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 bg-white rounded-xl text-slate-900"><Upload className="h-5 w-5" /></button>
-                                                        <button type="button" onClick={() => setSettingsForm({ ...settingsForm, imageUrl: '' })} className="p-3 bg-white rounded-xl text-red-600"><Trash2 className="h-5 w-5" /></button>
+                                                        <button type="button" onClick={() => setSettingsForm(prev => ({ ...prev, imageUrl: '' }))} className="p-3 bg-white rounded-xl text-red-600"><Trash2 className="h-5 w-5" /></button>
                                                     </div>
                                                 </>
                                             ) : (
@@ -680,19 +728,19 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                             className="w-full h-32 p-4 rounded-2xl border border-slate-300 text-sm font-bold bg-slate-50 focus:bg-white outline-none resize-none" 
                                             placeholder="Clinic overview..."
                                             value={settingsForm.about || ''}
-                                            onChange={e => setSettingsForm({ ...settingsForm, about: e.target.value })}
+                                            onChange={e => setSettingsForm(prev => ({ ...prev, about: e.target.value }))}
                                         />
                                     </div>
                                     <div className="space-y-6">
                                         <div className="border-b border-slate-100 pb-3"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amenities</span></div>
                                         <div className="flex gap-2">
                                             <input type="text" className="flex-1 h-11 rounded-xl border border-slate-300 px-4 text-sm font-bold" placeholder="Add amenity..." value={amenityInput} onChange={e => setAmenityInput(e.target.value)} />
-                                            <Button type="button" onClick={() => { if(amenityInput.trim()){ setSettingsForm({ ...settingsForm, amenities: [...(settingsForm.amenities || []), amenityInput.trim()] }); setAmenityInput(''); } }}>ADD</Button>
+                                            <button type="button" onClick={() => handleAddAmenity()} className="bg-primary-600 text-white px-4 rounded-xl font-bold">ADD</button>
                                         </div>
                                         <div className="flex flex-wrap gap-2">
                                             {settingsForm.amenities?.map((a, i) => (
                                                 <span key={i} className="inline-flex items-center gap-2 px-4 py-2 bg-primary-50 text-primary-900 text-[10px] font-black border border-primary-100 rounded-xl">
-                                                    {a} <button type="button" onClick={() => setSettingsForm({ ...settingsForm, amenities: settingsForm.amenities?.filter((_, idx) => idx !== i) })}><X className="h-3 w-3" /></button>
+                                                    {a} <button type="button" onClick={() => setSettingsForm(prev => ({ ...prev, amenities: prev.amenities?.filter((_, idx) => idx !== i) }))}><X className="h-3 w-3" /></button>
                                                 </span>
                                             ))}
                                         </div>
@@ -703,44 +751,76 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             {settingsSubTab === 'LOCATION' && (
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in h-full">
                                     <div className="col-span-1 space-y-6">
-                                        <div className="bg-slate-900 p-6 rounded-[2rem] text-white space-y-4">
-                                            <h4 className="text-sm font-black uppercase tracking-widest flex items-center gap-2"><MapPin className="h-4 w-4 text-primary-400" /> GPS Pinning</h4>
-                                            <div className="space-y-3">
-                                                <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex justify-between items-center"><span className="text-[9px] font-black text-white/50 uppercase">LAT</span><span className="font-mono text-xs font-bold">{settingsForm.geoLocation?.lat.toFixed(6)}</span></div>
-                                                <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex justify-between items-center"><span className="text-[9px] font-black text-white/50 uppercase">LNG</span><span className="font-mono text-xs font-bold">{settingsForm.geoLocation?.lng.toFixed(6)}</span></div>
+                                        <div className="bg-slate-900 p-6 rounded-[2rem] text-white shadow-2xl relative overflow-hidden flex-shrink-0 group">
+                                            <Target className="absolute -top-6 -right-6 h-24 w-24 opacity-5 group-hover:scale-110 transition-transform duration-700" />
+                                            <h4 className="text-sm font-black mb-2 flex items-center gap-3"><ShieldCheck className="h-5 w-5 text-primary-400" /> GPS Precision Pins</h4>
+                                            <p className="text-[10px] text-slate-400 leading-relaxed mb-6 uppercase tracking-wider">Enable live travel tracking for your patients by accurately pinning your entrance.</p>
+                                            <div className="grid grid-cols-1 gap-3 mb-6">
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-primary-400 opacity-50">LAT</span>
+                                                    <input 
+                                                        type="number" 
+                                                        step="0.000001" 
+                                                        value={settingsForm.geoLocation?.lat ?? ""} 
+                                                        onChange={e => {
+                                                            const val = parseFloat(e.target.value);
+                                                            if (!isNaN(val)) setSettingsForm(prev => ({ ...prev, geoLocation: { lat: val, lng: prev.geoLocation?.lng || 0 } }));
+                                                        }}
+                                                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-3 py-3 text-xs font-mono font-bold focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400/30 outline-none text-white shadow-inner"
+                                                        placeholder="0.000000"
+                                                    />
+                                                </div>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-primary-400 opacity-50">LNG</span>
+                                                    <input 
+                                                        type="number" 
+                                                        step="0.000001" 
+                                                        value={settingsForm.geoLocation?.lng ?? ""} 
+                                                        onChange={e => {
+                                                            const val = parseFloat(e.target.value);
+                                                            if (!isNaN(val)) setSettingsForm(prev => ({ ...prev, geoLocation: { lat: prev.geoLocation?.lat || 0, lng: val } }));
+                                                        }}
+                                                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-3 py-3 text-xs font-mono font-bold focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400/30 outline-none text-white shadow-inner"
+                                                        placeholder="0.000000"
+                                                    />
+                                                </div>
                                             </div>
                                             <button 
                                                 type="button" 
                                                 onClick={handleLocateMe}
-                                                className="w-full h-11 bg-primary-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
+                                                disabled={isLocating}
+                                                className={`w-full flex items-center justify-center gap-3 h-12 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-xl ${isLocating ? 'bg-slate-800 text-slate-500' : 'bg-primary-600 text-white hover:bg-primary-500 hover:scale-[1.02] active:scale-95'}`}
                                             >
-                                                {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4" />} Sync My GPS
+                                                {isLocating ? <span className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" /> : <LocateFixed className="h-4 w-4" />} Sync GPS Location
                                             </button>
                                         </div>
-                                        <div className="space-y-4">
-                                            <Input label="Mailing Address" value={settingsForm.address || ''} onChange={e => setSettingsForm({ ...settingsForm, address: e.target.value })} />
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <Input label="City" value={settingsForm.city || ''} onChange={e => setSettingsForm({ ...settingsForm, city: e.target.value })} />
-                                                <Input label="Pincode" value={settingsForm.pincode || ''} onChange={e => setSettingsForm({ ...settingsForm, pincode: e.target.value })} />
+                                        <div className="p-6 bg-white border border-slate-200 rounded-[2.5rem] space-y-4 shadow-sm flex-shrink-0">
+                                            <Input label="Mailing Address" value={settingsForm.address || ''} onChange={e => setSettingsForm(prev => ({ ...prev, address: e.target.value }))} className="h-11 rounded-xl text-sm" />
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <Input label="City" value={settingsForm.city || ''} onChange={e => setSettingsForm(prev => ({ ...prev, city: e.target.value }))} className="h-11 rounded-xl text-sm" />
+                                                <Input label="Pincode" value={settingsForm.pincode || ''} onChange={e => setSettingsForm(prev => ({ ...prev, pincode: e.target.value }))} className="h-11 rounded-xl text-sm" />
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="col-span-2 bg-slate-100 rounded-[2.5rem] border border-slate-200 overflow-hidden relative min-h-[350px]">
-                                        <MapContainer center={[settingsForm.geoLocation?.lat || 13.085, settingsForm.geoLocation?.lng || 80.21]} zoom={15} className="h-full w-full">
+                                    <div className="col-span-2 relative min-h-[400px] rounded-[3rem] border border-slate-200 overflow-hidden shadow-2xl bg-slate-100 ring-4 ring-slate-100">
+                                        <MapContainer center={[settingsForm.geoLocation?.lat || 13.085, settingsForm.geoLocation?.lng || 80.21]} zoom={15} className="h-full w-full z-0">
                                             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                                             <MapInvalidator center={[settingsForm.geoLocation?.lat || 13.085, settingsForm.geoLocation?.lng || 80.21]} isTabActive={settingsSubTab === 'LOCATION'} />
                                             <LocationPicker onSelect={handleLocationSelected} />
                                             {settingsForm.geoLocation && <Marker position={[settingsForm.geoLocation.lat, settingsForm.geoLocation.lng]} />}
                                         </MapContainer>
-                                        <div className="absolute bottom-4 right-4 z-10 bg-white/90 backdrop-blur px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border border-slate-200 shadow-lg">Tap Map to Move Pin</div>
+                                        <div className="absolute bottom-6 right-6 z-10 bg-slate-900/95 backdrop-blur-xl text-white px-6 py-3 rounded-2xl border border-white/10 shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom-4">
+                                            <div className="w-2.5 h-2.5 bg-primary-500 rounded-full animate-pulse shadow-[0_0_15px_#14b8a6]" />
+                                            <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Live Geosync Engaged</span>
+                                        </div>
                                     </div>
                                 </div>
                             )}
                         </div>
 
-                        <div className="pt-6 mt-6 border-t border-slate-100 flex justify-end gap-3 shrink-0">
-                            <Button variant="secondary" type="button" onClick={() => setIsSettingsOpen(false)}>Cancel</Button>
-                            <Button type="submit" className="px-12 shadow-xl shadow-teal-500/20"><Save className="h-5 w-5 mr-2" /> Apply Settings</Button>
+                        <div className="pt-6 flex flex-col-reverse xs:flex-row justify-end gap-3 border-t border-slate-100 mt-6 bg-white flex-shrink-0">
+                            <Button variant="secondary" type="button" onClick={() => setIsSettingsOpen(false)} className="w-full xs:w-auto px-10 rounded-2xl font-black text-[10px] uppercase tracking-widest h-12 border-slate-200 hover:bg-slate-50">Dismiss</Button>
+                            <Button type="submit" className="w-full xs:w-auto px-16 rounded-2xl shadow-2xl shadow-primary-900/20 font-black uppercase tracking-[0.2em] h-12 bg-primary-600 hover:bg-primary-700 active:scale-[0.95] transition-all transform"><Save className="h-5 w-5 mr-3" /> Save Changes</Button>
                         </div>
                     </form>
                 </div>
@@ -758,11 +838,3 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         </div>
     );
 };
-
-function Loader2(props: any) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props} className={props.className + " animate-spin"}>
-      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-    </svg>
-  );
-}

@@ -350,11 +350,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="max-w-4xl mx-auto px-4 text-center relative z-10">
           <h2 className="text-3xl sm:text-4xl font-black mb-4 tracking-tight">Your time matters. Take control of it.</h2>
           <p className="text-slate-300 mb-8">Ready to get started? Find a doctor or clinic near you and experience a new, stress-free way to manage your health.</p>
-          <div className="flex flex-col sm:flex-row justify-center gap-3">
-            <Button size="lg" className="bg-white hover:bg-slate-100 text-slate-900 h-12 sm:h-14 px-8 sm:px-10 rounded-full text-base sm:text-lg font-bold" onClick={() => onPatientEnter('CLINIC', undefined, location)}>
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <Button size="lg" className="bg-teal-600 hover:bg-teal-700 text-white h-12 sm:h-14 px-8 sm:px-12 rounded-full text-base sm:text-lg font-black shadow-xl shadow-teal-900/40 uppercase tracking-widest transition-all transform active:scale-95" onClick={() => onPatientEnter('CLINIC', undefined, location)}>
               Find clinics near me
             </Button>
-            <Button size="lg" variant="outline" className="border-slate-700 text-white hover:bg-slate-800 h-12 sm:h-14 px-8 sm:px-10 rounded-full text-base sm:text-lg" onClick={() => onPatientEnter('DOCTOR', undefined, location)}>
+            <Button size="lg" variant="outline" className="border-white/20 text-white hover:bg-white hover:text-slate-900 h-12 sm:h-14 px-8 sm:px-12 rounded-full text-base sm:text-lg font-bold transition-all transform active:scale-95" onClick={() => onPatientEnter('DOCTOR', undefined, location)}>
               Find doctors
             </Button>
           </div>
