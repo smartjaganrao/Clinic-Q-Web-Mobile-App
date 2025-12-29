@@ -1614,7 +1614,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                     </div>
                 </header>
 
-                <div className={`flex-1 flex flex-col w-full relative ${activeTab !== 'BOOK' ? 'overflow-y-auto overflow-x-hidden scroll-smooth pb-32 md:pb-8' : 'overflow-y-auto'}`}>
+                <div className={`flex-1 flex flex-col w-full relative ${activeTab !== 'BOOK' ? 'overflow-y-auto overflow-x-hidden scroll-smooth pb-32 md:pb-8' : 'overflow-hidden'}`}>
                     {activeTab === 'ACTIVE' && (
                         isGuest ? (
                             <GuestLoginCard onLoginClick={onLoginClick} />
