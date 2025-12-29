@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff, ClinicOperationMode, Clinic, AppointmentConfig } from '../types';
+import { Doctor, Patient, PatientStatus, DoctorStatus, ClinicType, Vitals, Staff, ClinicOperationMode, Clinic, AppointmentConfig, SessionMode } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
@@ -23,6 +23,7 @@ import { VitalsModal } from '../features/reception/components/VitalsModal';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { Logo } from '../components/Logo';
 import { reverseGeocode } from '../utils/geolocation';
+import { getActiveSession, getQueueSorter } from '../utils/time';
 
 // Leaflet icon fix
 const DefaultIcon = L.icon({
@@ -235,18 +236,34 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             return pDate === ut;
         });
         if (Ye !== 'ALL') list = list.filter(p => p.doctorId === Ye);
+        
         if (ke === 'QUEUE') {
             if (O === 'LIVE') list = list.filter(p => p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR);
             else if (O === 'HOLD') list = list.filter(p => p.status === PatientStatus.ON_HOLD);
             else if (O === 'DONE') list = list.filter(p => p.status === PatientStatus.COMPLETED);
             else if (O === 'ABSENT') list = list.filter(p => p.status === PatientStatus.SKIPPED);
         }
+        
         if (ve) {
             const q = ve.toLowerCase();
             list = list.filter(p => p.name.toLowerCase().includes(q) || p.phone.includes(q) || p.tokenNumber.toString().includes(q));
         }
+
+        // Apply advanced sorting based on session mode if filtering by a specific doctor
+        if (Ye !== 'ALL' && m) {
+            const doctor = s.find(d => d.id === Ye);
+            if (doctor) {
+                // Mock clinic for utility if m is missing, but m is prop here
+                const session = getActiveSession(doctor, m);
+                const mode = session?.mode || SessionMode.HYBRID;
+                const sorter = getQueueSorter(mode);
+                return list.sort(sorter);
+            }
+        }
+        
+        // Default sorting
         return list.sort((a, b) => a.timeAdded - b.timeAdded);
-    }, [t, ke, O, Ye, ve, ut, m?.timezone]);
+    }, [t, ke, O, Ye, ve, ut, m, s]);
 
     const sidebarItems = [
         { id: 'QUEUE', label: 'Control Tower', icon: Monitor },

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Doctor, Patient, PatientStatus, DoctorStatus, PainPoint, Clinic } from '../types';
+import { Doctor, Patient, PatientStatus, DoctorStatus, PainPoint, Clinic, SessionMode } from '../types';
 import { Button } from '../components/Button';
 import { 
     Clock12, Coffee, List, X, Building, PlayCircle, User, LogOut
@@ -8,6 +8,7 @@ import {
 import { PatientQueueSidebar } from '../features/doctor/components/PatientQueueSidebar';
 import { ConsultationWorkspace } from '../features/doctor/components/ConsultationWorkspace';
 import { Logo } from '../components/Logo';
+import { getActiveSession, getQueueSorter } from '../utils/time';
 
 interface DoctorProps {
   doctor: Doctor;
@@ -46,51 +47,31 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({
   };
 
   // SMART HYBRID QUEUE LOGIC
-  const { currentPatient, sortedQueue, heldPatients } = useMemo(() => {
+  const { currentPatient, sortedQueue, heldPatients, currentSessionMode } = useMemo(() => {
     const current = queue.find(p => p.status === PatientStatus.WITH_DOCTOR);
     const waiting = queue.filter(p => p.status === PatientStatus.WAITING);
     const held = queue.filter(p => p.status === PatientStatus.ON_HOLD).sort((a, b) => a.timeAdded - b.timeAdded);
     
-    const now = new Date();
-    const currentMins = now.getHours() * 60 + now.getMinutes();
-    
-    const timeToMins = (t?: string) => {
-        if (!t) return 0;
-        const [h, m] = t.split(':').map(Number);
-        return h * 60 + m;
-    };
+    // Determine active session mode
+    // We need a pseudo-clinic object for the utility if real one isn't passed fully populated
+    // but here we can construct a minimal one or assume defaults.
+    // Ideally we should pass the full clinic object to DoctorDashboard.
+    // For now, let's assume a default timezone if missing or reuse what we have.
+    const mockClinic = { timezone: 'Asia/Kolkata' } as Clinic; // Fallback
+    const activeSession = getActiveSession(doctor, mockClinic);
+    const mode = activeSession?.mode || SessionMode.HYBRID;
 
-    const UPCOMING_THRESHOLD_MINS = 10; 
+    const sorter = getQueueSorter(mode);
 
-    const classifyPatient = (p: Patient) => {
-        if (p.isEmergency) return 1; 
-        if (p.visitType === 'APPOINTMENT' && p.appointmentTime) {
-            const apptMins = timeToMins(p.appointmentTime);
-            const minsUntilAppt = apptMins - currentMins;
-            if (minsUntilAppt <= UPCOMING_THRESHOLD_MINS) {
-                return 2; 
-            }
-            return 4;
-        }
-        return 3;
-    };
-
-    const sorted = waiting.sort((a, b) => {
-        const priorityA = classifyPatient(a);
-        const priorityB = classifyPatient(b);
-        if (priorityA !== priorityB) return priorityA - priorityB;
-        if (a.visitType === 'APPOINTMENT' && b.visitType === 'APPOINTMENT' && a.appointmentTime && b.appointmentTime) {
-             return timeToMins(a.appointmentTime) - timeToMins(b.appointmentTime);
-        }
-        return a.timeAdded - b.timeAdded;
-    });
+    const sorted = waiting.sort(sorter);
 
     return { 
         currentPatient: current, 
         sortedQueue: sorted,
-        heldPatients: held
+        heldPatients: held,
+        currentSessionMode: mode
     };
-  }, [queue, currentTime]);
+  }, [queue, currentTime, doctor]);
 
   // Check for Delay Expiry
   useEffect(() => {
@@ -170,7 +151,13 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({
               <div>
                   <h1 className="text-lg sm:text-xl font-bold text-slate-900 leading-none flex items-center gap-2">
                       {doctor.name}
-                      {isOffShift && <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded-full uppercase font-bold border border-slate-200">Off Shift</span>}
+                      {isOffShift ? (
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded-full uppercase font-bold border border-slate-200">Off Shift</span>
+                      ) : (
+                          <span className={`px-2 py-0.5 text-[10px] rounded-full uppercase font-bold border ${currentSessionMode === SessionMode.APPOINTMENT ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : currentSessionMode === SessionMode.WALK_IN ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                              {currentSessionMode} Session
+                          </span>
+                      )}
                   </h1>
                   <div className="flex items-center gap-2 mt-1">
                       <p className="text-xs text-slate-500">{doctor.specialty} • Room {doctor.roomNumber}</p>

@@ -1,4 +1,12 @@
-import React from 'react';
+
+// Fix for missing JSX.IntrinsicElements definitions in the environment
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      [elemName: string]: any;
+    }
+  }
+}
 
 export enum UserRole {
   ADMIN = 'ADMIN',
@@ -50,6 +58,13 @@ export enum ClinicOperationMode {
     HYBRID_FULL = 'HYBRID_FULL'                        // 5. Hybrid: Direct, Online Token & Appointment
 }
 
+// NEW: Session Modes for specific time slots
+export enum SessionMode {
+  WALK_IN = 'WALK_IN',         // Token based, First-Come-First-Served
+  APPOINTMENT = 'APPOINTMENT', // Fixed slots only
+  HYBRID = 'HYBRID'            // Appointments prioritized, Walk-ins fill gaps
+}
+
 export interface AppointmentConfig {
     slotDuration: number; // in minutes
     bufferTime: number;   // in minutes
@@ -64,6 +79,7 @@ export interface TimeSlot {
     endTime: string;   // "13:00"
     label?: string;    // "Morning Shift"
     active?: boolean;  // allow marking slot active/inactive
+    mode?: SessionMode; // NEW: Session mode for this specific slot
 }
 
 export interface DaySchedule {

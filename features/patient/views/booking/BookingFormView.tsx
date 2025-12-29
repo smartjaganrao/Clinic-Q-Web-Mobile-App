@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { IndianRupeeIcon } from '../../../../components/icons';
 import { Button } from '../../../../components/Button';
-import { Clinic, Doctor, UserProfile, GroupedSlots } from '../../../../types';
+import { Clinic, Doctor, UserProfile, GroupedSlots, SessionMode } from '../../../../types';
 import { Input } from '../../../../components/Input';
 import { Tooltip } from '../../../../components/Tooltip';
 
@@ -93,6 +93,22 @@ export const BookingFormView = ({
     isClinicDirectWalkInOnly: boolean;
     formatTime12h: (time: string) => string;
 }) => {
+    
+    // Filter walk-in shifts: Must be WALK_IN or HYBRID mode (or undefined/default)
+    const validWalkInShifts = walkInShiftsToday.filter(s => 
+        !s.shift.mode || s.shift.mode === SessionMode.WALK_IN || s.shift.mode === SessionMode.HYBRID
+    );
+
+    const hasWalkInToday = validWalkInShifts.length > 0;
+
+    // Check if appointment is allowed for selected date based on schedule mode
+    const isDateApptAllowed = (dateStr: string) => {
+        const dayObj = bookingDates.find(d => d.dateStr === dateStr);
+        if (!dayObj || dayObj.isOff || !dayObj.schedule) return false;
+        // Allows appointments if ANY slot in the day allows it (APPOINTMENT or HYBRID)
+        return dayObj.schedule.slots.some((s: any) => s.active && (!s.mode || s.mode === SessionMode.APPOINTMENT || s.mode === SessionMode.HYBRID));
+    };
+
     return (
         <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 pb-16">
 
@@ -237,11 +253,12 @@ export const BookingFormView = ({
                         <div>
                             <label className="block text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Select Visit Type</label>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                <div onClick={() => isClinicOnlineWalkInAllowed && isWalkInAllowed && setVisitType('WALK_IN')} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 ${visitType === 'WALK_IN' ? 'border-primary-600 bg-primary-50 ring-1 ring-primary-500/20' : (isClinicOnlineWalkInAllowed && isWalkInAllowed) ? 'border-slate-100 hover:border-slate-200' : 'border-slate-50 opacity-40 grayscale pointer-events-none'}`}>
+                                <div onClick={() => isClinicOnlineWalkInAllowed && isWalkInAllowed && hasWalkInToday && setVisitType('WALK_IN')} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 ${visitType === 'WALK_IN' ? 'border-primary-600 bg-primary-50 ring-1 ring-primary-500/20' : (isClinicOnlineWalkInAllowed && isWalkInAllowed && hasWalkInToday) ? 'border-slate-100 hover:border-slate-200' : 'border-slate-50 opacity-40 grayscale pointer-events-none'}`}>
                                     <div className={`p-2 rounded-xl ${visitType === 'WALK_IN' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'}`}><Zap className="h-5 w-5 fill-current" /></div>
                                     <div>
                                         <div className="flex items-center gap-2"><span className={`font-black uppercase tracking-widest text-[11px] ${visitType === 'WALK_IN' ? 'text-primary-900' : 'text-slate-700'}`}>Live Token</span>{visitType === 'WALK_IN' && <CheckCircle2 className="h-3.5 w-3.5 text-primary-600" />}</div>
                                         <p className="text-[9px] font-bold text-slate-500 mt-0.5">Join the live queue now.</p>
+                                        {!hasWalkInToday && isClinicOnlineWalkInAllowed && <span className="text-[9px] text-red-500 font-bold block mt-1">No walk-in sessions now</span>}
                                     </div>
                                 </div>
                                 <div onClick={() => isClinicApptAllowed && setVisitType('APPOINTMENT')} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 ${visitType === 'APPOINTMENT' ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-500/20' : isClinicApptAllowed ? 'border-slate-100 hover:border-slate-200' : 'border-slate-50 opacity-40 grayscale pointer-events-none'}`}>
@@ -302,7 +319,7 @@ export const BookingFormView = ({
                                         <div className="bg-white p-3 rounded-xl border border-slate-200 flex flex-col">
                                             <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-widest mb-2">Arrival Analysis</h4>
                                             {selectedWalkInShiftId ? (() => {
-                                                const selectedShift = walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
+                                                const selectedShift = validWalkInShifts.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
                                                 if (!selectedShift) return (
                                                     <div className="flex-1 flex items-center justify-center">
                                                         <p className="text-[9px] text-slate-400 text-center">Select a shift to see arrival analysis</p>
@@ -347,7 +364,7 @@ export const BookingFormView = ({
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        {walkInShiftsToday.map(({ shift, statusLabel, statusColor, stats, isEnded, isFull, totalWaitMins, load }) => (
+                                        {validWalkInShifts.map(({ shift, statusLabel, statusColor, stats, isEnded, isFull, totalWaitMins, load }) => (
                                             <div key={shift.id || shift.startTime} onClick={() => !isEnded && !isFull && setSelectedWalkInShiftId(shift.id || shift.startTime)} className={`p-2 rounded-xl border-2 transition-all ${(!isEnded && !isFull) ? 'cursor-pointer' : 'cursor-not-allowed'} ${selectedWalkInShiftId === (shift.id || shift.startTime) ? 'border-primary-600 bg-white shadow-md' : (isEnded || isFull) ? 'bg-slate-100/50 border-transparent opacity-40 grayscale' : 'bg-white border-slate-200 hover:border-primary-300'}`}>
                                                 <div className="flex justify-between items-start mb-1"><div className={`p-1.5 rounded-lg ${selectedWalkInShiftId === (shift.id || shift.startTime) ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'}`}><Clock className="h-3 w-3" /></div><span className={`text-[7px] font-black uppercase tracking-wider ${statusColor}`}>{statusLabel}</span></div>
                                                 <h4 className="font-black text-slate-800 text-xs">{shift.label || 'Regular Shift'}</h4>
@@ -356,12 +373,23 @@ export const BookingFormView = ({
                                             </div>
                                         ))}
                                     </div>
+                                    {validWalkInShifts.length === 0 && (
+                                        <div className="text-center py-4 text-xs text-slate-400">No walk-in sessions available for today.</div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="space-y-3 animate-in fade-in duration-300">
                                     <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
                                         {bookingDates.map(day => (
-                                            <button key={day.dateStr} disabled={day.isOff} onClick={() => { setApptDate(day.dateStr); setApptTime(''); }} className={`flex-shrink-0 w-10 h-14 rounded-xl border-2 flex flex-col items-center justify-center transition-all ${apptDate === day.dateStr ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : day.isOff ? 'bg-slate-100/50 text-slate-300 border-transparent' : 'bg-white border-slate-200 hover:border-indigo-400'}`}><span className="text-[7px] font-black uppercase tracking-tighter mb-0.5">{day.dayShort}</span><span className="text-sm font-black">{day.dayNum}</span></button>
+                                            <button 
+                                                key={day.dateStr} 
+                                                disabled={day.isOff || !isDateApptAllowed(day.dateStr)} 
+                                                onClick={() => { setApptDate(day.dateStr); setApptTime(''); }} 
+                                                className={`flex-shrink-0 w-10 h-14 rounded-xl border-2 flex flex-col items-center justify-center transition-all ${apptDate === day.dateStr ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : (day.isOff || !isDateApptAllowed(day.dateStr)) ? 'bg-slate-100/50 text-slate-300 border-transparent cursor-not-allowed opacity-50' : 'bg-white border-slate-200 hover:border-indigo-400'}`}
+                                            >
+                                                <span className="text-[7px] font-black uppercase tracking-tighter mb-0.5">{day.dayShort}</span>
+                                                <span className="text-sm font-black">{day.dayNum}</span>
+                                            </button>
                                         ))}
                                     </div>
                                     {apptDate && (
@@ -376,6 +404,9 @@ export const BookingFormView = ({
                                                     </div>
                                                 </div>
                                             ))}
+                                            {Object.values(groupedTimeSlots).every(slots => slots.length === 0) && (
+                                                 <div className="text-center py-4 text-xs text-slate-400">No appointment slots available for this date.</div>
+                                            )}
                                         </div>
                                     )}
                                 </div>

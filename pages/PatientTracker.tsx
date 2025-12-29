@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { createDoctorSlug } from '../utils/slugs';
 import { calculateDistance, reverseGeocode } from '../utils/geolocation';
-import { isClinicOpen, getClinicCurrentTime, getLocalToday, formatTime12h } from '../utils/time';
+import { isClinicOpen, getClinicCurrentTime, getLocalToday, formatTime12h, hasShiftsToday } from '../utils/time';
 import { CATEGORIES, RELATIONSHIP_OPTIONS, SYMPTOM_MAP } from '../constants';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import { GuestLoginCard } from '../features/patient/components/GuestLoginCard';
@@ -41,6 +41,7 @@ import { BookingFormView } from '../features/patient/views/booking/BookingFormVi
 import { DoctorProfileModal } from '../features/patient/components/DoctorProfileModal';
 import { StarRating } from '../components/StarRating';
 import { Ticket } from '../components/icons';
+import { SessionMode } from '../types';
 
 interface PatientTrackerProps {
     clinics: Clinic[];
@@ -1049,7 +1050,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
         const currentMins = now.getHours() * 60 + now.getMinutes();
 
-        return schedule.slots.filter(s => s.active !== false).map(shift => {
+        // Filter shifts that are not Appointment only
+        return schedule.slots.filter(s => s.active !== false && (!s.mode || s.mode === SessionMode.WALK_IN || s.mode === SessionMode.HYBRID)).map(shift => {
             const [sh, sm] = shift.startTime.split(':').map(Number);
             const [eh, em] = shift.endTime.split(':').map(Number);
             const startTotal = sh * 60 + sm;
@@ -1182,6 +1184,9 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         const MIN_NOTICE_MINS = 30;
 
         selectedDayObj.schedule.slots.forEach(shiftSlot => {
+            // SKIP WALK-IN ONLY SLOTS
+            if (shiftSlot.mode === SessionMode.WALK_IN) return;
+
             const { startTime, endTime } = shiftSlot;
             const [startH, startM] = startTime.split(':').map(Number);
             const [endH, endM] = endTime.split(':').map(Number);

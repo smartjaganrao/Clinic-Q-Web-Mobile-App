@@ -1,4 +1,5 @@
-import { Doctor, Clinic } from "../types";
+
+import { Doctor, Clinic, TimeSlot, SessionMode, Patient, PatientStatus } from "../types";
 
 // Get current time in clinic's timezone
 export const getClinicCurrentTime = (timezone?: string) => {
@@ -86,7 +87,10 @@ export const getDoctorTodayShift = (doc: Doctor) => {
     if (!schedule || schedule.isOff || !schedule.slots?.length) return 'Off Today';
     return schedule.slots
         .filter(s => s.active !== false)
-        .map(s => `${formatTime12h(s.startTime)} - ${formatTime12h(s.endTime)}`)
+        .map(s => {
+            const modeLabel = s.mode === SessionMode.APPOINTMENT ? '(Appt Only)' : s.mode === SessionMode.WALK_IN ? '(Walk-in)' : '';
+            return `${formatTime12h(s.startTime)} - ${formatTime12h(s.endTime)} ${modeLabel}`;
+        })
         .join(', ');
 };
 
@@ -125,7 +129,8 @@ export const hasAvailableSlotsTomorrow = (doc: Doctor, clinic: Clinic) => {
 
     if (!schedule || schedule.isOff || !schedule.slots?.length) return false;
 
-    return schedule.slots.some(shift => shift.active !== false);
+    // Check if there are any slots that allow appointments (HYBRID or APPOINTMENT)
+    return schedule.slots.some(shift => shift.active !== false && (shift.mode === SessionMode.HYBRID || shift.mode === SessionMode.APPOINTMENT || !shift.mode));
 };
 
 export const hasShiftsToday = (doc: Doctor, clinic: Clinic) => {
@@ -138,4 +143,81 @@ export const hasShiftsToday = (doc: Doctor, clinic: Clinic) => {
     if (!schedule || schedule.isOff || !schedule.slots?.length) return false;
 
     return schedule.slots.some(shift => shift.active !== false);
+};
+
+export const getActiveSession = (doctor: Doctor, clinic: Clinic): TimeSlot | null => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const now = getClinicCurrentTime(clinic.timezone);
+    const dayName = days[now.getDay()];
+    const schedule = doctor.weeklySchedule.find(s => s.day === dayName);
+    
+    if (!schedule || schedule.isOff || !schedule.slots) return null;
+
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+
+    return schedule.slots.find(shift => {
+        if (shift.active === false) return false;
+        const [sh, sm] = shift.startTime.split(':').map(Number);
+        const [eh, em] = shift.endTime.split(':').map(Number);
+        const startTotal = sh * 60 + sm;
+        let endTotal = eh * 60 + em;
+        if (endTotal <= startTotal) endTotal += 1440;
+        return currentMins >= startTotal && currentMins < endTotal;
+    }) || null;
+};
+
+export const getQueueSorter = (mode: SessionMode) => {
+    const timeToMins = (t?: string) => {
+        if (!t) return 0;
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+    };
+
+    return (a: Patient, b: Patient) => {
+        // Priority 1: Emergency (Always Top)
+        if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
+        if (a.isEmergency && b.isEmergency) return a.timeAdded - b.timeAdded;
+
+        // Manual Override
+        if (a.queueOrder !== undefined || b.queueOrder !== undefined) {
+             const orderA = a.queueOrder ?? Number.MAX_SAFE_INTEGER;
+             const orderB = b.queueOrder ?? Number.MAX_SAFE_INTEGER;
+             if (orderA !== orderB) return orderA - orderB;
+        }
+
+        // Session Specific Sorting
+        if (mode === SessionMode.APPOINTMENT) {
+             // Sort purely by Appointment Time
+             const timeA = a.appointmentTime ? timeToMins(a.appointmentTime) : Number.MAX_SAFE_INTEGER;
+             const timeB = b.appointmentTime ? timeToMins(b.appointmentTime) : Number.MAX_SAFE_INTEGER;
+             if (timeA !== timeB) return timeA - timeB;
+        } 
+        
+        else if (mode === SessionMode.HYBRID) {
+             // Appointments take priority based on their slot time
+             // Walk-ins fill in the gaps (sorted by arrival time, but practically placed after appts if logic dictates)
+             
+             // Simplification for the "Priority" requirement:
+             // Appointments are sorted by Slot Time.
+             // Walk-ins are sorted by Arrival Time.
+             // However, an Appointment at 10:00 should come before a Walk-in at 10:00?
+             // Or should we interleave?
+             // Prompt says: "Appointments have priority"
+             
+             const isApptA = a.visitType === 'APPOINTMENT';
+             const isApptB = b.visitType === 'APPOINTMENT';
+
+             if (isApptA && isApptB) {
+                  return timeToMins(a.appointmentTime) - timeToMins(b.appointmentTime);
+             }
+             if (isApptA && !isApptB) return -1; // Appt before Walk-in
+             if (!isApptA && isApptB) return 1;  // Walk-in after Appt
+             
+             // Both Walk-ins: FIFO
+             return a.timeAdded - b.timeAdded;
+        }
+
+        // Default / WALK_IN mode: FIFO
+        return a.timeAdded - b.timeAdded;
+    };
 };

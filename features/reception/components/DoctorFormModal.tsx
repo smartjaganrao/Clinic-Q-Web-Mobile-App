@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
-import { Doctor, DaySchedule } from '../../../types';
+import { Doctor, DaySchedule, SessionMode } from '../../../types';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { Modal } from '../../../components/Modal';
-import { Plus, Trash2, Link as LinkIcon, Clock, Calendar, Zap, Lock, Languages, GraduationCap, FileText, X, Sun, CloudSun, Moon, MoonStar, Copy, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, Link as LinkIcon, Clock, Calendar, Zap, Lock, Languages, GraduationCap, FileText, X, Sun, CloudSun, Moon, MoonStar, Copy, CheckCircle2, ChevronDown } from 'lucide-react';
 
 interface DoctorFormModalProps {
   isOpen: boolean;
@@ -44,7 +45,11 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
     if (isOpen) {
         if (initialData && mode === 'EDIT') {
             const normalized = initialData.weeklySchedule.map((d: any) => {
-                if (d.slots && Array.isArray(d.slots)) return { ...d, isOff: !!d.isOff };
+                if (d.slots && Array.isArray(d.slots)) {
+                    // Ensure each slot has a mode, defaulting to HYBRID if missing
+                    const slotsWithMode = d.slots.map((s: any) => ({...s, mode: s.mode || SessionMode.HYBRID}));
+                    return { ...d, slots: slotsWithMode, isOff: !!d.isOff };
+                }
                 return { day: d.day, slots: [], isOff: !!d.isOff };
             });
             setForm({
@@ -68,7 +73,7 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
         } else {
             const defaultSchedule = DAYS_OF_WEEK.map(d => ({
                 day: d, 
-                slots: [{ startTime: '09:00', endTime: '17:00', active: true, label: 'Regular' }], 
+                slots: [{ startTime: '09:00', endTime: '17:00', active: true, label: 'Regular', mode: SessionMode.HYBRID }], 
                 isOff: false
             }));
             setForm({ 
@@ -133,7 +138,7 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
       const newSchedule = [...form.schedule]; 
       const cur = newSchedule[dayIndex]; 
       const isOff = !cur.isOff; 
-      newSchedule[dayIndex] = { ...cur, isOff, slots: isOff ? [] : (cur.slots?.length ? cur.slots : [{ startTime: '09:00', endTime: '17:00', active: true, label: 'Regular' }]) }; 
+      newSchedule[dayIndex] = { ...cur, isOff, slots: isOff ? [] : (cur.slots?.length ? cur.slots : [{ startTime: '09:00', endTime: '17:00', active: true, label: 'Regular', mode: SessionMode.HYBRID }]) }; 
       setForm({ ...form, schedule: newSchedule }); 
   };
   
@@ -145,14 +150,14 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
       let defaultStart = last ? last.endTime : '09:00'; 
       const [hh, mm] = defaultStart.split(':').map(Number);
       const defaultEnd = `${((hh + 4) % 24).toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}`;
-      newSchedule[dayIndex] = { ...cur, slots: [...existing, { startTime: defaultStart, endTime: defaultEnd, active: true, label: 'Shift' }], isOff: false }; 
+      newSchedule[dayIndex] = { ...cur, slots: [...existing, { startTime: defaultStart, endTime: defaultEnd, active: true, label: 'Shift', mode: SessionMode.HYBRID }], isOff: false }; 
       setForm({ ...form, schedule: newSchedule }); 
   };
 
   const applyPreset = (dayIndex: number, preset: typeof PRESETS[0]) => {
-      const newSchedule = [...form.schedule];
-      const cur = newSchedule[dayIndex];
-      const slots = [...(cur.slots || [])];
+      const newSchedule = [...form.schedule]; 
+      const cur = newSchedule[dayIndex]; 
+      const slots = [...(cur.slots || [])]; 
       
       // Prevent duplicates of the same shift label for the same day
       if (slots.some(s => s.label === preset.label)) {
@@ -163,7 +168,7 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
       newSchedule[dayIndex] = { 
           ...cur, 
           isOff: false, 
-          slots: [...slots, { startTime: preset.start, endTime: preset.end, active: true, label: preset.label }]
+          slots: [...slots, { startTime: preset.start, endTime: preset.end, active: true, label: preset.label, mode: SessionMode.HYBRID }]
       };
       setForm({ ...form, schedule: newSchedule });
   };
@@ -346,23 +351,41 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
                                 <div className="space-y-2">
                                     {daySchedule.slots && daySchedule.slots.length > 0 ? (
                                         daySchedule.slots.map((slot, sIdx) => (
-                                            <div key={sIdx} className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                                            <div key={sIdx} className="flex flex-col sm:flex-row sm:items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200">
                                                 <div className="flex items-center gap-1.5">
                                                     <Clock className="h-3.5 w-3.5 text-slate-400" />
                                                     <input type="time" className="text-xs font-bold bg-white border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-primary-500" value={slot.startTime} onChange={e => updateSlot(idx, sIdx, 'startTime', e.target.value)} />
                                                     <span className="text-slate-400 font-bold">to</span>
                                                     <input type="time" className="text-xs font-bold bg-white border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-primary-500" value={slot.endTime} onChange={e => updateSlot(idx, sIdx, 'endTime', e.target.value)} />
                                                 </div>
-                                                <div className="flex-1">
-                                                    <input className="w-full bg-white border border-slate-200 rounded px-3 py-1 text-xs font-medium placeholder:text-slate-300" placeholder="Shift Name (e.g. Regular)" value={slot.label || ''} onChange={e => updateSlot(idx, sIdx, 'label', e.target.value)} />
+                                                <div className="flex items-center gap-2 flex-1">
+                                                    <input className="flex-1 bg-white border border-slate-200 rounded px-3 py-1 text-xs font-medium placeholder:text-slate-300" placeholder="Shift Name" value={slot.label || ''} onChange={e => updateSlot(idx, sIdx, 'label', e.target.value)} />
+                                                    {/* Session Mode Selector */}
+                                                    <div className="relative">
+                                                         <select 
+                                                            value={slot.mode || SessionMode.HYBRID} 
+                                                            onChange={e => updateSlot(idx, sIdx, 'mode', e.target.value)}
+                                                            className={`
+                                                                appearance-none pl-2 pr-6 py-1 rounded-lg text-[10px] font-black uppercase border outline-none cursor-pointer
+                                                                ${slot.mode === SessionMode.APPOINTMENT ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 
+                                                                  slot.mode === SessionMode.WALK_IN ? 'bg-green-50 text-green-700 border-green-200' : 
+                                                                  'bg-blue-50 text-blue-700 border-blue-200'}
+                                                            `}
+                                                         >
+                                                             <option value={SessionMode.HYBRID}>Hybrid</option>
+                                                             <option value={SessionMode.WALK_IN}>Walk-In</option>
+                                                             <option value={SessionMode.APPOINTMENT}>Appt Only</option>
+                                                         </select>
+                                                         <ChevronDown className="absolute right-1 top-1/2 -translate-y-1/2 h-3 w-3 pointer-events-none opacity-50" />
+                                                    </div>
+                                                    <button type="button" onClick={() => {
+                                                        const slots = [...daySchedule.slots];
+                                                        slots.splice(sIdx, 1);
+                                                        const newSched = [...form.schedule];
+                                                        newSched[idx] = { ...daySchedule, slots, isOff: slots.length === 0 };
+                                                        setForm({...form, schedule: newSched});
+                                                    }} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"><Trash2 className="h-4 w-4" /></button>
                                                 </div>
-                                                <button type="button" onClick={() => {
-                                                    const slots = [...daySchedule.slots];
-                                                    slots.splice(sIdx, 1);
-                                                    const newSched = [...form.schedule];
-                                                    newSched[idx] = { ...daySchedule, slots, isOff: slots.length === 0 };
-                                                    setForm({...form, schedule: newSched});
-                                                }} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"><Trash2 className="h-4 w-4" /></button>
                                             </div>
                                         ))
                                     ) : (
