@@ -70,6 +70,14 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const searchBarContainerRef = useRef<HTMLDivElement>(null);
 
+    const quickSearches = [
+        { term: 'Fever', emoji: '🤒' },
+        { term: 'Cold & Cough', emoji: '🤧' },
+        { term: 'Tooth Pain', emoji: '🦷' },
+        { term: 'Child Doctor', emoji: '👶' },
+        { term: 'Heart Specialist', emoji: '❤️' }
+    ];
+
     // Auto-collapse sidebar on smaller screens
     useEffect(() => {
         const handleResize = () => {
@@ -199,6 +207,22 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     const [memberToDeleteIndex, setMemberToDeleteIndex] = useState<number | null>(null);
     const [isCustomRelation, setIsCustomRelation] = useState(false);
 
+    const isSymptomSearch = useMemo(() => {
+        if (!searchQuery.trim()) return false;
+        const q = searchQuery.toLowerCase();
+        const searchWords = q.split(/\s+/);
+        return Object.keys(SYMPTOM_MAP).some(key =>
+            searchWords.some(word => key.toLowerCase().includes(word))
+        );
+    }, [searchQuery]);
+
+    // Auto-populate symptoms field when searching for symptoms
+    useEffect(() => {
+        if (isSymptomSearch && searchQuery.trim()) {
+            setSymptoms(searchQuery.trim());
+        }
+    }, [isSymptomSearch, searchQuery]);
+
     const [symptoms, setSymptoms] = useState('');
     const [visitType, setVisitType] = useState<'WALK_IN' | 'APPOINTMENT'>('WALK_IN');
     const [apptDate, setApptDate] = useState('');
@@ -213,7 +237,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     const clinicCardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const [highlightedClinicId, setHighlightedClinicId] = useState<string | null>(null);
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-    const [pinnedAddress, setPinnedAddress] = useState<string | null>(null);
+    const [pinnedAddress, setPinnedAddress] = useState<string | null>('Locate Me');
     const [isLocating, setIsLocating] = useState(false);
     const [isPickingLocation, setIsPickingLocation] = useState(false);
 
@@ -263,12 +287,31 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         if (!searchQuery.trim() || searchQuery.length < 2) return null;
         const q = searchQuery.toLowerCase();
 
-        const matchedClinics = clinics.filter(c => c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q)).slice(0, 4);
+        // Check for symptom matches - check if any word from search query appears in symptom keys
+        const searchWords = q.toLowerCase().split(/\s+/);
+        const matchedSpecialties = Object.keys(SYMPTOM_MAP)
+            .filter(key => searchWords.some(word => key.toLowerCase().includes(word)))
+            .map(key => SYMPTOM_MAP[key]);
+
+        const matchedClinics = clinics.filter(c =>
+            c.name.toLowerCase().includes(q) ||
+            c.city.toLowerCase().includes(q) ||
+            c.doctors.some(d =>
+                d.specialty.toLowerCase().includes(q) ||
+                d.name.toLowerCase().includes(q) ||
+                (matchedSpecialties.length > 0 && matchedSpecialties.includes(d.specialty))
+            )
+        ).slice(0, 4);
+
         const matchedDoctors: { clinic: Clinic, doctor: Doctor }[] = [];
 
         clinics.forEach(c => {
             c.doctors.forEach(d => {
-                if (d.name.toLowerCase().includes(q) || d.specialty.toLowerCase().includes(q)) {
+                const specialtyFromSymptomMatch = matchedSpecialties.length > 0 && matchedSpecialties.includes(d.specialty);
+                const nameMatch = d.name.toLowerCase().includes(q);
+                const specialtyNameMatch = d.specialty.toLowerCase().includes(q);
+
+                if (specialtyFromSymptomMatch || nameMatch || specialtyNameMatch) {
                     if (matchedDoctors.length < 5) matchedDoctors.push({ clinic: c, doctor: d });
                 }
             });
@@ -279,12 +322,33 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
     const handleSuggestionClick = (type: 'CLINIC' | 'DOCTOR', item: any) => {
         setShowSuggestions(false);
+        const wasSymptomSearch = isSymptomSearch;
         setSearchQuery('');
+        // Clear symptoms only if this wasn't a symptom search
+        if (!wasSymptomSearch) {
+            setSymptoms('');
+        }
         if (type === 'CLINIC') {
             navigateToView('CLINIC_DETAILS', item);
         } else {
             navigateToView(null, item.clinic, item.doctor);
         }
+    };
+
+    const handleQuickSearch = (term: string) => {
+        // For terms with symptom mappings, use symptom search
+        if (term === 'Fever' || term === 'Cold & Cough' || term === 'Tooth Pain' || term === 'Child Doctor') {
+            setSearchQuery(term);
+            setSelectedCategory('ALL'); // Don't filter by category for symptom searches
+        } else if (term === 'Heart Specialist') {
+            // For terms without symptom mappings, use specialty search
+            setSearchQuery('Cardiologist');
+            setSelectedCategory('ALL');
+        }
+
+        setSearchMode('DOCTOR');
+        setShowSuggestions(true); // Show suggestions dropdown
+        setSelectedSpecialty('All Specialties'); // Reset specialty to avoid conflicts
     };
 
     const travelEstimate = useMemo(() => {
@@ -409,10 +473,19 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         // Filter by Search Query (if applicable to doctor name or specialty)
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            relevant = relevant.filter(d =>
-                d.name.toLowerCase().includes(q) ||
-                d.specialty.toLowerCase().includes(q)
-            );
+    
+            // New logic: Check for symptom mapping - check if any word from search query appears in symptom keys
+            const searchWords = q.toLowerCase().split(/\s+/);
+            const matchedSpecialties = Object.keys(SYMPTOM_MAP)
+                .filter(key => searchWords.some(word => key.toLowerCase().includes(word)))
+                .map(key => SYMPTOM_MAP[key]);
+    
+            relevant = relevant.filter(d => {
+                const specialtyFromSymptomMatch = matchedSpecialties.length > 0 && matchedSpecialties.includes(d.specialty);
+                const nameMatch = d.name.toLowerCase().includes(q);
+                const specialtyNameMatch = d.specialty.toLowerCase().includes(q);
+                return specialtyFromSymptomMatch || nameMatch || specialtyNameMatch;
+            });
         }
 
         // Filter by Specialty
@@ -422,14 +495,17 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             const cat = selectedCategory.toLowerCase();
             relevant = relevant.filter(d => {
                 const spec = d.specialty.toLowerCase();
-                if (cat === 'dental') return spec.includes('dent');
+                if (cat === 'general') return spec.includes('physician');
                 if (cat === 'pediatric') return spec.includes('pedia');
-                if (cat === 'gynecology') return spec.includes('gyne') || spec.includes('women');
-                if (cat === 'orthopedic') return spec.includes('ortho') || spec.includes('bone');
-                if (cat === 'dermatology') return spec.includes('derma') || spec.includes('skin');
-                if (cat === 'ophthalmology') return spec.includes('ophthalm') || spec.includes('eye');
-                if (cat === 'ent') return spec.includes('ent') || spec.includes('ear');
-                return true;
+                if (cat === 'dental') return spec.includes('dent');
+                if (cat === 'ophthalmology') return spec.includes('ophthalm');
+                if (cat === 'orthopedic') return spec.includes('ortho');
+                if (cat === 'gynecology') return spec.includes('gyne');
+                if (cat === 'cardiology') return spec.includes('cardio');
+                if (cat === 'dermatology') return spec.includes('derma');
+                if (cat === 'ent') return spec.includes('ent');
+                if (cat === 'surgery') return spec.includes('surgeon');
+                return false;
             });
         }
 
@@ -452,11 +528,22 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         // 1. Clinic-Level Text Search (City or Name)
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
+            
+            // Check for symptom matches - check if any word from search query appears in symptom keys
+            const searchWords = q.toLowerCase().split(/\s+/);
+            const matchedSpecialties = Object.keys(SYMPTOM_MAP)
+                .filter(key => searchWords.some(word => key.toLowerCase().includes(word)))
+                .map(key => SYMPTOM_MAP[key]);
+
             // Match if clinic name, city, or any of its doctors match
             filtered = filtered.filter(c =>
                 c.name.toLowerCase().includes(q) ||
                 c.city.toLowerCase().includes(q) ||
-                c.doctors.some(d => d.specialty.toLowerCase().includes(q) || d.name.toLowerCase().includes(q))
+                c.doctors.some(d => 
+                    d.specialty.toLowerCase().includes(q) || 
+                    d.name.toLowerCase().includes(q) ||
+                    (matchedSpecialties.length > 0 && matchedSpecialties.includes(d.specialty))
+                )
             );
         }
 
@@ -549,12 +636,17 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             const q = searchQuery.toLowerCase();
 
             if (q) {
+                const matchedSpecialties = Object.keys(SYMPTOM_MAP)
+                    .filter(key => key.toLowerCase().includes(q))
+                    .map(key => SYMPTOM_MAP[key]);
+
+                const specialtyFromSymptomMatch = matchedSpecialties.length > 0 && matchedSpecialties.includes(doc.specialty);
                 const matchesName = doc.name.toLowerCase().includes(q);
                 const matchesSpecialty = doc.specialty.toLowerCase().includes(q);
                 const matchesClinic = clinic.name.toLowerCase().includes(q);
                 const matchesCity = clinic.city.toLowerCase().includes(q);
 
-                if (!matchesName && !matchesSpecialty && !matchesClinic && !matchesCity) return false;
+                if (!specialtyFromSymptomMatch && !matchesName && !matchesSpecialty && !matchesClinic && !matchesCity) return false;
             }
 
             if (selectedCity !== 'All Cities' && clinic.city !== selectedCity) return false;
@@ -1342,6 +1434,21 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     <span className="truncate max-w-[120px]">{selectedCity}</span>
                                     <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                                 </div>
+
+                                <button
+                                    onClick={handleLocateMe}
+                                    className={`px-3 py-2 rounded-xl border flex items-center gap-1.5 transition-all text-xs font-bold uppercase tracking-widest ${pinnedAddress ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-slate-200 text-slate-700 hover:border-primary-400'}`}
+                                    title="Fetch Current Location"
+                                >
+                                    {isLocating ? (
+                                        <span className="animate-spin h-3 w-3 border border-primary-500 border-t-transparent rounded-full"></span>
+                                    ) : (
+                                        <LocateFixed className="h-3.5 w-3.5 shrink-0" />
+                                    )}
+                                    <span className="truncate max-w-[100px] text-slate-800 font-medium">
+                                        {pinnedAddress || 'Locate Me'}
+                                    </span>
+                                </button>
                             </div>
 
                             <div className="flex items-center gap-2">
@@ -1369,7 +1476,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     <input
                                         type="text"
                                         className="w-full pl-10 pr-4 h-10 md:h-12 rounded-xl md:rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary-500/10 focus:border-primary-400 outline-none transition-all font-bold text-sm"
-                                        placeholder="Problem (fever, cough) or doctor"
+                                        placeholder="Search by symptoms, doctor, or clinic"
                                         value={searchQuery}
                                         onFocus={() => setShowSuggestions(true)}
                                         onChange={(e) => {
@@ -1379,10 +1486,20 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     />
                                     {searchQuery && (
                                         <button
-                                            onClick={() => { setSearchQuery(''); setShowSuggestions(false); }}
-                                            className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-slate-300 hover:text-slate-500"
+                                            onClick={() => {
+                                                setSearchQuery('');
+                                                setShowSuggestions(false);
+                                                setSelectedCategory('ALL');
+                                                setSelectedCity('All Cities');
+                                                setSelectedSpecialty('All Specialties');
+                                                setShowOpenOnly(false);
+                                                setSelectedDoctorGender('ALL');
+                                                setSelectedMinExperience(0);
+                                                setSortBy('NEAR');
+                                            }}
+                                            className="absolute right-3.5 top-1/2 -translate-y-1/2 p-2 bg-red-100 hover:bg-red-200 text-red-600 hover:text-red-800 rounded-lg transition-all shadow-sm"
                                         >
-                                            <X className="h-3 w-3" />
+                                            <X className="h-4 w-4" />
                                         </button>
                                     )}
                                 </div>
@@ -1417,7 +1534,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                             </div>
                                         )}
                                         {globalSuggestions.clinics.length === 0 && globalSuggestions.doctors.length === 0 && (
-                                            <div className="p-8 text-center text-slate-400"><Search className="h-8 w-8 mx-auto mb-2 opacity-20" /><p className="text-sm font-bold">No exact matches found</p><p className="text-xs">Try searching for symptoms like 'fever'</p></div>
+                                            <div className="p-8 text-center text-slate-400"><Search className="h-8 w-8 mx-auto mb-2 opacity-20" /><p className="text-sm font-bold">No matches found</p><p className="text-xs">Try searching for symptoms, doctor names, or clinic names</p></div>
                                         )}
                                     </div>
                                 )}
@@ -1462,7 +1579,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                         <LocateFixed className="h-4 w-4 shrink-0 transition-transform group-hover:scale-110" />
                                     )}
                                     <span className="text-[10px] font-black uppercase tracking-widest truncate max-w-[100px]">
-                                        {pinnedAddress || 'Locate'}
+                                        {pinnedAddress || 'Locate Me'}
                                     </span>
                                 </button>
 
@@ -1477,6 +1594,23 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 )}
                             </div>
                         </div>
+
+                        {/* Quick Suggestions */}
+                        {isGuest && (
+                            <div className="flex items-center gap-2 pt-2 overflow-x-auto">
+                                <span className="text-sm font-bold text-slate-500 shrink-0">Popular:</span>
+                                {quickSearches.map(search => (
+                                    <button
+                                        key={search.term}
+                                        onClick={() => handleQuickSearch(search.term)}
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-bold text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-all shrink-0"
+                                    >
+                                        <span>{search.emoji}</span>
+                                        <span>{search.term}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </header>
 

@@ -39,6 +39,7 @@ interface FilterProps {
     setSelectedCategory: (category: string) => void;
     CATEGORIES: { id: string; label: string; icon: React.ElementType }[];
     bookingView: 'LIST' | 'CLINIC_DETAILS' | 'DOCTOR_PROFILE' | 'FORM';
+    pinnedAddress: string | null;
 }
 
 export const Filter: React.FC<FilterProps> = ({
@@ -61,7 +62,8 @@ export const Filter: React.FC<FilterProps> = ({
     selectedCategory,
     setSelectedCategory,
     CATEGORIES,
-    bookingView
+    bookingView,
+    pinnedAddress
 }) => {
     return (
         <div className="px-4 md:px-8 py-0 shrink-0">
@@ -123,12 +125,14 @@ export const Filter: React.FC<FilterProps> = ({
                             </button>
                         )}
 
-                        <button 
-                            onClick={() => setShowMap(!showMap)} 
+                        <button
+                            onClick={() => setShowMap(!showMap)}
                             className={`h-11 px-6 flex items-center gap-2.5 rounded-2xl border-2 transition-all shrink-0 ml-auto shadow-md ${showMap ? 'bg-primary-600 border-primary-600 text-white' : 'bg-white border-slate-100 text-slate-500 hover:border-primary-400'}`}
                         >
                             {showMap ? <ListIcon className="h-4 w-4" /> : <MapIcon className="h-4 w-4" />}
-                            <span className="text-[10px] font-black uppercase tracking-widest">{showMap ? 'List View' : 'Map View'}</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest truncate max-w-[120px]">
+                                {showMap ? 'List View' : (pinnedAddress || 'Map View')}
+                            </span>
                         </button>
                     </div>
 
@@ -198,12 +202,12 @@ export const Filter: React.FC<FilterProps> = ({
             {/* Desktop-only Specialization Category row */}
             {bookingView === 'LIST' && (
                 <div className="hidden lg:block mt-3 pb-2">
-                    <div className="flex gap-2 overflow-x-auto no-scrollbar pt-1 pb-1">
+                    <div className="flex gap-1 flex-wrap pt-1 pb-1">
                         {CATEGORIES.map(cat => (
                             <button
                                 key={cat.id}
                                 onClick={() => setSelectedCategory(cat.id)}
-                                className={`flex items-center gap-2 px-5 h-9 rounded-full border-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategory === cat.id ? 'bg-primary-600 text-white border-primary-600 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
+                                className={`flex items-center gap-1.5 px-3 h-9 rounded-full border-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategory === cat.id ? 'bg-primary-600 text-white border-primary-600 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
                             >
                                 <cat.icon className={`h-3.5 w-3.5 ${selectedCategory === cat.id ? 'text-white' : 'text-primary-500'}`} /> {cat.label.replace(' Specializations', '')}
                             </button>
