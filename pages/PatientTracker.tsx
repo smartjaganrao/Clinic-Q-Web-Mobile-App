@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { createDoctorSlug } from '../utils/slugs';
 import { calculateDistance, reverseGeocode } from '../utils/geolocation';
-import { isClinicOpen, getClinicCurrentTime, getLocalToday, formatTime12h, hasShiftsToday } from '../utils/time';
+import { isClinicOpen, getClinicCurrentTime, getLocalToday, formatTime12h, getDoctorTodayShifts } from '../utils/time';
 import { CATEGORIES, RELATIONSHIP_OPTIONS, SYMPTOM_MAP } from '../constants';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import { GuestLoginCard } from '../features/patient/components/GuestLoginCard';

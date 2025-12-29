@@ -1,4 +1,3 @@
-
 import { Doctor, Clinic, TimeSlot, SessionMode, Patient, PatientStatus } from "../types";
 
 // Get current time in clinic's timezone
@@ -99,6 +98,51 @@ export const getDoctorTodayShift = (doc: Doctor) => {
             return `${formatTime12h(s.startTime)} - ${formatTime12h(s.endTime)} ${modeLabel}`;
         })
         .join(', ');
+};
+
+export const getDoctorTodayShifts = (doc: Doctor, clinic: Clinic) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const now = getClinicCurrentTime(clinic?.timezone);
+    const dayName = days[now.getDay()];
+    const schedule = doc.weeklySchedule.find(s => s.day === dayName);
+
+    if (!schedule || schedule.isOff || !schedule.slots?.length) {
+        return { todayShift: 'Off Today', activeShift: null, futureShift: null };
+    }
+
+    const todayShiftString = schedule.slots
+        .filter(s => s.active !== false)
+        .map(s => {
+            const modeLabel = s.mode === SessionMode.APPOINTMENT ? '(Appt Only)' : s.mode === SessionMode.WALK_IN ? '(Walk-in)' : '';
+            return `${formatTime12h(s.startTime)} - ${formatTime12h(s.endTime)} ${modeLabel}`;
+        })
+        .join(', ');
+
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    let activeShift: TimeSlot | null = null;
+    let futureShift: TimeSlot | null = null;
+
+    const sortedSlots = schedule.slots
+        .filter(s => s.active !== false && s.mode !== SessionMode.APPOINTMENT)
+        .sort((a, b) => (parseTimeMins(a.startTime) || 0) - (parseTimeMins(b.startTime) || 0));
+
+    for (const shift of sortedSlots) {
+        const startMins = parseTimeMins(shift.startTime);
+        const endMins = parseTimeMins(shift.endTime);
+        if (startMins === null || endMins === null) continue;
+        
+        let endTotal = endMins;
+        if (endTotal <= startMins) endTotal += 1440; // Overnight
+
+        if (currentMins >= startMins && currentMins < endTotal) {
+            activeShift = shift;
+            break; // Found active shift
+        } else if (currentMins < startMins && !futureShift) {
+            futureShift = shift;
+        }
+    }
+
+    return { todayShift: todayShiftString || 'Off Today', activeShift, futureShift };
 };
 
 export const isDoctorShiftActive = (doc: Doctor, clinic: Clinic) => {

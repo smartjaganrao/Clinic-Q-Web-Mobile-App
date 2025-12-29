@@ -21,7 +21,7 @@ interface ClinicCardProps {
     onQueue: () => void;
 }
 
-const ActionButton = ({ label, subLabel, icon: Icon, variant, onClick, className = '', tooltip }: any) => {
+const ActionButton = ({ label, subLabel, icon: Icon, variant, onClick, className = '', tooltip, disabled }: any) => {
     // If tooltip is present, the wrapper takes flex-1, and button takes w-full.
     // If no tooltip, button takes flex-1 directly (via base class if not overridden).
     const base = "flex flex-col items-center justify-center py-2.5 px-2 rounded-2xl border transition-all active:scale-95 shadow-sm";
@@ -32,10 +32,10 @@ const ActionButton = ({ label, subLabel, icon: Icon, variant, onClick, className
         orange: "bg-orange-500 text-white border-orange-600 hover:bg-orange-600 shadow-orange-100"
     };
 
-    const buttonClass = `${base} ${variants[variant] || variants.outline} ${className} ${!tooltip ? 'flex-1' : 'w-full'}`;
+    const buttonClass = `${base} ${variants[variant] || variants.outline} ${className} ${!tooltip ? 'flex-1' : 'w-full'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`;
 
     const button = (
-        <button onClick={(e) => { e.stopPropagation(); onClick(); }} className={buttonClass}>
+        <button onClick={(e) => { if (disabled) { e.stopPropagation(); return; } e.stopPropagation(); onClick(); }} className={buttonClass} disabled={disabled}>
             <div className={`flex items-center gap-1.5 ${subLabel ? 'mb-0.5' : ''}`}>
                 <Icon className="h-4 w-4" />
                 <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
@@ -46,7 +46,7 @@ const ActionButton = ({ label, subLabel, icon: Icon, variant, onClick, className
 
     if (tooltip) {
         return (
-            <Tooltip text={tooltip} className="flex-1">
+            <Tooltip text={disabled ? "No doctors available for live token" : tooltip} className="flex-1">
                 {button}
             </Tooltip>
         );
@@ -61,6 +61,7 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
     const isDirectWalkInOnly = clinic.operationMode === ClinicOperationMode.DIRECT_WALK_IN;
     const canQueueOnline = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
     const canBook = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
+    const isQueueDisabled = !relevantDoctors || relevantDoctors.length === 0 || relevantDoctors.every(doc => !doc.isAvailable);
 
     return (
         <div ref={cardRef} className={`bg-white rounded-[1.5rem] border p-0 shadow-sm hover:shadow-xl transition-all duration-500 flex flex-col group relative overflow-visible mb-2 sm:mb-4 ${isHighlighted ? 'border-primary-500 ring-4 ring-primary-500/10 scale-[1.02] z-20' : 'border-slate-200'}`} onClick={onSelect}>
@@ -174,7 +175,7 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
             <div className="bg-slate-50 p-3 flex flex-col sm:flex-row gap-2 mt-auto border-t border-slate-100 rounded-b-[1.5rem]">
                 {canQueueOnline ? (
                     <>
-                        <ActionButton label="Get Token" subLabel="Join live walk-in queue" icon={Zap} variant="accent" onClick={onQueue} tooltip="Join the live queue remotely" />
+                        <ActionButton label="Get Token" subLabel="Join live walk-in queue" icon={Zap} variant="accent" onClick={onQueue} tooltip="Join the live queue remotely" disabled={isQueueDisabled} />
                         {canBook && <ActionButton label="Book Appointment" icon={Calendar} variant="primary" onClick={onBook} tooltip="Schedule a confirmed slot for later" />}
                     </>
                 ) : isDirectWalkInOnly ? (

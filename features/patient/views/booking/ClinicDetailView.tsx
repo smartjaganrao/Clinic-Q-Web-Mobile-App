@@ -16,7 +16,7 @@ import {
     Calendar
 } from 'lucide-react';
 import { ClinicOperationMode, DoctorStatus } from '../../../../types';
-import { getDoctorTodayShift, hasAvailableSlotsTomorrow, hasShiftsToday } from '../../../../utils/time';
+import { getDoctorTodayShifts, hasAvailableSlotsTomorrow, hasShiftsToday } from '../../../../utils/time';
 import { Tooltip } from '../../../../components/Tooltip';
 
 export const ClinicDetailView = ({
@@ -113,12 +113,20 @@ export const ClinicDetailView = ({
                             {selectedClinic.doctors.map(doc => {
                                 const canQueueOnline = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(selectedClinic.operationMode);
                                 const canBookAppointments = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(selectedClinic.operationMode);
-                                const todayShift = getDoctorTodayShift(doc);
+                                const { todayShift, activeShift, futureShift } = getDoctorTodayShifts(doc, selectedClinic);
                                 const isAvailable = doc.status === DoctorStatus.AVAILABLE;
                                 const hasSlotsTomorrow = hasAvailableSlotsTomorrow(doc, selectedClinic);
-                                const hasDoctorShiftsToday = hasShiftsToday(doc, selectedClinic);
-                                const canGetToken = canQueueOnline && hasDoctorShiftsToday;
+                                const hasDoctorShiftsToday = !!todayShift && todayShift !== 'Off Today';
+                                const canGetLiveToken = canQueueOnline && hasDoctorShiftsToday && activeShift;
+                                const canBookAdvanceToken = selectedClinic.enableAdvanceBooking && canQueueOnline && hasDoctorShiftsToday && !activeShift && futureShift;
+                                const canGetToken = canGetLiveToken || canBookAdvanceToken;
                                 const canBookForTomorrow = canBookAppointments && hasSlotsTomorrow;
+
+                                const getTokenButtonText = () => {
+                                    if (canGetLiveToken) return 'Get Live Token';
+                                    if (canBookAdvanceToken) return 'Book Advance Token';
+                                    return 'No Live Queue';
+                                };
 
                                 return (
                                     <div
@@ -201,18 +209,21 @@ export const ClinicDetailView = ({
                                                     </button>
                                                 </Tooltip>
                                             )}
-                                            <Tooltip text={canGetToken ? "Join the live walk-in queue remotely" : "Live queue not available"} className="flex-1">
+                                            <Tooltip text={canGetToken ? (canGetLiveToken ? "Join the live walk-in queue remotely" : "Book a token for a later shift today") : "Live queue not available"} className="flex-1">
                                                 <button
                                                     disabled={!canGetToken}
                                                     onClick={(e) => { e.stopPropagation(); navigateToView(null, selectedClinic, doc, 'WALK_IN'); }}
-                                                    className={`w-full flex flex-col items-center justify-center py-2.5 px-2 rounded-xl border transition-all active:scale-95 shadow-sm ${canGetToken
-                                                            ? 'bg-teal-600 text-white border-teal-600 hover:bg-teal-700 shadow-teal-100'
+                                                    className={`w-full flex flex-col items-center justify-center py-2.5 px-2 rounded-xl border transition-all active:scale-95 shadow-sm ${
+                                                        canGetToken
+                                                            ? canGetLiveToken
+                                                                ? 'bg-teal-600 text-white border-teal-600 hover:bg-teal-700 shadow-teal-100'
+                                                                : 'bg-sky-600 text-white border-sky-600 hover:bg-sky-700 shadow-sky-100'
                                                             : 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed'
                                                         }`}
                                                 >
                                                     <div className="flex items-center gap-1.5 mb-0.5">
                                                         <Zap className="h-3.5 w-3.5" />
-                                                        <span className="text-[10px] font-black uppercase tracking-widest">{canGetToken ? 'Get Token' : 'No Live Queue'}</span>
+                                                        <span className="text-[10px] font-black uppercase tracking-widest">{getTokenButtonText()}</span>
                                                     </div>
                                                 </button>
                                             </Tooltip>

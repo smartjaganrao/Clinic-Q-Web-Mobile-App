@@ -220,6 +220,7 @@ export interface Clinic {
   plan: PlanType;
   type?: ClinicType; 
   operationMode: ClinicOperationMode; // New: Clinic Operational Mode
+  enableAdvanceBooking: boolean; // New: Control for advance booking
   appointmentConfig?: AppointmentConfig; // New: Appointment-specific settings
   doctors: Doctor[];
   patients: Patient[];

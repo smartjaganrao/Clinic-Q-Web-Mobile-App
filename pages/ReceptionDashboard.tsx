@@ -748,6 +748,19 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                                 {Object.values(ClinicOperationMode).map(mode => <option key={mode} value={mode}>{mode.replace(/_/g, ' ')}</option>)}
                                             </select>
                                         </div>
+                                        <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                                            <div>
+                                                <label htmlFor="enableAdvanceBooking" className="text-sm font-bold text-slate-800">Enable Advance Token Booking</label>
+                                                <p className="text-xs text-slate-500 mt-1">Allow patients to book a token for a future shift on the same day.</p>
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                id="enableAdvanceBooking"
+                                                checked={settingsForm.enableAdvanceBooking || false}
+                                                onChange={e => setSettingsForm({ ...settingsForm, enableAdvanceBooking: e.target.checked })}
+                                                className="h-5 w-5 rounded-md text-primary-600 focus:ring-2 focus:ring-primary-500/50 border-slate-300 shadow-sm"
+                                            />
+                                        </div>
                                     </div>
                                     <div className="space-y-6">
                                         <div className="flex justify-between items-center border-b border-slate-100 pb-3">

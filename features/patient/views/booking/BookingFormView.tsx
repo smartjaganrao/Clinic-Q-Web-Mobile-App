@@ -101,6 +101,12 @@ export const BookingFormView = ({
     );
 
     const hasWalkInToday = validWalkInShifts.length > 0;
+    
+    const isAdvanceBooking = React.useMemo(() => {
+        if (visitType !== 'WALK_IN' || !selectedWalkInShiftId) return false;
+        const selectedShift = walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
+        return selectedShift && !selectedShift.isActive;
+    }, [visitType, selectedWalkInShiftId, walkInShiftsToday]);
 
     // Check if appointment is allowed for selected date based on schedule mode
     const isDateApptAllowed = (dateStr: string) => {
@@ -278,8 +284,8 @@ export const BookingFormView = ({
                                 <div onClick={() => isClinicOnlineWalkInAllowed && isWalkInAllowed && hasWalkInToday && setVisitType('WALK_IN')} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 ${visitType === 'WALK_IN' ? 'border-primary-600 bg-primary-50 ring-1 ring-primary-500/20' : (isClinicOnlineWalkInAllowed && isWalkInAllowed && hasWalkInToday) ? 'border-slate-100 hover:border-slate-200' : 'border-slate-50 opacity-40 grayscale pointer-events-none'}`}>
                                     <div className={`p-2 rounded-xl ${visitType === 'WALK_IN' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'}`}><Zap className="h-5 w-5 fill-current" /></div>
                                     <div>
-                                        <div className="flex items-center gap-2"><span className={`font-black uppercase tracking-widest text-[11px] ${visitType === 'WALK_IN' ? 'text-primary-900' : 'text-slate-700'}`}>Live Token</span>{visitType === 'WALK_IN' && <CheckCircle2 className="h-3.5 w-3.5 text-primary-600" />}</div>
-                                        <p className="text-[9px] font-bold text-slate-500 mt-0.5">Join the live queue now.</p>
+                                        <div className="flex items-center gap-2"><span className={`font-black uppercase tracking-widest text-[11px] ${visitType === 'WALK_IN' ? 'text-primary-900' : 'text-slate-700'}`}>{isAdvanceBooking ? 'Advance Token' : 'Live Token'}</span>{visitType === 'WALK_IN' && <CheckCircle2 className="h-3.5 w-3.5 text-primary-600" />}</div>
+                                        <p className="text-[9px] font-bold text-slate-500 mt-0.5">{isAdvanceBooking ? 'Book for a future shift today.' : 'Join the live queue now.'}</p>
                                         {!hasWalkInToday && isClinicOnlineWalkInAllowed && <span className="text-[9px] text-red-500 font-bold block mt-1">No walk-in sessions now</span>}
                                     </div>
                                 </div>
@@ -446,7 +452,7 @@ export const BookingFormView = ({
                                         disabled={(visitType === 'APPOINTMENT' && (!apptDate || !apptTime)) || (visitType === 'WALK_IN' && (!selectedWalkInShiftId || !isWalkInAllowed))}
                                         onClick={handleBookToken}
                                     >
-                                        {visitType === 'APPOINTMENT' ? 'Confirm Appointment' : 'Join Live Queue'}
+                                        {visitType === 'APPOINTMENT' ? 'Confirm Appointment' : (isAdvanceBooking ? 'Book Advance Token' : 'Join Live Queue')}
                                     </button>
                                 </Tooltip>
                                 <p className="text-center text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-center gap-1.5">

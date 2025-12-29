@@ -67,12 +67,14 @@ const isDoctorShiftActive = (doc: Doctor, clinic: Clinic) => {
         const [sh, sm] = shift.startTime.split(':').map(Number);
         const [eh, em] = shift.endTime.split(':').map(Number);
         const startTotal = sh * 60 + sm;
-        let endTotal = eh * 60 + em;
-        if (endTotal <= startTotal) endTotal += 1440;
+        const endTotal = eh * 60 + em;
 
-        const isStarted = currentMins >= startTotal;
-        const isEnded = currentMins >= endTotal;
-        return isStarted && !isEnded;
+        // Handle overnight shift
+        if (endTotal < startTotal) {
+            return currentMins >= startTotal || currentMins < endTotal;
+        }
+
+        return currentMins >= startTotal && currentMins < endTotal;
     });
 };
 
@@ -108,22 +110,28 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
   // Get summary info for the doctor
   const getDoctorSummary = () => {
     const totalClinics = locations.length;
-    const availableClinics = locations.filter(({ clinic, docInstance }) => {
+    const availableClinicsForToken = locations.filter(({ clinic, docInstance }) => {
       const canQueueOnline = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
-      const canBookAppointments = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
       const isClinicOpenNow = isClinicOpen(clinic.operatingHours, clinic.timezone);
       const isDoctorShiftActiveNow = isDoctorShiftActive(docInstance, clinic);
-      const hasSlotsTomorrow = hasAvailableSlotsTomorrow(docInstance, clinic);
-      return (canQueueOnline && isClinicOpenNow && isDoctorShiftActiveNow) || (canBookAppointments && hasSlotsTomorrow);
+      return docInstance.isAvailable && canQueueOnline && isClinicOpenNow && isDoctorShiftActiveNow;
+    }).length;
+
+    const availableClinicsForBooking = locations.filter(({ clinic, docInstance }) => {
+        const canBookAppointments = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
+        const hasSlotsTomorrow = hasAvailableSlotsTomorrow(docInstance, clinic);
+        return docInstance.isAvailable && canBookAppointments && hasSlotsTomorrow;
     }).length;
 
     const minFee = Math.min(...locations.map(({ docInstance }) => docInstance.consultationFee));
     const maxFee = Math.max(...locations.map(({ docInstance }) => docInstance.consultationFee));
 
-    return { totalClinics, availableClinics, minFee, maxFee };
+    return { totalClinics, availableClinics: availableClinicsForToken, availableForBooking: availableClinicsForBooking, minFee, maxFee };
   };
 
   const summary = getDoctorSummary();
+  const isTokenAvailable = summary.availableClinics > 0;
+  const canBookAppointment = summary.availableForBooking > 0;
 
   return (
     <div className={`bg-white rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group cursor-pointer mb-2 sm:mb-4 ${onClick ? 'hover:border-primary-300' : ''}`} onClick={onClick}>
@@ -193,7 +201,7 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
             {locations.slice(0, 2).map(({ clinic, distance }) => (
               <div key={clinic.id} className="flex items-center justify-between bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <div className={`w-2 h-2 rounded-full ${isClinicOpen(clinic.operatingHours, clinic.timezone) ? 'bg-green-500' : 'bg-slate-400'}`}></div>
+                  <div className={`w-2 h-2 rounded-full ${isClinicOpen(clinic.operatingHours, clinic.timezone) && isDoctorShiftActive(locations.find(l=>l.clinic.id === clinic.id)!.docInstance, clinic) ? 'bg-green-500' : 'bg-slate-400'}`}></div>
                   <span className="text-[9px] font-bold text-slate-700 truncate">{clinic.name}</span>
                 </div>
                 {distance !== null && (
@@ -217,14 +225,18 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
             <div className="text-[10px] font-black text-slate-700 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
               ₹{summary.minFee}{summary.minFee !== summary.maxFee ? ` - ₹${summary.maxFee}` : ''}
             </div>
-            {summary.availableClinics > 0 ? (
+            {isTokenAvailable ? (
               <span className="text-[8px] font-black text-green-600 bg-green-50 px-1.5 py-0.5 rounded-md border border-green-100 flex items-center gap-1">
                   <Zap className="h-2.5 w-2.5 fill-current" /> {summary.availableClinics} Live
               </span>
-            ) : (
+            ) : canBookAppointment ? (
               <span className="text-[8px] font-black text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-md border border-orange-100">
                 Book Tomorrow
               </span>
+            ) : (
+                 <span className="text-[8px] font-black text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md border border-slate-200">
+                    Unavailable
+                 </span>
             )}
           </div>
 
@@ -245,13 +257,14 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
                  View Profile
                </button>
            </Tooltip>
-           <Tooltip text={summary.availableClinics > 0 ? "Join live queue" : "Schedule for later"} className="flex-1">
+           <Tooltip text={isTokenAvailable ? "Join live queue" : (canBookAppointment ? "Book appointment for tomorrow" : "No slots available")} className="flex-1">
                <button 
-                 className="w-full flex items-center justify-center bg-primary-600 hover:bg-primary-700 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-md shadow-primary-200 transition-all active:scale-95 gap-2"
+                 className={`w-full flex items-center justify-center bg-primary-600 hover:bg-primary-700 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-md shadow-primary-200 transition-all active:scale-95 gap-2 ${!isTokenAvailable && !canBookAppointment ? 'opacity-50 cursor-not-allowed bg-slate-400 hover:bg-slate-400' : (!isTokenAvailable ? 'bg-orange-500 hover:bg-orange-600' : '')}`}
                  onClick={(e) => { e.stopPropagation(); onClick && onClick(); }}
+                 disabled={!isTokenAvailable && !canBookAppointment}
                >
-                 {summary.availableClinics > 0 ? <Zap className="h-3 w-3 fill-current" /> : <Calendar className="h-3 w-3" />}
-                 {summary.availableClinics > 0 ? 'Get Token' : 'Book Appointment'}
+                 {isTokenAvailable ? <Zap className="h-3 w-3 fill-current" /> : <Calendar className="h-3 w-3" />}
+                 {isTokenAvailable ? 'Get Token' : (canBookAppointment ? 'Book Appointment' : 'Unavailable')}
                </button>
            </Tooltip>
       </div>
