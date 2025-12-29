@@ -778,7 +778,7 @@ export default function App() {
                 onBack={handleLogout}
                 onGetToken={handleGetToken}
                 addToast={addToast}
-                onUpdateDetails={(id, updates) => { if(currentClinicId) storage.updatePatient(currentClinicId, id, updates) }}
+                onUpdateDetails={storage.updatePatient}
                 onCancelVisit={handleCancelVisit}
                 onCheckIn={handlePatientCheckIn}
                 preSelectedClinicId={currentClinicId || undefined}

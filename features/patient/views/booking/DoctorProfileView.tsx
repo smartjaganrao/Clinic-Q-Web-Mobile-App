@@ -1,4 +1,20 @@
 
+// import React from 'react';
+// import {
+//     Star,
+//     Stethoscope,
+//     Award,
+//     Languages,
+//     GraduationCap,
+//     FileText,
+//     Clock,
+//     MapPin,
+//     Navigation,
+// } from 'lucide-react';
+// import { IndianRupeeIcon } from '../../../../components/icons';
+// import { ClinicOperationMode, DoctorStatus } from '../../../../types';
+// import { isClinicOpen, isDoctorShiftActive, hasAvailableSlotsTomorrow, getDoctorTodayShift } from '../../../../utils/time';
+
 import React from 'react';
 import {
     Star,
@@ -14,6 +30,7 @@ import {
 import { IndianRupeeIcon } from '../../../../components/icons';
 import { ClinicOperationMode, DoctorStatus } from '../../../../types';
 import { isClinicOpen, isDoctorShiftActive, hasAvailableSlotsTomorrow, getDoctorTodayShift } from '../../../../utils/time';
+import { StarRating } from '../../../../components/StarRating';
 
 export const DoctorProfileView = ({ selectedProfileDoctor, clinics, navigateToView }) => {
     return (
@@ -34,9 +51,12 @@ export const DoctorProfileView = ({ selectedProfileDoctor, clinics, navigateToVi
                 <div className="pt-16 px-2 pb-2 flex flex-col items-center md:items-start">
                     <div className="flex items-center gap-3 mb-2">
                         <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">{selectedProfileDoctor.name}</h2>
-                        <div className="bg-amber-50 text-amber-500 px-2 py-1 rounded-lg flex items-center gap-1 border border-amber-100 flex-shrink-0">
-                            <Star className="h-4 w-4 fill-current" />
-                            <span className="text-xs font-black">{selectedProfileDoctor.rating.toFixed(1)}</span>
+                        <div className="flex items-center gap-2">
+                            <div className="bg-amber-50 text-amber-500 px-2 py-1 rounded-lg flex items-center gap-1 border border-amber-100 flex-shrink-0">
+                                <Star className="h-4 w-4 fill-current" />
+                                <span className="text-xs font-black">{selectedProfileDoctor.rating.toFixed(1)}</span>
+                            </div>
+                            <span className="text-sm text-slate-500 font-medium">({selectedProfileDoctor.reviewCount || 0} reviews)</span>
                         </div>
                     </div>
                     <p className="text-primary-600 font-bold uppercase tracking-widest flex items-center gap-2 text-[15px] mb-5">
@@ -64,6 +84,25 @@ export const DoctorProfileView = ({ selectedProfileDoctor, clinics, navigateToVi
                                 <FileText className="h-4 w-4 text-primary-500" /> About Doctor
                             </h3>
                             <p className="text-slate-600 text-base leading-relaxed text-center md:text-left">{selectedProfileDoctor.bio}</p>
+                        </>
+                    )}
+                    {selectedProfileDoctor.reviews && selectedProfileDoctor.reviews.length > 0 && (
+                        <>
+                            <div className="w-full border-t border-slate-100 my-4"></div>
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-1.5">
+                                <FileText className="h-4 w-4 text-primary-500" /> Patient Reviews
+                            </h3>
+                            <div className="space-y-4">
+                                {selectedProfileDoctor.reviews.map((review, index) => (
+                                    <div key={index} className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="font-bold text-sm text-slate-800">{review.patientName || 'Anonymous'}</span>
+                                            <StarRating rating={review.rating} />
+                                        </div>
+                                        <p className="text-slate-600 text-sm">{review.comment}</p>
+                                    </div>
+                                ))}
+                            </div>
                         </>
                     )}
                 </div>

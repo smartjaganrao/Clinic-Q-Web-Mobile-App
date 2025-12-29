@@ -63,6 +63,9 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
     const canBook = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
     const isQueueDisabled = !relevantDoctors || relevantDoctors.length === 0 || relevantDoctors.every(doc => !doc.isAvailable);
 
+    const totalReviews = clinic.doctors.reduce((acc, doc) => acc + (doc.reviewCount || 0), 0);
+    const averageRating = clinic.doctors.length > 0 ? (clinic.doctors.reduce((a, b) => a + (b.rating || 0), 0) / clinic.doctors.length).toFixed(1) : 'N/A';
+
     return (
         <div ref={cardRef} className={`bg-white rounded-[1.5rem] border p-0 shadow-sm hover:shadow-xl transition-all duration-500 flex flex-col group relative overflow-visible mb-2 sm:mb-4 ${isHighlighted ? 'border-primary-500 ring-4 ring-primary-500/10 scale-[1.02] z-20' : 'border-slate-200'}`} onClick={onSelect}>
              
@@ -132,8 +135,11 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                          <div className="flex items-center gap-2">
                             <div className="flex items-center gap-1 text-amber-500 bg-amber-50 px-1 py-0.5 rounded-md border border-amber-100">
                                 <Star className="h-2.5 w-2.5 fill-current" />
-                                <span className="text-[9px] font-black">{clinic.doctors.length ? (clinic.doctors.reduce((a, b) => a + b.rating, 0) / clinic.doctors.length).toFixed(1) : 0}</span>
+                                <span className="text-[9px] font-black">{averageRating}</span>
                             </div>
+                             <span className="text-[9px] text-slate-400 font-bold">
+                                ({totalReviews} reviews)
+                            </span>
                             <span className="text-[8px] bg-slate-100 text-slate-500 font-black px-1.5 py-0.5 rounded-md uppercase tracking-tight border border-slate-200">
                                 {clinic.type?.replace('_', ' ') || 'General'}
                             </span>

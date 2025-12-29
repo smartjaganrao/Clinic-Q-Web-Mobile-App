@@ -62,7 +62,7 @@ export const HistoryVisitsView = ({ historyVisits, setFeedbackModal }) => {
                                                 ))}
                                             </div>
                                             <span className="text-[10px] font-bold text-amber-700">
-                                                You rated this visit
+                                                You rated this visit {visit.rating}/5
                                             </span>
                                         </div>
                                     ) : (

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card } from '../../../components/Card';
 import { Button } from '../../../components/Button';
@@ -14,8 +13,6 @@ export const ActiveVisitsView = ({
     getSmartQueueDetails,
     setCancelModal,
     setShowQRScanner,
-    unratedCompletedVisit,
-    setFeedbackModal,
     handleTabSwitch,
     userLocation,
     clinics
@@ -24,51 +21,12 @@ export const ActiveVisitsView = ({
     getSmartQueueDetails: (visit: any) => any,
     setCancelModal: (modal: any) => void,
     setShowQRScanner: (show: boolean) => void,
-    unratedCompletedVisit: any,
-    setFeedbackModal: (modal: any) => void,
     handleTabSwitch: (tab: string) => void,
     userLocation: { lat: number, lng: number } | null,
     clinics: any[]
 }) => {
     return (
         <div className="w-full h-full px-4 md:px-8 py-6 max-w-[1920px] mx-auto animate-in fade-in duration-500">
-
-            {/* Premium Rating Prompt */}
-            {unratedCompletedVisit && (
-                <div className="mb-10 p-1 bg-gradient-to-r from-amber-200 via-orange-200 to-amber-200 rounded-[2rem] shadow-xl shadow-amber-900/5">
-                    <div className="bg-white/95 backdrop-blur-sm rounded-[1.9rem] p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-                        <div className="flex items-center gap-5">
-                            <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center shadow-inner border border-amber-100">
-                                <ThumbsUp className="h-8 w-8 text-amber-500 animate-bounce-slow" />
-                            </div>
-                            <div className="text-center md:text-left">
-                                <h3 className="text-xl font-black text-slate-900 tracking-tight">
-                                    Consultation Complete
-                                </h3>
-                                <p className="text-sm text-slate-500 font-medium">
-                                    How was your visit with <span className="text-slate-900 font-bold">Dr. {unratedCompletedVisit.doctorName}</span>?
-                                </p>
-                            </div>
-                        </div>
-
-                        <Tooltip text="Provide feedback to help other patients">
-                            <Button
-                                onClick={() =>
-                                    setFeedbackModal({
-                                        isOpen: true,
-                                        visit: unratedCompletedVisit,
-                                        rating: 0,
-                                        text: ''
-                                    })
-                                }
-                                className="bg-slate-900 text-white shadow-2xl hover:bg-slate-800 px-10 h-14 rounded-2xl font-black uppercase tracking-widest text-xs transition-all active:scale-95"
-                            >
-                                Rate Doctor Now
-                            </Button>
-                        </Tooltip>
-                    </div>
-                </div>
-            )}
 
             {/* Active Visits Grid */}
             {activeVisits.length > 0 ? (

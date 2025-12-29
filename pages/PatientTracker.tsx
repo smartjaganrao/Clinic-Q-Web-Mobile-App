@@ -27,7 +27,7 @@ import {
 import { createDoctorSlug } from '../utils/slugs';
 import { calculateDistance, reverseGeocode } from '../utils/geolocation';
 import { isClinicOpen, getClinicCurrentTime, getLocalToday, formatTime12h, getDoctorTodayShifts } from '../utils/time';
-import { CATEGORIES, RELATIONSHIP_OPTIONS, SYMPTOM_MAP } from '../constants';
+import { CATEGORIES, RELATIONSHIP_OPTIONS, SYMPTOM_MAP, INITIAL_USER_PROFILE } from '../constants';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import { GuestLoginCard } from '../features/patient/components/GuestLoginCard';
 import { ActiveVisitsView } from '../features/patient/views/ActiveVisitsView';
@@ -52,7 +52,7 @@ interface PatientTrackerProps {
     onBack: () => void;
     onGetToken: (name: string, phone: string, doctorId: string, clinicId: string, visitType: 'WALK_IN' | 'APPOINTMENT', time?: string, date?: string, age?: string, gender?: any, symptoms?: string) => void;
     addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
-    onUpdateDetails: (id: string, updates: Partial<Patient>) => void;
+    onUpdateDetails: (clinicId: string, id: string, updates: Partial<Patient>) => void;
     onCancelVisit: (clinicId: string, patientId: string) => void;
     onCheckIn: (clinicId: string, patientId: string) => void;
     preSelectedClinicId?: string;
@@ -122,12 +122,15 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
     const selectedProfileDoctor = useMemo(() => {
         if (!matchDoctor?.params.doctorId) return undefined;
-        // Find the doctor across all clinics by masterId
-        for (const clinic of clinics) {
-            const doctor = clinic.doctors.find(d => d.masterId === matchDoctor.params.doctorId);
-            if (doctor) return doctor;
-        }
-        return undefined;
+        
+        const allInstances = clinics.flatMap(c => c.doctors.filter(d => d.masterId === matchDoctor?.params.doctorId));
+        if (allInstances.length === 0) return undefined;
+    
+        const profile = { ...allInstances[0] };
+        const allReviews = allInstances.flatMap(d => d.reviews || []);
+        profile.reviews = allReviews;
+    
+        return profile;
     }, [clinics, matchDoctor?.params.doctorId]);
 
     useEffect(() => {
@@ -311,11 +314,17 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         if (isGuest) return;
         try {
             const saved = localStorage.getItem(`clinicq_patient_${userPhone}`);
-            if (saved) setUserProfile(JSON.parse(saved));
-            else {
-                const defaultProfile = { name: userName, phone: userPhone, age: '', gender: '', familyMembers: [] };
-                setUserProfile(defaultProfile);
-                localStorage.setItem(`clinicq_patient_${userPhone}`, JSON.stringify(defaultProfile));
+            if (saved) {
+                setUserProfile(JSON.parse(saved));
+            } else {
+                if (userPhone === INITIAL_USER_PROFILE.phone) {
+                    setUserProfile(INITIAL_USER_PROFILE);
+                    localStorage.setItem(`clinicq_patient_${userPhone}`, JSON.stringify(INITIAL_USER_PROFILE));
+                } else {
+                    const defaultProfile = { name: userName, phone: userPhone, age: '', gender: '', familyMembers: [] };
+                    setUserProfile(defaultProfile);
+                    localStorage.setItem(`clinicq_patient_${userPhone}`, JSON.stringify(defaultProfile));
+                }
             }
         } catch (e) { console.error("Profile load error", e); }
     }, [userPhone, userName, isGuest]);
@@ -940,7 +949,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
     const handleSubmitFeedback = () => {
         if (feedbackModal.visit && feedbackModal.rating > 0) {
-            onUpdateDetails(feedbackModal.visit.id, {
+            onUpdateDetails(feedbackModal.visit.clinicId, feedbackModal.visit.id, {
                 rating: feedbackModal.rating,
                 feedback: feedbackModal.text
             });
@@ -1481,8 +1490,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 getSmartQueueDetails={getSmartQueueDetails}
                                 setCancelModal={setCancelModal}
                                 setShowQRScanner={setShowQRScanner}
-                                unratedCompletedVisit={unratedCompletedVisit}
-                                setFeedbackModal={setFeedbackModal}
                                 handleTabSwitch={handleTabSwitch}
                                 userLocation={userLocation}
                                 clinics={clinics}

@@ -26,6 +26,8 @@ export const ClinicDetailView = ({
     navigateToView
 }) => {
     const isClinicDirectWalkInOnly = selectedClinic?.operationMode === ClinicOperationMode.DIRECT_WALK_IN;
+    const totalReviews = selectedClinic.doctors.reduce((acc, doc) => acc + (doc.reviewCount || 0), 0);
+    const averageRating = selectedClinic.doctors.length > 0 ? (selectedClinic.doctors.reduce((a, b) => a + (b.rating || 0), 0) / selectedClinic.doctors.length).toFixed(1) : 'N/A';
 
     return (
         <div className="max-w-5xl mx-auto space-y-6">
@@ -84,6 +86,10 @@ export const ClinicDetailView = ({
                                 <span className="font-medium text-slate-700">{selectedClinic.contactPhone}</span>
                             </div>
                         )}
+                         <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
+                            <Star className="h-4 w-4 text-amber-500" /> 
+                            <span className="font-semibold text-slate-700">{averageRating} ({totalReviews} reviews)</span>
+                        </div>
                         <div className="flex items-center gap-1 bg-primary-50 text-primary-700 px-3 py-1 rounded-full font-bold border border-primary-100 uppercase tracking-tight">
                             <ShieldCheck className="h-4 w-4" /> Verified
                         </div>
@@ -142,9 +148,12 @@ export const ClinicDetailView = ({
                                                     <img src={doc.avatarUrl} className="w-16 h-16 rounded-xl object-cover bg-slate-50 border border-slate-100 shadow-sm" />
                                                     <div className={`absolute -bottom-1 -right-1 w-4 h-4 border-2 border-white rounded-full ${isAvailable ? 'bg-green-500' : doc.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-400'}`}></div>
                                                 </div>
-                                                <div className="flex items-center gap-1 text-amber-500 bg-amber-50/50 px-1.5 py-0.5 rounded-lg border border-amber-100/50">
-                                                    <Star className="h-2.5 w-2.5 fill-current" />
-                                                    <span className="text-[10px] font-black">{doc.rating.toFixed(1)}</span>
+                                                <div className="flex flex-col items-center">
+                                                    <div className="flex items-center gap-1 text-amber-500 bg-amber-50/50 px-1.5 py-0.5 rounded-lg border border-amber-100/50">
+                                                        <Star className="h-2.5 w-2.5 fill-current" />
+                                                        <span className="text-[10px] font-black">{doc.rating.toFixed(1)}</span>
+                                                    </div>
+                                                    <span className="text-[9px] text-slate-500">({doc.reviewCount || 0} reviews)</span>
                                                 </div>
                                             </div>
 

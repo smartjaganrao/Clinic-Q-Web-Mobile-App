@@ -86,7 +86,7 @@ class StorageService {
 
   // --- PUBLIC API (Mimics Firebase/DB Interface) ---
 
-  subscribe(listener: (clinics: Clinic[]) => void) {
+  subscribe = (listener: (clinics: Clinic[]) => void) => {
     this.listeners.push(listener);
     listener([...this.clinics]); // Initial data
     return () => {
@@ -94,14 +94,14 @@ class StorageService {
     };
   }
 
-  async getClinics(): Promise<Clinic[]> {
+  getClinics = async (): Promise<Clinic[]> => {
     await delay(50); // Simulate fetch
     return [...this.clinics];
   }
 
   // --- AUTHENTICATION OPERATIONS ---
 
-  async authenticatePartner(email: string, pass: string): Promise<{role: UserRole, clinicId: string, userId: string, name: string} | null> {
+  authenticatePartner = async (email: string, pass: string): Promise<{role: UserRole, clinicId: string, userId: string, name: string} | null> => {
       await delay(300);
       
       // 1. Check Super Admin
@@ -165,7 +165,7 @@ class StorageService {
 
   // --- PATIENT OPERATIONS ---
 
-  async addPatient(clinicId: string, patient: Patient) {
+  addPatient = async (clinicId: string, patient: Patient) => {
     await delay(100);
     this.clinics = this.clinics.map(c => 
       c.id === clinicId ? { ...c, patients: [...c.patients, patient] } : c
@@ -173,17 +173,53 @@ class StorageService {
     this.save();
   }
 
-  async updatePatient(clinicId: string, patientId: string, updates: Partial<Patient>) {
+  updatePatient = async (clinicId: string, patientId: string, updates: Partial<Patient>) => {
     await delay(50);
-    this.clinics = this.clinics.map(c => 
-      c.id === clinicId 
-      ? { ...c, patients: c.patients.map(p => p.id === patientId ? { ...p, ...updates } : p) }
-      : c
-    );
+    this.clinics = this.clinics.map(c => {
+      if (c.id !== clinicId) return c;
+
+      const patientIndex = c.patients.findIndex(p => p.id === patientId);
+      if (patientIndex === -1) return c;
+
+      const patient = c.patients[patientIndex];
+      const updatedPatient = { ...patient, ...updates };
+
+      let updatedDoctors = c.doctors;
+      if (updates.rating) {
+          const doctorIndex = c.doctors.findIndex(d => d.id === patient.doctorId);
+          if (doctorIndex !== -1) {
+              const doctor = c.doctors[doctorIndex];
+              const oldRating = doctor.rating || 0;
+              const oldCount = doctor.reviewCount || 0;
+              const newRating = ((oldRating * oldCount) + updates.rating) / (oldCount + 1);
+              
+              const updatedDoctor = { 
+                  ...doctor,
+                  rating: parseFloat(newRating.toFixed(1)),
+                  reviewCount: oldCount + 1
+              };
+              updatedDoctors = [
+                  ...c.doctors.slice(0, doctorIndex),
+                  updatedDoctor,
+                  ...c.doctors.slice(doctorIndex + 1)
+              ];
+          }
+      }
+
+      return {
+        ...c,
+        patients: [
+          ...c.patients.slice(0, patientIndex),
+          updatedPatient,
+          ...c.patients.slice(patientIndex + 1)
+        ],
+        doctors: updatedDoctors,
+      };
+    });
     this.save();
   }
 
-  async updatePatientStatus(clinicId: string, patientId: string, status: PatientStatus) {
+  updatePatientStatus = async (clinicId: string, patientId: string, status: PatientStatus) => {
     await delay(50);
     this.clinics = this.clinics.map(c => 
       c.id === clinicId 
@@ -199,7 +235,7 @@ class StorageService {
     this.save();
   }
 
-  async bulkUpdatePatientStatus(clinicId: string, patientIds: string[], status: PatientStatus) {
+  bulkUpdatePatientStatus = async (clinicId: string, patientIds: string[], status: PatientStatus) => {
       await delay(100);
       this.clinics = this.clinics.map(c => 
           c.id === clinicId
@@ -209,7 +245,7 @@ class StorageService {
       this.save();
   }
 
-  async reorderQueue(clinicId: string, draggedId: string, targetId: string) {
+  reorderQueue = async (clinicId: string, draggedId: string, targetId: string) => {
       await delay(50);
       const clinic = this.clinics.find(c => c.id === clinicId);
       if (!clinic) return;
@@ -239,13 +275,13 @@ class StorageService {
       this.save();
   }
 
-  async deletePatient(clinicId: string, patientId: string) {
+  deletePatient = async (clinicId: string, patientId: string) => {
     await delay(50);
     this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, patients: c.patients.filter(p => p.id !== patientId) } : c);
     this.save();
   }
 
-  async deleteMultiplePatients(clinicId: string, patientIds: string[]) {
+  deleteMultiplePatients = async (clinicId: string, patientIds: string[]) => {
       await delay(100);
       this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, patients: c.patients.filter(p => !patientIds.includes(p.id)) } : c);
       this.save();
@@ -253,25 +289,25 @@ class StorageService {
 
   // --- DOCTOR OPERATIONS ---
 
-  async addDoctor(clinicId: string, doctor: Doctor) {
+  addDoctor = async (clinicId: string, doctor: Doctor) => {
       await delay(100);
       this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, doctors: [...c.doctors, doctor] } : c);
       this.save();
   }
 
-  async updateDoctor(clinicId: string, doctorId: string, updates: Partial<Doctor>) {
+  updateDoctor = async (clinicId: string, doctorId: string, updates: Partial<Doctor>) => {
       await delay(50);
       this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, doctors: c.doctors.map(d => d.id === doctorId ? { ...d, ...updates } : d) } : c);
       this.save();
   }
 
-  async deleteDoctor(clinicId: string, doctorId: string) {
+  deleteDoctor = async (clinicId: string, doctorId: string) => {
       await delay(50);
       this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, doctors: c.doctors.filter(d => d.id !== doctorId) } : c);
       this.save();
   }
 
-  async updateDoctorStatus(clinicId: string, doctorId: string, status: DoctorStatus, delayMinutes: number) {
+  updateDoctorStatus = async (clinicId: string, doctorId: string, status: DoctorStatus, delayMinutes: number) => {
       await delay(50);
       this.clinics = this.clinics.map(c => c.id === clinicId ? {
           ...c,
@@ -289,7 +325,7 @@ class StorageService {
   // --- STAFF OPERATIONS (NEW) ---
 
   // Fix: Completed missing addClinicStaff method and added other essential staff operations
-  async addClinicStaff(clinicId: string, staff: Staff) {
+  addClinicStaff = async (clinicId: string, staff: Staff) => {
       await delay(100);
       this.clinics = this.clinics.map(c => 
           c.id === clinicId ? { ...c, staff: [...(c.staff || []), staff] } : c
@@ -297,7 +333,7 @@ class StorageService {
       this.save();
   }
 
-  async updateClinicStaff(clinicId: string, staffId: string, updates: Partial<Staff>) {
+  updateClinicStaff = async (clinicId: string, staffId: string, updates: Partial<Staff>) => {
       await delay(50);
       this.clinics = this.clinics.map(c => 
           c.id === clinicId 
@@ -307,7 +343,7 @@ class StorageService {
       this.save();
   }
 
-  async deleteClinicStaff(clinicId: string, staffId: string) {
+  deleteClinicStaff = async (clinicId: string, staffId: string) => {
       await delay(50);
       this.clinics = this.clinics.map(c => 
           c.id === clinicId ? { ...c, staff: (c.staff || []).filter(s => s.id !== staffId) } : c
@@ -318,32 +354,32 @@ class StorageService {
   // --- CLINIC OPERATIONS ---
 
   // Fix: Added missing clinic operations methods
-  async createClinic(clinic: Clinic) {
+  createClinic = async (clinic: Clinic) => {
       await delay(200);
       this.clinics = [...this.clinics, { ...clinic, staff: clinic.staff || [] }];
       this.save();
   }
 
-  async updateClinic(clinicId: string, updates: Partial<Clinic>) {
+  updateClinic = async (clinicId: string, updates: Partial<Clinic>) => {
       await delay(100);
       this.clinics = this.clinics.map(c => c.id === clinicId ? { ...c, ...updates } : c);
       this.save();
   }
 
-  async deleteClinic(clinicId: string) {
+  deleteClinic = async (clinicId: string) => {
       await delay(100);
       this.clinics = this.clinics.filter(c => c.id !== clinicId);
       this.save();
   }
 
-  async resetSystem() {
+  resetSystem = async () => {
       await delay(500);
       localStorage.removeItem(STORAGE_KEY);
       this.clinics = JSON.parse(JSON.stringify(INITIAL_CLINICS));
       this.save();
   }
 
-  async deleteAllData() {
+  deleteAllData = async () => {
       await delay(500);
       localStorage.removeItem(STORAGE_KEY);
       this.clinics = [];

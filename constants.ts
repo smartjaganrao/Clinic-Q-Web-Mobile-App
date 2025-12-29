@@ -1,5 +1,5 @@
 
-import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient, TimeSlot, Review, AdminProfile, Staff, ClinicOperationMode, SessionMode } from './types';
+import { Doctor, PricingPlan, Clinic, PlanType, PatientStatus, DoctorStatus, DaySchedule, ClinicType, Patient, TimeSlot, Review, AdminProfile, Staff, ClinicOperationMode, SessionMode, UserProfile } from './types';
 import { Stethoscope, Baby, Smile, Eye, Bone, Accessibility, Heart, Ear, Scissors, Sparkles, LayoutGrid } from 'lucide-react';
 
 export const APP_NAME = "SmartQFlow";
@@ -120,6 +120,10 @@ CLINIC_1.doctors = [
         consultationTime: 15,
         rating: 4.8,
         reviewCount: 120,
+        reviews: [
+            { id: 'rev1', patientName: 'Rohan', rating: 5, comment: 'Very good doctor, listened to my problems patiently.', date: '2023-10-10' },
+            { id: 'rev2', patientName: 'Sneha', rating: 4, comment: 'Good experience, but the wait time was a bit long.', date: '2023-10-09' },
+        ],
         weeklySchedule: createSchedule([{ start: "09:00", end: "13:00", mode: SessionMode.HYBRID, label: "Morning OPD" }])
     },
     // Dr. Rajesh: Evening Shift (17:00 - 21:00)
@@ -145,6 +149,9 @@ CLINIC_1.doctors = [
         consultationTime: 20,
         rating: 4.9,
         reviewCount: 200,
+        reviews: [
+            { id: 'rev3', patientName: 'Kavya', rating: 5, comment: 'Excellent doctor, highly recommended for everyone.', date: '2023-10-12' },
+        ],
         weeklySchedule: createSchedule([{ start: "17:00", end: "21:00", mode: SessionMode.APPOINTMENT, label: "Evening Cardio" }])
     },
     // Dr. Anand Raj: Overnight Shift (22:00 - 02:00)
@@ -221,6 +228,9 @@ CLINIC_2.doctors = [
         consultationTime: 15,
         rating: 4.9,
         reviewCount: 350,
+        reviews: [
+            { id: 'rev4', patientName: 'Aditya', rating: 5, comment: 'Dr. Anita is great with kids!', date: '2023-10-11' },
+        ],
         weeklySchedule: createSchedule([{ start: "16:30", end: "20:30", mode: SessionMode.WALK_IN, label: "Evening Clinic" }])
     }
 ];
@@ -352,6 +362,9 @@ CLINIC_4.doctors = [
         consultationTime: 20,
         rating: 4.7,
         reviewCount: 450,
+        reviews: [
+            { id: 'rev5', patientName: 'Amit', rating: 4, comment: 'Good, but a bit rushed.', date: '2023-10-11' },
+        ],
         weeklySchedule: createSchedule([{ start: "08:00", end: "12:00", mode: SessionMode.APPOINTMENT, label: "Morning Ortho" }])
     }
 ];
@@ -403,6 +416,9 @@ CLINIC_5.doctors = [
         consultationTime: 20,
         rating: 4.9,
         reviewCount: 150,
+        reviews: [
+            { id: 'rev6', patientName: 'Pooja', rating: 5, comment: 'Amazing results!', date: '2023-10-12' },
+        ],
         weeklySchedule: createSchedule([{ start: "11:00", end: "18:00", mode: SessionMode.HYBRID, label: "Day Shift" }])
     }
 ];
@@ -432,7 +448,7 @@ export const CATEGORIES = [
     { id: 'surgery', label: 'Surgeon', icon: Scissors },
 ];
 
-export const RELATIONSHIP_OPTIONS = ['Self', 'Spouse', 'Child', 'Parent', 'Sibling', 'Other'];
+export const RELATIONSHIP_OPTIONS = ['Self', 'Spouse', 'Child', 'Parent', 'Sibling', 'Grandparent', 'Other'];
 
 export const SYMPTOM_MAP: { [key: string]: string } = {
     'Fever, cough, sore throat': 'General Physician',
@@ -454,3 +470,16 @@ export const SUPER_ADMIN_PROFILE: AdminProfile = {
   avatarUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200",
   lastLogin: new Date().toLocaleString()
 };
+
+export const INITIAL_USER_PROFILE: UserProfile = {
+    name: 'Rohan',
+    phone: '9876543210',
+    age: '35',
+    gender: 'Male',
+    familyMembers: [
+      { name: 'Kavya', age: '32', gender: 'Female', relation: 'Spouse' },
+      { name: 'Aditya', age: '5', gender: 'Male', relation: 'Child' },
+      { name: 'Sunita', age: '60', gender: 'Female', relation: 'Parent' },
+    ]
+  };
+  

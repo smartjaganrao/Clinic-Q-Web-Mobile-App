@@ -160,11 +160,14 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
                     {doctor.specialty}
                   </p>
                 </div>
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 flex items-center gap-2">
                   <div className="flex items-center gap-1 text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-100">
                     <Star className="h-3 w-3 fill-current" />
                     <span className="text-[9px] font-black">{doctor.rating.toFixed(1)}</span>
                   </div>
+                  <span className="text-[9px] text-slate-400 font-bold">
+                    ({doctor.reviewCount || 0} reviews)
+                  </span>
                 </div>
               </div>
 
