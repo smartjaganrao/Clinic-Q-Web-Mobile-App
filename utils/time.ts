@@ -26,6 +26,23 @@ export const getClinicCurrentTime = (timezone?: string) => {
     return new Date(utc + (offsetHours * 3600000));
 };
 
+export const parseTimeMins = (timeStr: string): number | null => {
+    if (!timeStr) return null;
+    const match = timeStr.trim().match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (!match) return null;
+    let [_, h, m, p] = match;
+    let hours = parseInt(h, 10);
+    const minutes = parseInt(m, 10);
+
+    if (p) {
+        const isPm = p.toUpperCase() === 'PM';
+        if (isPm && hours !== 12) hours += 12;
+        if (!isPm && hours === 12) hours = 0;
+    }
+    
+    return hours * 60 + minutes;
+};
+
 export const isClinicOpen = (hours?: string, timezone?: string) => {
     if (!hours) return false;
     if (hours.toLowerCase() === '24 hours') return true;
@@ -34,19 +51,9 @@ export const isClinicOpen = (hours?: string, timezone?: string) => {
         const currentMins = now.getHours() * 60 + now.getMinutes();
         const [startStr, endStr] = hours.split('-').map(s => s.trim());
         if (!startStr || !endStr) return false;
-        const parseToMins = (timeStr: string) => {
-            const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-            if (!match) return null;
-            let [_, h, m, p] = match;
-            let hour = parseInt(h);
-            const min = parseInt(m);
-            const isPm = p.toUpperCase() === 'PM';
-            if (isPm && hour !== 12) hour += 12;
-            if (!isPm && hour === 12) hour = 0; // 12 AM is 00:00
-            return hour * 60 + min;
-        };
-        const startMins = parseToMins(startStr);
-        const endMins = parseToMins(endStr);
+        
+        const startMins = parseTimeMins(startStr);
+        const endMins = parseTimeMins(endStr);
         if (startMins === null || endMins === null) return false;
 
         // Handle overnight shifts
@@ -187,23 +194,12 @@ export const getQueueSorter = (mode: SessionMode) => {
 
         // Session Specific Sorting
         if (mode === SessionMode.APPOINTMENT) {
-             // Sort purely by Appointment Time
              const timeA = a.appointmentTime ? timeToMins(a.appointmentTime) : Number.MAX_SAFE_INTEGER;
              const timeB = b.appointmentTime ? timeToMins(b.appointmentTime) : Number.MAX_SAFE_INTEGER;
              if (timeA !== timeB) return timeA - timeB;
         } 
         
         else if (mode === SessionMode.HYBRID) {
-             // Appointments take priority based on their slot time
-             // Walk-ins fill in the gaps (sorted by arrival time, but practically placed after appts if logic dictates)
-             
-             // Simplification for the "Priority" requirement:
-             // Appointments are sorted by Slot Time.
-             // Walk-ins are sorted by Arrival Time.
-             // However, an Appointment at 10:00 should come before a Walk-in at 10:00?
-             // Or should we interleave?
-             // Prompt says: "Appointments have priority"
-             
              const isApptA = a.visitType === 'APPOINTMENT';
              const isApptB = b.visitType === 'APPOINTMENT';
 
@@ -213,11 +209,68 @@ export const getQueueSorter = (mode: SessionMode) => {
              if (isApptA && !isApptB) return -1; // Appt before Walk-in
              if (!isApptA && isApptB) return 1;  // Walk-in after Appt
              
-             // Both Walk-ins: FIFO
              return a.timeAdded - b.timeAdded;
         }
 
-        // Default / WALK_IN mode: FIFO
         return a.timeAdded - b.timeAdded;
     };
+};
+
+// --- VALIDATION HELPERS ---
+
+export const validateShiftWithinClinicHours = (shiftStart: string, shiftEnd: string, clinicHours: string): boolean => {
+    if (!clinicHours || clinicHours.toLowerCase() === '24 hours') return true;
+    
+    // Assuming clinicHours format "09:00 AM - 09:00 PM" (multiple shifts comma separated not handled fully here for simplicity, taking first block or assuming simple range)
+    // If clinic allows multiple shifts, we need to check if the doctor shift falls within ANY of the clinic shifts.
+    
+    const clinicShifts = clinicHours.split(',').map(s => {
+        const [start, end] = s.split('-').map(t => t.trim());
+        return { start: parseTimeMins(start), end: parseTimeMins(end) };
+    });
+
+    const docStart = parseTimeMins(shiftStart);
+    const docEnd = parseTimeMins(shiftEnd);
+
+    if (docStart === null || docEnd === null) return false;
+    
+    let docEndAdjusted = docEnd;
+    if (docEnd <= docStart) docEndAdjusted += 1440; // Overnight
+
+    // Check if the doctor shift is fully contained within at least one clinic shift
+    return clinicShifts.some(clinicShift => {
+        if (clinicShift.start === null || clinicShift.end === null) return false;
+        let clinicEndAdjusted = clinicShift.end;
+        if (clinicEndAdjusted <= clinicShift.start) clinicEndAdjusted += 1440;
+
+        // Simple containment check
+        // NOTE: This logic assumes day-aligned shifts. Complex overnight logic might need more robust Date handling.
+        return docStart >= clinicShift.start && docEndAdjusted <= clinicEndAdjusted;
+    });
+};
+
+export const hasSlotOverlap = (slots: TimeSlot[]): boolean => {
+    if (!slots || slots.length < 2) return false;
+    
+    const sorted = [...slots].sort((a, b) => {
+        const sa = parseTimeMins(a.startTime) || 0;
+        const sb = parseTimeMins(b.startTime) || 0;
+        return sa - sb;
+    });
+
+    for (let i = 0; i < sorted.length - 1; i++) {
+        const current = sorted[i];
+        const next = sorted[i+1];
+        
+        if (!current.active || !next.active) continue;
+
+        const startA = parseTimeMins(current.startTime) || 0;
+        let endA = parseTimeMins(current.endTime) || 0;
+        if (endA <= startA) endA += 1440;
+
+        const startB = parseTimeMins(next.startTime) || 0;
+        
+        if (startB < endA) return true; // Overlap detected
+    }
+    return false;
 };

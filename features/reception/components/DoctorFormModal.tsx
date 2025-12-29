@@ -4,7 +4,8 @@ import { Doctor, DaySchedule, SessionMode } from '../../../types';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { Modal } from '../../../components/Modal';
-import { Plus, Trash2, Link as LinkIcon, Clock, Calendar, Zap, Lock, Languages, GraduationCap, FileText, X, Sun, CloudSun, Moon, MoonStar, Copy, CheckCircle2, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Link as LinkIcon, Clock, Calendar, Zap, Lock, Languages, GraduationCap, FileText, X, Sun, CloudSun, Moon, MoonStar, Copy, CheckCircle2, ChevronDown, AlertTriangle } from 'lucide-react';
+import { hasSlotOverlap, validateShiftWithinClinicHours } from '../../../utils/time';
 
 interface DoctorFormModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface DoctorFormModalProps {
   onSave: (data: any) => void;
   onCheckMasterDoctor: (mobile: string) => Doctor | null;
   addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
+  clinicOperatingHours?: string; // New prop for validation
 }
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -26,7 +28,7 @@ const PRESETS = [
 ];
 
 export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
-  isOpen, onClose, mode, initialData, onSave, onCheckMasterDoctor, addToast
+  isOpen, onClose, mode, initialData, onSave, onCheckMasterDoctor, addToast, clinicOperatingHours
 }) => {
   const [activeTab, setActiveTab] = useState<'INFO' | 'PROFILE' | 'SCHEDULE'>('INFO');
   const [linkedProfile, setLinkedProfile] = useState<Doctor | null>(null);
@@ -116,8 +118,34 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
       } 
   };
 
+  const validateSchedule = () => {
+    for (const daySchedule of form.schedule) {
+        if (!daySchedule.isOff) {
+            // Check overlaps
+            if (hasSlotOverlap(daySchedule.slots)) {
+                addToast(`Schedule overlap detected on ${daySchedule.day}`, 'error');
+                return false;
+            }
+            // Check against clinic hours
+            if (clinicOperatingHours) {
+                for (const slot of daySchedule.slots) {
+                    if (slot.active !== false && !validateShiftWithinClinicHours(slot.startTime, slot.endTime, clinicOperatingHours)) {
+                        addToast(`Shift on ${daySchedule.day} (${slot.startTime}-${slot.endTime}) is outside clinic operating hours (${clinicOperatingHours})`, 'error');
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    return true;
+  };
+
   const handleSubmit = (e: React.FormEvent) => { 
       e.preventDefault(); 
+      if (!validateSchedule()) {
+          setActiveTab('SCHEDULE');
+          return;
+      }
       onSave({
           ...form,
           experience: parseInt(form.experience),
@@ -308,6 +336,15 @@ export const DoctorFormModal: React.FC<DoctorFormModalProps> = ({
 
             {activeTab === 'SCHEDULE' && (
                 <div className="space-y-4 animate-in fade-in max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                    {clinicOperatingHours && (
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4 flex items-start gap-3">
+                            <Clock className="h-5 w-5 text-blue-600 mt-0.5" />
+                            <div>
+                                <p className="text-xs font-bold text-blue-800">Clinic Operating Hours: {clinicOperatingHours}</p>
+                                <p className="text-[10px] text-blue-600">Ensure doctor shifts fall within these hours.</p>
+                            </div>
+                        </div>
+                    )}
                     {form.schedule.map((daySchedule, idx) => (
                         <div key={daySchedule.day} className={`rounded-xl border p-4 transition-all ${daySchedule.isOff ? 'bg-slate-50 border-slate-200 opacity-60' : 'bg-white border-slate-300 shadow-sm'}`}>
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">

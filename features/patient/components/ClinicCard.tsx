@@ -119,6 +119,15 @@ export const ClinicCard: React.FC<ClinicCardProps> = ({
                                 </div>
                             )}
                         </div>
+
+                         {/* Operating Hours Display */}
+                         {clinic.operatingHours && (
+                            <div className="flex items-center gap-1.5 text-[9px] text-slate-500 font-medium mb-1.5">
+                                <Clock className="h-2.5 w-2.5 text-slate-400 flex-shrink-0" />
+                                <span>{clinic.operatingHours}</span>
+                            </div>
+                         )}
+
                          <div className="flex items-center gap-2">
                             <div className="flex items-center gap-1 text-amber-500 bg-amber-50 px-1 py-0.5 rounded-md border border-amber-100">
                                 <Star className="h-2.5 w-2.5 fill-current" />

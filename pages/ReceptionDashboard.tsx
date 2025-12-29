@@ -23,7 +23,7 @@ import { VitalsModal } from '../features/reception/components/VitalsModal';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { Logo } from '../components/Logo';
 import { reverseGeocode } from '../utils/geolocation';
-import { getActiveSession, getQueueSorter } from '../utils/time';
+import { getActiveSession, getQueueSorter, parseTimeMins } from '../utils/time';
 
 // Leaflet icon fix
 const DefaultIcon = L.icon({
@@ -280,6 +280,24 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
     const handleSettingsSave = (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Validate shifts
+        for (const shift of operatingShifts) {
+            const startMins = parseTimeMins(shift.start);
+            const endMins = parseTimeMins(shift.end);
+            
+            if (startMins !== null && endMins !== null) {
+                let adjustedEnd = endMins;
+                if (adjustedEnd <= startMins) adjustedEnd += 1440; // Overnight
+                
+                // Assuming max 24 hour range for a shift description
+                if (adjustedEnd - startMins <= 0) {
+                     he("Invalid shift: End time must be after start time.", "error");
+                     return;
+                }
+            }
+        }
+
         const formattedHours = operatingShifts.map(s => `${format12h(s.start)} - ${format12h(s.end)}`).join(', ');
         P({
             ...settingsForm,
@@ -678,6 +696,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 initialData={editingDoctor || undefined} 
                 onCheckMasterDoctor={C}
                 addToast={he}
+                clinicOperatingHours={m?.operatingHours} // Pass clinic operating hours for validation
                 onSave={(data) => {
                     if (editingDoctor) {
                         onEditDoctor(editingDoctor.id, {

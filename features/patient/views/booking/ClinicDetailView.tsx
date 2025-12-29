@@ -71,9 +71,22 @@ export const ClinicDetailView = ({
                     )}
 
                     <div className="flex flex-wrap gap-4 mb-6 text-sm text-slate-600">
-                        {selectedClinic.operatingHours && <div className="flex items-center gap-1 bg-slate-50 px-3 py-1 rounded-full"><Clock className="h-4 w-4" /> {selectedClinic.operatingHours}</div>}
-                        {selectedClinic.contactPhone && <div className="flex items-center gap-1 bg-slate-50 px-3 py-1 rounded-full"><Phone className="h-4 w-4" /> {selectedClinic.contactPhone}</div>}
-                        <div className="flex items-center gap-1 bg-primary-50 text-primary-700 px-3 py-1 rounded-full font-bold border border-primary-100 uppercase tracking-tight"><ShieldCheck className="h-4 w-4" /> Verified</div>
+                        {/* Display Operating Hours */}
+                        {selectedClinic.operatingHours && (
+                            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
+                                <Clock className="h-4 w-4 text-primary-500" /> 
+                                <span className="font-semibold text-slate-700">{selectedClinic.operatingHours}</span>
+                            </div>
+                        )}
+                        {selectedClinic.contactPhone && (
+                            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
+                                <Phone className="h-4 w-4 text-slate-400" /> 
+                                <span className="font-medium text-slate-700">{selectedClinic.contactPhone}</span>
+                            </div>
+                        )}
+                        <div className="flex items-center gap-1 bg-primary-50 text-primary-700 px-3 py-1 rounded-full font-bold border border-primary-100 uppercase tracking-tight">
+                            <ShieldCheck className="h-4 w-4" /> Verified
+                        </div>
                     </div>
 
                     <div className="mb-8">

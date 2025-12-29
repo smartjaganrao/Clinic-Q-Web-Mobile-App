@@ -86,7 +86,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                               </div>
                           </div>
                           <div className="flex flex-col items-end gap-1.5">
-                               <Badge status={patient.status} />
+                               <Badge patientStatus={patient.status} />
                                {patient.visitType === 'APPOINTMENT' && (
                                    <span className="text-[8px] font-black text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100 uppercase tracking-widest">APPT</span>
                                )}
@@ -237,7 +237,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                               <Activity className="h-3 w-3 animate-pulse" />
                               <span className="text-[9px] font-black uppercase tracking-wider">Consulting</span>
                           </div>
-                      ) : <Badge status={patient.status} />}
+                      ) : <Badge patientStatus={patient.status} />}
                   </td>
 
                   <td className={`px-4 py-1 ${isServing ? 'border-y border-blue-500' : ''}`}>

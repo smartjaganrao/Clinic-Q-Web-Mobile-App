@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Clinic, Doctor, DoctorStatus } from '../../../types';
 import { Modal } from '../../../components/Modal';
@@ -116,6 +117,7 @@ export const AdminDoctorsModal: React.FC<AdminDoctorsModalProps> = ({
                 onSave={handleSave}
                 onCheckMasterDoctor={onCheckMasterDoctor}
                 addToast={addToast}
+                clinicOperatingHours={clinic.operatingHours} // Pass clinic operating hours
             />
 
             <ConfirmationModal 

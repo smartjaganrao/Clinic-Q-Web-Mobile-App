@@ -21,6 +21,7 @@ class StorageService {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
           this.clinics = JSON.parse(stored);
+          this.sanitizeData(); // Ensure data integrity
         } else {
           // Deep copy to prevent mutation of the constant
           this.clinics = JSON.parse(JSON.stringify(INITIAL_CLINICS));
@@ -31,6 +32,41 @@ class StorageService {
       console.error("Storage Load Error", e);
       this.clinics = JSON.parse(JSON.stringify(INITIAL_CLINICS));
     }
+  }
+
+  private sanitizeData() {
+      // Fix potential human errors or data corruption in existing storage
+      const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      let changed = false;
+
+      this.clinics.forEach(clinic => {
+          clinic.doctors.forEach(doc => {
+              if (!doc.weeklySchedule || !Array.isArray(doc.weeklySchedule) || doc.weeklySchedule.length !== 7) {
+                  // Rebuild schedule if missing or incomplete
+                  doc.weeklySchedule = days.map(d => ({
+                      day: d,
+                      slots: [{ startTime: '09:00', endTime: '17:00', active: true, label: 'Regular' }],
+                      isOff: d === 'Sunday'
+                  }));
+                  changed = true;
+              } else {
+                  // Ensure specific structure of existing schedule
+                  doc.weeklySchedule.forEach(day => {
+                      if (!day.slots) day.slots = [];
+                      // Ensure slots have valid times or defaults
+                      day.slots.forEach(slot => {
+                          if (!slot.startTime) slot.startTime = "09:00";
+                          if (!slot.endTime) slot.endTime = "17:00";
+                      });
+                  });
+              }
+          });
+      });
+
+      if (changed) {
+          console.warn("Sanitized corrupted data in storage.");
+          this.save();
+      }
   }
 
   private save() {

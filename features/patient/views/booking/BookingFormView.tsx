@@ -29,6 +29,7 @@ import { Button } from '../../../../components/Button';
 import { Clinic, Doctor, UserProfile, GroupedSlots, SessionMode } from '../../../../types';
 import { Input } from '../../../../components/Input';
 import { Tooltip } from '../../../../components/Tooltip';
+import { getDoctorTodayShift } from '../../../../utils/time';
 
 export const BookingFormView = ({
     selectedDoctor,
@@ -147,7 +148,7 @@ export const BookingFormView = ({
                         {selectedClinic && (
                             <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 mb-4">
                                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                    <Building2 className="h-3.5 w-3.5 text-primary-500" /> Clinic Details
+                                    <Building2 className="h-3.5 w-3.5 text-primary-500" /> Visit Details
                                 </h3>
                                 <div className="space-y-2">
                                     <div className="flex items-start gap-2">
@@ -157,6 +158,27 @@ export const BookingFormView = ({
                                             <p className="text-[9px] text-slate-600 leading-tight">{selectedClinic.address}, {selectedClinic.city}</p>
                                         </div>
                                     </div>
+                                    
+                                    {/* Clinic Operating Hours */}
+                                    {selectedClinic.operatingHours && (
+                                        <div className="flex items-center gap-2">
+                                            <Clock className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                                            <p className="text-[10px] font-bold text-slate-700">
+                                                <span className="text-slate-500 font-medium mr-1">Clinic:</span> 
+                                                {selectedClinic.operatingHours}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Doctor Shift Hours */}
+                                    <div className="flex items-center gap-2">
+                                        <Clock className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                                        <p className="text-[10px] font-bold text-slate-700">
+                                            <span className="text-slate-500 font-medium mr-1">Doctor:</span> 
+                                            {getDoctorTodayShift(selectedDoctor)}
+                                        </p>
+                                    </div>
+
                                     {selectedClinic.contactPhone && (
                                         <div className="flex items-center gap-2">
                                             <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
@@ -165,7 +187,7 @@ export const BookingFormView = ({
                                     )}
                                     {selectedClinic.operationMode && (
                                         <div className="flex items-center gap-2">
-                                            <Clock className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                                            <Zap className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
                                             <p className="text-[10px] font-bold text-slate-700 capitalize">{selectedClinic.operationMode.replace('_', ' ')}</p>
                                         </div>
                                     )}
