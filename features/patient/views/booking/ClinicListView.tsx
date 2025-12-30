@@ -29,15 +29,31 @@ export const ClinicListView = ({
     navigateToView,
     showMap
 }) => {
-    // Simple state for helper strip, defaults to true. In a real app, persist this to localStorage.
-    const [showHelper, setShowHelper] = useState(true);
+    const [showHelper, setShowHelper] = useState(() => {
+        try {
+            // Only show helper if it has not been dismissed before.
+            return localStorage.getItem('clinicq_helper_dismissed') !== 'true';
+        } catch (e) {
+            // If localStorage is unavailable (e.g., in SSR or private browsing), default to true.
+            return true;
+        }
+    });
+
+    const handleCloseHelper = () => {
+        try {
+            localStorage.setItem('clinicq_helper_dismissed', 'true');
+        } catch (e) {
+            // If localStorage is unavailable, the state will still hide it for the current session.
+        }
+        setShowHelper(false);
+    };
 
     return (
         <div className="flex flex-col h-full">
-            {showHelper && <HelperStrip onClose={() => setShowHelper(false)} />}
+            {showHelper && <HelperStrip onClose={handleCloseHelper} />}
             
             {filteredClinics.length > 0 ? (
-                <div className={`w-full grid gap-4 mb-4 ${showMap ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'}`}>
+                <div className={`w-full grid gap-4 mb-4 ${showMap ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'}`}>
                     {filteredClinics.map(clinic => {
                         const waitInfo = getClinicWaitStats(clinic);
                         const relevantDoctors = getRelevantDoctors(clinic);

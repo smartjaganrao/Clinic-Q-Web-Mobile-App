@@ -6,7 +6,7 @@ import { Stethoscope, Search, MapPin, Filter } from 'lucide-react';
 export const DoctorListView = ({ groupedDoctors, navigateToView, showMap, loading = false, searchQuery = '', onQuickSearch }) => {
     if (loading) {
         return (
-            <div className={`w-full grid gap-6 mb-4 ${showMap ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'}`}>
+            <div className={`w-full grid gap-6 mb-4 ${showMap ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'}`}>
                 {Array.from({ length: 8 }).map((_, index) => (
                     <DoctorCardSkeleton key={index} className="animate-in fade-in duration-300" />
                 ))}
@@ -16,7 +16,7 @@ export const DoctorListView = ({ groupedDoctors, navigateToView, showMap, loadin
 
     return (
         groupedDoctors.length > 0 ? (
-            <div className={`w-full grid gap-6 mb-4 ${showMap ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'}`}>
+            <div className={`w-full grid gap-6 mb-4 ${showMap ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'}`}>
                 {groupedDoctors.map(({ masterDoc, locations }, index) => {
                     return (
                         <div

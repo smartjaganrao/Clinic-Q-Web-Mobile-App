@@ -68,7 +68,49 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     const [searchParams] = useSearchParams();
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(window.innerWidth < 1024);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isHoveringSidebar, setIsHoveringSidebar] = useState(false);
     const searchBarContainerRef = useRef<HTMLDivElement>(null);
+
+    const [recentSearches, setRecentSearches] = useState<string[]>([]);
+
+    useEffect(() => {
+        try {
+            const storedSearches = localStorage.getItem('clinicq_recent_searches');
+            if (storedSearches) {
+                setRecentSearches(JSON.parse(storedSearches));
+            }
+        } catch (e) {
+            console.error("Failed to load recent searches from localStorage", e);
+        }
+    }, []);
+
+    const saveSearchTerm = (term: string) => {
+        if (!term || !term.trim()) return;
+        const cleanedTerm = term.trim();
+
+        try {
+            const updatedSearches = [
+                cleanedTerm,
+                ...recentSearches.filter(s => s.toLowerCase() !== cleanedTerm.toLowerCase())
+            ].slice(0, 5); // Keep only the top 5
+
+            setRecentSearches(updatedSearches);
+            localStorage.setItem('clinicq_recent_searches', JSON.stringify(updatedSearches));
+        } catch (e) {
+            console.error("Failed to save recent search to localStorage", e);
+        }
+    };
+
+    const clearRecentSearches = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setRecentSearches([]);
+        try {
+            localStorage.removeItem('clinicq_recent_searches');
+        } catch (e) {
+            console.error("Failed to clear recent searches from localStorage", e);
+        }
+    };
+
 
     const quickSearches = [
         { term: 'Fever', emoji: '🤒' },
@@ -81,7 +123,10 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     // Auto-collapse sidebar on smaller screens
     useEffect(() => {
         const handleResize = () => {
-            if (window.innerWidth < 1024) {
+            if (window.innerWidth < 768) {
+                setIsSidebarCollapsed(true);
+            } else if (window.innerWidth >= 768 && window.innerWidth < 1024) {
+                // Tablet view: auto-collapse
                 setIsSidebarCollapsed(true);
             } else {
                 setIsSidebarCollapsed(false);
@@ -321,6 +366,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     }, [searchQuery, clinics]);
 
     const handleSuggestionClick = (type: 'CLINIC' | 'DOCTOR', item: any) => {
+        saveSearchTerm(searchQuery);
         setShowSuggestions(false);
         const wasSymptomSearch = isSymptomSearch;
         setSearchQuery('');
@@ -1345,18 +1391,31 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 />
             )}
 
-            <aside className={`
-            fixed md:sticky top-0 left-0 h-screen z-[100] md:z-30 shrink-0 bg-white border-r border-slate-200 transition-all duration-300 flex flex-col
-            ${isMobileMenuOpen ? 'translate-x-0 w-64' : '-translate-x-full md:translate-x-0'}
-            ${isSidebarCollapsed ? 'md:w-20' : 'md:w-64'}
-        `}>
+            <aside
+                className={`
+                fixed md:sticky top-0 left-0 h-screen z-[100] md:z-30 shrink-0 bg-white border-r border-slate-200 transition-all duration-300 flex flex-col
+                ${isMobileMenuOpen ? 'translate-x-0 w-64' : '-translate-x-full md:translate-x-0'}
+                ${isSidebarCollapsed ? 'md:w-20' : 'md:w-64'}
+                ${window.innerWidth >= 1024 && window.innerWidth < 1280 ? 'md:w-[200px]' : ''}
+            `}
+                onMouseEnter={() => {
+                    if (window.innerWidth >= 768 && window.innerWidth < 1024) {
+                        setIsHoveringSidebar(true);
+                    }
+                }}
+                onMouseLeave={() => {
+                    if (window.innerWidth >= 768 && window.innerWidth < 1024) {
+                        setIsHoveringSidebar(false);
+                    }
+                }}
+            >
                 <div className={`h-20 flex items-center ${isSidebarCollapsed ? 'md:justify-center' : 'px-6 justify-between'} px-6 md:px-auto border-b border-slate-100 relative`}>
                     <button
                         onClick={() => navigate('/')}
                         className="flex items-center gap-2 overflow-hidden whitespace-nowrap hover:opacity-80 transition-opacity"
                     >
                         <Logo className="h-8 w-8 flex-shrink-0" />
-                        <span className={`font-bold text-xl text-slate-900 tracking-tight transition-opacity duration-200 ${isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:hidden' : 'opacity-100'}`}>Smart<span className="text-primary-600">QFlow</span></span>
+                        <span className={`font-bold text-lg text-slate-900 tracking-tight transition-opacity duration-200 ${isSidebarCollapsed ? 'md:opacity-0 md:w-0 md:hidden' : 'opacity-100'}`}>Smart<span className="text-primary-600">QFlow</span></span>
                     </button>
                     <button
                         onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -1382,7 +1441,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                             <span className={`ml-3 transition-all duration-200 overflow-hidden whitespace-nowrap ${isSidebarCollapsed ? 'md:w-0 md:opacity-0' : 'w-auto opacity-100'}`}>
                                 {item.label}
                             </span>
-                            {isSidebarCollapsed && (
+                            {(isSidebarCollapsed || (window.innerWidth >= 768 && window.innerWidth < 1024 && isHoveringSidebar)) && (
                                 <div className="hidden md:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
                                     {item.label}
                                 </div>
@@ -1393,7 +1452,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 <div className="p-4 border-t border-slate-100">
                     <div className={`flex items-center ${isSidebarCollapsed ? 'md:justify-center' : 'gap-3'} gap-3 px-0 py-2`}>
                         <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold flex-shrink-0">{isGuest ? <User className="h-5 w-5" /> : userName.charAt(0)}</div>
-                        {(!isSidebarCollapsed || isMobileMenuOpen) && (
+                        {(!isSidebarCollapsed || isMobileMenuOpen || (window.innerWidth >= 768 && window.innerWidth < 1024 && isHoveringSidebar)) && (
                             <div className="flex-1 min-w-0 overflow-hidden">
                                 <p className="text-sm font-bold text-slate-900 truncate">{userName}</p>
                                 <p className="text-xs text-slate-500 truncate">{userPhone}</p>
@@ -1402,7 +1461,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                     </div>
                     <button onClick={isGuest ? () => onLoginClick && onLoginClick() : onBack} className={`w-full mt-2 flex items-center ${isSidebarCollapsed ? 'md:justify-center' : 'justify-center gap-2'} justify-center gap-2 p-2 text-sm ${isGuest ? 'bg-slate-900 text-white hover:bg-slate-800' : 'text-red-600 hover:bg-red-50'} rounded-lg transition-colors`}>
                         {isGuest ? <LogIn className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}
-                        {(!isSidebarCollapsed || isMobileMenuOpen) && <span>{isGuest ? 'Login' : 'Logout'}</span>}
+                        {(!isSidebarCollapsed || isMobileMenuOpen || (window.innerWidth >= 768 && window.innerWidth < 1024 && isHoveringSidebar)) && <span>{isGuest ? 'Login' : 'Logout'}</span>}
                     </button>
                 </div>
             </aside>
@@ -1413,7 +1472,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 <header className="bg-white border-b border-slate-200 px-4 md:px-8 py-3 sticky top-0 z-[60] shadow-sm shrink-0">
                     <div className="flex flex-col gap-3">
                         {/* Top Row on Mobile: Menu, Location, QR, User */}
-                        <div className="flex items-center justify-between lg:hidden">
+                        <div className="flex items-center justify-between xl:hidden">
                             <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => setIsMobileMenuOpen(true)}
@@ -1468,20 +1527,26 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         </div>
 
                         {/* Main Row: Search + Mode Toggle */}
-                        <div className="flex items-center gap-2 lg:gap-4">
+                        <div className="flex items-center gap-2 xl:gap-4">
                             {/* Global Search Input */}
                             <div ref={searchBarContainerRef} className="flex-1 relative">
                                 <div className="relative group">
                                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
                                     <input
                                         type="text"
-                                        className="w-full pl-10 pr-4 h-10 md:h-12 rounded-xl md:rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary-500/10 focus:border-primary-400 outline-none transition-all font-bold text-sm"
+                                        className="w-full pl-10 pr-4 h-12 md:h-14 rounded-xl md:rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary-500/10 focus:border-primary-400 outline-none transition-all font-bold text-sm"
                                         placeholder="Search by symptoms, doctor, or clinic"
                                         value={searchQuery}
                                         onFocus={() => setShowSuggestions(true)}
                                         onChange={(e) => {
                                             setSearchQuery(e.target.value);
                                             setShowSuggestions(true);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && searchQuery.trim()) {
+                                                saveSearchTerm(searchQuery);
+                                                setShowSuggestions(false);
+                                            }
                                         }}
                                     />
                                     {searchQuery && (
@@ -1504,38 +1569,69 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     )}
                                 </div>
 
-                                {showSuggestions && globalSuggestions && (
+                                {showSuggestions && (
                                     <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in slide-in-from-top-2 z-[70] max-h-[60vh] overflow-y-auto">
-                                        {globalSuggestions.clinics.length > 0 && (
-                                            <div className="p-2 border-b border-slate-50">
-                                                <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                    <Building2 className="h-3 w-3" /> Partner Clinics
-                                                </div>
-                                                {globalSuggestions.clinics.map(c => (
+                                        {globalSuggestions ? (
+                                            <>
+                                                {globalSuggestions.clinics.length > 0 && (
+                                                    <div className="p-2 border-b border-slate-50">
+                                                        <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                            <Building2 className="h-3 w-3" /> Partner Clinics
+                                                        </div>
+                                                        {globalSuggestions.clinics.map(c => (
+                                                            <button
+                                                                key={c.id}
+                                                                onClick={() => handleSuggestionClick('CLINIC', c)}
+                                                                className="w-full text-left p-3 rounded-xl hover:bg-primary-50 group flex items-center gap-4 transition-colors"
+                                                            >
+                                                                <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+                                                                    {c.imageUrl ? <img src={c.imageUrl} className="w-full h-full object-cover rounded-lg" /> : <Building2 className="h-5 w-5 text-slate-400" />}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0"><div className="font-bold text-slate-900 text-sm truncate">{c.name}</div><div className="text-xs text-slate-500 truncate">{c.address}</div></div><ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary-400" />
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                {globalSuggestions.doctors.length > 0 && (
+                                                    <div className="p-2">
+                                                        <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Stethoscope className="h-3 w-3" /> Specialists</div>
+                                                        {globalSuggestions.doctors.map(({ clinic, doctor }) => (
+                                                            <button key={`${clinic.id}-${doctor.id}`} onClick={() => handleSuggestionClick('DOCTOR', { clinic, doctor })} className="w-full text-left p-3 rounded-xl hover:bg-primary-50 group flex items-center gap-4 transition-colors"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center shrink-0"><img src={doctor.avatarUrl} className="w-full h-full object-cover rounded-full" /></div><div className="flex-1 min-w-0"><div className="font-bold text-slate-900 text-sm truncate">{doctor.name}</div><div className="text-xs text-primary-600 font-bold">{doctor.specialty} <span className="text-slate-300 mx-1">•</span> <span className="text-slate-500 font-normal">{clinic.name}</span></div></div><ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary-400" /></button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                {globalSuggestions.clinics.length === 0 && globalSuggestions.doctors.length === 0 && (
+                                                    <div className="p-8 text-center text-slate-400"><Search className="h-8 w-8 mx-auto mb-2 opacity-20" /><p className="text-sm font-bold">No matches found</p><p className="text-xs">Try searching for symptoms, doctor names, or clinic names</p></div>
+                                                )}
+                                            </>
+                                        ) : searchQuery.trim().length === 0 && recentSearches.length > 0 ? (
+                                            <div className="p-2">
+                                                <div className="flex justify-between items-center px-3 py-2">
+                                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                        <History className="h-3 w-3" /> Recent Searches
+                                                    </div>
                                                     <button
-                                                        key={c.id}
-                                                        onClick={() => handleSuggestionClick('CLINIC', c)}
+                                                        onClick={clearRecentSearches}
+                                                        className="text-[10px] font-bold text-red-500 hover:text-red-700 uppercase tracking-widest"
+                                                    >
+                                                        Clear
+                                                    </button>
+                                                </div>
+                                                {recentSearches.map(term => (
+                                                    <button
+                                                        key={term}
+                                                        onClick={() => {
+                                                            setSearchQuery(term);
+                                                            saveSearchTerm(term);
+                                                        }}
                                                         className="w-full text-left p-3 rounded-xl hover:bg-primary-50 group flex items-center gap-4 transition-colors"
                                                     >
-                                                        <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
-                                                            {c.imageUrl ? <img src={c.imageUrl} className="w-full h-full object-cover rounded-lg" /> : <Building2 className="h-5 w-5 text-slate-400" />}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0"><div className="font-bold text-slate-900 text-sm truncate">{c.name}</div><div className="text-xs text-slate-500 truncate">{c.address}</div></div><ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary-400" />
+                                                        <Search className="h-4 w-4 text-slate-400" />
+                                                        <span className="font-bold text-slate-900 text-sm truncate">{term}</span>
                                                     </button>
                                                 ))}
                                             </div>
-                                        )}
-                                        {globalSuggestions.doctors.length > 0 && (
-                                            <div className="p-2">
-                                                <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Stethoscope className="h-3 w-3" /> Specialists</div>
-                                                {globalSuggestions.doctors.map(({ clinic, doctor }) => (
-                                                    <button key={`${clinic.id}-${doctor.id}`} onClick={() => handleSuggestionClick('DOCTOR', { clinic, doctor })} className="w-full text-left p-3 rounded-xl hover:bg-primary-50 group flex items-center gap-4 transition-colors"><div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center shrink-0"><img src={doctor.avatarUrl} className="w-full h-full object-cover rounded-full" /></div><div className="flex-1 min-w-0"><div className="font-bold text-slate-900 text-sm truncate">{doctor.name}</div><div className="text-xs text-primary-600 font-bold">{doctor.specialty} <span className="text-slate-300 mx-1">•</span> <span className="text-slate-500 font-normal">{clinic.name}</span></div></div><ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary-400" /></button>
-                                                ))}
-                                            </div>
-                                        )}
-                                        {globalSuggestions.clinics.length === 0 && globalSuggestions.doctors.length === 0 && (
-                                            <div className="p-8 text-center text-slate-400"><Search className="h-8 w-8 mx-auto mb-2 opacity-20" /><p className="text-sm font-bold">No matches found</p><p className="text-xs">Try searching for symptoms, doctor names, or clinic names</p></div>
-                                        )}
+                                        ) : null}
                                     </div>
                                 )}
                             </div>
@@ -1553,7 +1649,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                             </div>
 
                             {/* Desktop Only Controls */}
-                            <div className="hidden lg:flex items-center gap-3">
+                            <div className="hidden xl:flex items-center gap-3">
                                 {/* Desktop Location Selector */}
                                 <div className="relative flex items-center gap-2 h-11 px-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm text-slate-600 cursor-pointer hover:text-primary-600 hover:border-primary-400 transition-all shrink-0">
                                     <MapPin className="h-4 w-4 text-slate-400" />
@@ -1671,16 +1767,18 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                         selectedDoctor={selectedDoctor}
                                         selectedProfileDoctor={selectedProfileDoctor}
                                         navigateToView={navigateToView}
+                                        showMap={showMap}
+                                        setShowMap={setShowMap}
                                     />
                                 </div>
                                 
                                 {(bookingView === 'LIST' || bookingView === 'CLINIC_DETAILS') && (
                                     <button
                                         onClick={() => setShowMap(!showMap)}
-                                        className={`md:hidden flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${
+                                        className={`lg:hidden flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${
                                             showMap 
-                                            ? 'bg-slate-100 text-slate-700 border-slate-200' 
-                                            : 'bg-primary-50 text-primary-700 border-primary-100'
+                                            ? 'bg-emerald-600 border-emerald-600 text-white' 
+                                            : 'bg-indigo-600 border-indigo-600 text-white'
                                         }`}
                                     >
                                         {showMap ? <List className="h-4 w-4" /> : <MapIcon className="h-4 w-4" />}
@@ -1750,6 +1848,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                 groupedDoctors={groupedDoctors}
                                                 navigateToView={navigateToView}
                                                 showMap={showMap}
+                                                onQuickSearch={handleQuickSearch}
                                             />
                                         )
                                     ) : bookingView === 'CLINIC_DETAILS' && selectedClinic ? (

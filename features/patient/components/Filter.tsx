@@ -127,7 +127,7 @@ export const Filter: React.FC<FilterProps> = ({
 
                         <button
                             onClick={() => setShowMap(!showMap)}
-                            className={`h-11 px-6 flex items-center gap-2.5 rounded-2xl border-2 transition-all shrink-0 ml-auto shadow-md ${showMap ? 'bg-primary-600 border-primary-600 text-white' : 'bg-white border-slate-100 text-slate-500 hover:border-primary-400'}`}
+                            className={`h-11 px-6 flex items-center gap-2.5 rounded-2xl border-2 transition-all shrink-0 ml-auto shadow-md ${showMap ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-indigo-600 border-indigo-600 text-white'}`}
                         >
                             {showMap ? <ListIcon className="h-4 w-4" /> : <MapIcon className="h-4 w-4" />}
                             <span className="text-[10px] font-black uppercase tracking-widest truncate max-w-[120px]">
@@ -138,28 +138,6 @@ export const Filter: React.FC<FilterProps> = ({
 
                     {/* Mobile Filters: ALL IN ONE LINE (Scrollable) */}
                     <div className="lg:hidden flex flex-nowrap overflow-x-auto no-scrollbar gap-2 mt-3 pb-3 -mx-2 px-2 scroll-smooth">
-                        {/* SPECIALIZATION FILTER (Integrated into same line) */}
-                        <div className="relative flex-shrink-0">
-                            <div className="relative flex items-center gap-1.5 h-10 px-3 bg-white rounded-xl border border-slate-200 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-all shadow-sm">
-                                <LayoutGrid className="h-3.5 w-3.5 text-primary-500 shrink-0" />
-                                <select 
-                                    className="absolute inset-0 opacity-0 cursor-pointer w-full" 
-                                    value={selectedCategory} 
-                                    onChange={(e) => setSelectedCategory(e.target.value)}
-                                >
-                                    {CATEGORIES.map(cat => (
-                                        <option key={cat.id} value={cat.id}>
-                                            {cat.label}
-                                        </option>
-                                    ))}
-                                </select>
-                                <span className="truncate max-w-[80px]">
-                                    {CATEGORIES.find(c => c.id === selectedCategory)?.label.replace(' All Specializations', 'All').replace(' Specializations', '') || 'All'}
-                                </span>
-                                <ChevronDown className="h-2.5 w-2.5 opacity-40 shrink-0" />
-                            </div>
-                        </div>
-
                         <div className="relative flex-shrink-0 h-10 bg-white border border-slate-200 rounded-xl px-3 flex items-center gap-1.5 text-[9px] font-black text-slate-500 uppercase shadow-sm">
                             <ArrowUpDown className="h-3 w-3 text-primary-500" />
                             <select className="absolute inset-0 opacity-0" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}><option value="NEAR">Near</option><option value="WAIT">Wait</option><option value="FEE">Fee</option></select>
@@ -199,15 +177,15 @@ export const Filter: React.FC<FilterProps> = ({
                 </>
             )}
 
-            {/* Desktop-only Specialization Category row */}
+            {/* Specialization Category row */}
             {bookingView === 'LIST' && (
-                <div className="hidden lg:block mt-3 pb-2">
-                    <div className="flex gap-1 flex-wrap pt-1 pb-1">
+                <div className="mt-3 pb-2 md:pb-0">
+                    <div className="flex gap-2 flex-nowrap overflow-x-auto no-scrollbar pt-1 pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
                         {CATEGORIES.map(cat => (
                             <button
                                 key={cat.id}
                                 onClick={() => setSelectedCategory(cat.id)}
-                                className={`flex items-center gap-1.5 px-3 h-9 rounded-full border-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategory === cat.id ? 'bg-primary-600 text-white border-primary-600 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
+                                className={`flex-shrink-0 flex items-center gap-1.5 px-3 h-9 rounded-full border-2 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategory === cat.id ? 'bg-primary-600 text-white border-primary-600 shadow-md' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
                             >
                                 <cat.icon className={`h-3.5 w-3.5 ${selectedCategory === cat.id ? 'text-white' : 'text-primary-500'}`} /> {cat.label.replace(' Specializations', '')}
                             </button>

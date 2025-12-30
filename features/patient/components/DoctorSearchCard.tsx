@@ -133,18 +133,6 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
   const isTokenAvailable = summary.availableClinics > 0;
   const canBookAppointment = summary.availableForBooking > 0;
 
-
-  const formatTime12h = (time24: string) => {
-    if (!time24 || !time24.includes(':')) return time24;
-    const [hStr, mStr] = time24.split(':');
-    let h = parseInt(hStr);
-    const m = mStr.padStart(2, '0');
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    h = h % 12;
-    h = h ? h : 12;
-    return `${h}:${m} ${ampm}`;
-  };
-
   return (
     <div className={`bg-white rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group cursor-pointer mb-2 sm:mb-4 ${onClick ? 'hover:border-primary-300' : ''}`} onClick={onClick}>
       {/* TOP SECTION - DOCTOR HEADER */}
@@ -167,19 +155,19 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
                   <h3 className="font-black text-slate-900 text-sm leading-tight truncate group-hover:text-primary-600 transition-colors">
                     {doctor.name}
                   </h3>
-                  <p className="text-[10px] text-primary-600 font-black uppercase tracking-widest flex items-center gap-1 mt-0.5 mb-2">
-                    <Stethoscope className="h-3 w-3" />
-                    {doctor.specialty}
-                  </p>
-                </div>
-                <div className="flex-shrink-0 flex items-center gap-2">
-                  <div className="flex items-center gap-1 text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-100">
-                    <Star className="h-3 w-3 fill-current" />
-                    <span className="text-[9px] font-black">{doctor.rating.toFixed(1)}</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-[10px] text-primary-600 font-black uppercase tracking-widest flex items-center gap-1 mb-2">
+                      <Stethoscope className="h-3 w-3" />
+                      {doctor.specialty}
+                    </p>
+                    <div className="flex items-center gap-1 text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-100 flex-shrink-0">
+                      <Star className="h-3 w-3 fill-current" />
+                      <span className="text-[9px] font-black">{doctor.rating.toFixed(1)}</span>
+                    </div>
+                    <span className="text-[8px] text-slate-500 font-bold self-end pb-0.5">
+                      {doctor.reviewCount || 0} reviews
+                    </span>
                   </div>
-                  <span className="text-[9px] text-slate-400 font-bold">
-                    ({doctor.reviewCount || 0} reviews)
-                  </span>
                 </div>
               </div>
 
@@ -212,25 +200,20 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
             <Building2 className="h-3.5 w-3.5 text-slate-400" />
             <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">Available at {summary.totalClinics} Clinic{summary.totalClinics > 1 ? 's' : ''}</span>
           </div>
-          <div className="space-y-0.5">
-            {locations.slice(0, 2).map(({ clinic, distance }) => (
-              <div key={clinic.id} className="flex items-center justify-between bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="flex overflow-x-auto space-x-1 pb-1">
+            {locations.map(({ clinic, distance }) => (
+              <div key={clinic.id} className="flex-shrink-0 flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-md border border-slate-100 whitespace-nowrap">
+                <div className="flex items-center gap-1 min-w-0">
                   <div className={`w-2 h-2 rounded-full ${isClinicOpen(clinic.operatingHours, clinic.timezone) && isDoctorShiftActive(locations.find(l=>l.clinic.id === clinic.id)!.docInstance, clinic) ? 'bg-green-500' : 'bg-slate-400'}`}></div>
-                  <span className="text-[9px] font-bold text-slate-700 truncate">{clinic.name}</span>
+                  <span className="text-[9px] font-bold text-slate-700 truncate max-w-[120px]">{clinic.name}</span>
                 </div>
                 {distance !== null && (
-                  <span className="text-[8px] font-bold text-blue-600 flex-shrink-0 ml-2">
+                  <span className="text-[8px] font-bold text-blue-600 flex-shrink-0">
                     {distance.toFixed(1)} km
                   </span>
                 )}
               </div>
             ))}
-            {locations.length > 2 && (
-              <div className="text-[8px] font-bold text-slate-500 text-center">
-                +{locations.length - 2} more clinics
-              </div>
-            )}
           </div>
         </div>
 
@@ -279,7 +262,7 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
                  disabled={!isTokenAvailable && !canBookAppointment}
                >
                  {isTokenAvailable ? <Zap className="h-3 w-3 fill-current" /> : <Calendar className="h-3 w-3" />}
-                 {isTokenAvailable ? 'GET TOKEN' : (canBookAppointment ? 'BOOK TOMORROW' : 'BOOK TODAY')}
+                 {isTokenAvailable ? 'Get Token' : (canBookAppointment ? 'Book Appointment' : 'Unavailable')}
                </button>
            </Tooltip>
       </div>

@@ -9,7 +9,9 @@ import {
     Stethoscope,
     Building2,
     Home,
-    ChevronRight
+    ChevronRight,
+    Map as MapIcon,
+    List
 } from 'lucide-react';
 import { Clinic, Doctor } from '../types';
 
@@ -20,6 +22,8 @@ interface BreadcrumbsProps {
     selectedDoctor?: Doctor;
     selectedProfileDoctor?: Doctor;
     navigateToView: (view: 'CLINIC_DETAILS', clinic: Clinic) => void;
+    showMap?: boolean;
+    setShowMap?: (show: boolean) => void;
 }
 
 export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
@@ -28,7 +32,9 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
     selectedClinic,
     selectedDoctor,
     selectedProfileDoctor,
-    navigateToView
+    navigateToView,
+    showMap,
+    setShowMap
 }) => {
     const navigate = useNavigate();
 
