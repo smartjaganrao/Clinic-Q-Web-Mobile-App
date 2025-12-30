@@ -41,11 +41,14 @@ export const ActiveVisitsView = ({
                         if (!doctor || !doctor.weeklySchedule) return null;
                         
                         // 1. Scheduled Time (When the visit happens)
-                        const scheduledDate = visit.visitType === 'APPOINTMENT' && visit.appointmentDate ? 
+                        // Use appointmentDate/Time if available, regardless of visitType, as long as it's a scheduled visit
+                        const hasScheduledDetails = visit.appointmentDate && visit.appointmentTime;
+
+                        const scheduledDate = hasScheduledDetails ?
                             new Date(visit.appointmentDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) :
                             new Date(visit.timeAdded).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
-                        const scheduledTime = visit.visitType === 'APPOINTMENT' && visit.appointmentTime ? 
+                        const scheduledTime = hasScheduledDetails ?
                             formatTime12h(visit.appointmentTime) :
                             new Date(visit.timeAdded).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
 
@@ -208,9 +211,22 @@ export const ActiveVisitsView = ({
                                         <div className="flex-1 min-w-0">
                                             <p className={`text-sm font-black leading-tight mb-1 ${queueStats.color}`}>{queueStats.message}</p>
                                             <div className="flex flex-wrap items-center gap-1.5">
-                                                <span className="text-[10px] opacity-70 font-black uppercase tracking-widest flex items-center gap-1.5 text-slate-600">
-                                                    <Clock className="h-3 w-3" /> EST: {queueStats.expectedTime}
-                                                </span>
+                                                {queueStats.scheduledTime ? (
+                                                    <>
+                                                        <span className="text-[10px] opacity-70 font-black uppercase tracking-widest flex items-center gap-1.5 text-slate-600">
+                                                            <Clock className="h-3 w-3" /> {queueStats.scheduledTime}
+                                                        </span>
+                                                        {queueStats.estimatedArrivalTime && queueStats.estimatedArrivalTime !== queueStats.expectedTime && (
+                                                            <span className="text-[9px] opacity-60 font-bold uppercase tracking-wider flex items-center gap-1 text-amber-600">
+                                                                EST: {queueStats.estimatedArrivalTime}
+                                                            </span>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <span className="text-[10px] opacity-70 font-black uppercase tracking-widest flex items-center gap-1.5 text-slate-600">
+                                                        <Clock className="h-3 w-3" /> EST: {queueStats.expectedTime}
+                                                    </span>
+                                                )}
                                                 {visit.isCheckedIn && (
                                                     <span className="text-[9px] font-black text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-tighter border border-emerald-200 flex items-center gap-1">
                                                         <CheckCircle2 className="h-3 w-3" /> Arrived

@@ -595,22 +595,24 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         const duration = endTotal - startTotal;
         const capacity = Math.floor(duration / (doctor.consultationTime || 15));
 
-        // Load = Patients in this shift (today's walk-ins + appointments on this date)
+        // Load = Patients in this shift (today's appointments + walk-ins mapped to this shift)
         const shiftPatients = clinicPatients.filter(p => {
             if (p.doctorId !== doctor.id) return false;
             if (p.status === PatientStatus.CANCELLED) return false;
 
-            if (p.visitType === 'APPOINTMENT' && p.appointmentDate === dateStr && p.appointmentTime) {
+            // Count any patient scheduled into this shift by appointmentDate/Time (works for both Appointment and Advance Walk-in bookings)
+            if (p.appointmentDate === dateStr && p.appointmentTime) {
                 const [ph, pm] = p.appointmentTime.split(':').map(Number);
                 const pTotalMins = ph * 60 + pm;
-                return pTotalMins >= startTotal && pTotalMins < endTotal;
+                if (pTotalMins >= startTotal && pTotalMins < endTotal) return true;
             }
 
+            // Fallback: same-day live walk-ins without appointmentTime, bucket by timeAdded
             const pDate = new Date(p.timeAdded);
             const pDateStr = pDate.toISOString().split('T')[0];
-            if (p.visitType === 'WALK_IN' && pDateStr === dateStr) {
+            if (!p.appointmentTime && pDateStr === dateStr) {
                 const pTotal = pDate.getHours() * 60 + pDate.getMinutes();
-                return pTotal >= startTotal && pTotal < endTotal;
+                if (pTotal >= startTotal && pTotal < endTotal) return true;
             }
 
             return false;
@@ -829,46 +831,120 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         };
 
         const myShift = getPatientShiftMins(visit, doctor);
-        const peopleAhead = clinic.patients.filter(p => {
-            if (p.doctorId !== visit.doctorId || p.status !== PatientStatus.WAITING || p.id === visit.id) return false;
+        // Calculate people ahead based on visit type
+        let peopleAhead = 0;
 
-            // Verify it's the same date (Appointment Date or Added Date)
-            const pDate = p.visitType === 'APPOINTMENT' ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
-            const myDate = visit.visitType === 'APPOINTMENT' ? visit.appointmentDate : new Date(visit.timeAdded).toISOString().split('T')[0];
-            if (pDate !== myDate) return false;
+        if (visit.visitType === 'APPOINTMENT' || (visit.visitType === 'WALK_IN' && visit.appointmentTime)) {
+            // For advance bookings and appointments, count ALL previous bookings in the same time slot
+            peopleAhead = clinic.patients.filter(p => {
+                if (p.doctorId !== visit.doctorId || p.id === visit.id) return false;
+                // For advance bookings, include all patients with appointments, not just active ones
+                // Only exclude completed and cancelled
+                if (p.status === PatientStatus.CANCELLED || p.status === PatientStatus.COMPLETED) return false;
 
-            // Same Shift Check
-            const otherShift = getPatientShiftMins(p, doctor);
-            if (!myShift || !otherShift || otherShift.startTime !== myShift.startTime) return false;
+                // Must have appointment details
+                if (!p.appointmentDate || !p.appointmentTime) return false;
 
-            // Sequence check (timeAdded is the reliable sequence order)
-            return p.timeAdded < visit.timeAdded;
-        }).length;
+                // Same date
+                if (p.appointmentDate !== visit.appointmentDate) return false;
+
+                // Same shift
+                const otherShift = getPatientShiftMins(p, doctor);
+                if (!myShift || !otherShift || otherShift.startTime !== myShift.startTime) return false;
+
+                // Earlier appointment time
+                const [pH, pM] = p.appointmentTime.split(':').map(Number);
+                const [myH, myM] = visit.appointmentTime.split(':').map(Number);
+                const pTime = pH * 60 + pM;
+                const myTime = myH * 60 + myM;
+
+                return pTime < myTime;
+            }).length;
+        } else {
+            // For live walk-ins, use the existing logic based on booking time
+            peopleAhead = clinic.patients.filter(p => {
+                if (p.doctorId !== visit.doctorId || p.id === visit.id) return false;
+                // Exclude completed/cancelled patients
+                if (p.status === PatientStatus.CANCELLED || p.status === PatientStatus.COMPLETED) return false;
+
+                // Verify it's the same date
+                const pDate = p.visitType === 'APPOINTMENT' ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
+                const myDate = visit.visitType === 'APPOINTMENT' ? visit.appointmentDate : new Date(visit.timeAdded).toISOString().split('T')[0];
+                if (pDate !== myDate) return false;
+
+                // Same Shift Check
+                const otherShift = getPatientShiftMins(p, doctor);
+                if (!myShift || !otherShift || otherShift.startTime !== myShift.startTime) return false;
+
+                // For live walk-ins, use booking time ordering
+                return new Date(p.timeAdded).getTime() < new Date(visit.timeAdded).getTime();
+            }).length;
+        }
 
         const servingPatient = clinic.patients.find(p => p.doctorId === visit.doctorId && p.status === PatientStatus.WITH_DOCTOR);
         const currentToken = servingPatient ? `#${servingPatient.tokenNumber}` : 'Not Started';
 
+        // Determine if there's a specific scheduled time (ONLY for true Appointments)
+        const hasScheduledTime = visit.visitType === 'APPOINTMENT' && visit.appointmentTime && visit.appointmentDate;
+        // Strict check if the visit's appointment date is today for messaging
+        const actualIsToday = visit.appointmentDate === getLocalToday(clinic.timezone);
+
         let expectedTime = '';
-        if (visit.visitType === 'APPOINTMENT' && visit.appointmentTime && visit.appointmentDate) {
-            // Compare appointment date and time with current date and time
+        let scheduledTime = '';
+        let estimatedArrivalTime = '';
+
+        if (hasScheduledTime) {
+            // For appointments, always show the scheduled time
+            scheduledTime = formatTime12h(visit.appointmentTime);
+
             const apptDate = new Date(visit.appointmentDate + 'T' + visit.appointmentTime);
             const nowTime = now.getTime();
 
+            // Calculate current estimation
+            let baseWait = peopleAhead * (doctor.consultationTime || 15);
+            if (doctor.delayMinutes > 0) baseWait += doctor.delayMinutes;
+            
+            const currentEstDate = new Date(now.getTime() + baseWait * 60000);
+            const currentEstTimeStr = formatTime12h(currentEstDate.getHours().toString().padStart(2, '0') + ':' + currentEstDate.getMinutes().toString().padStart(2, '0'));
+
             if (apptDate.getTime() > nowTime) {
-                // Future appointment - show appointment time
-                expectedTime = formatTime12h(visit.appointmentTime);
+                // Future scheduled time - calculate estimated arrival time based on appointment time + people ahead
+                const baseApptTimeMs = apptDate.getTime();
+                let estimatedArrivalMs = baseApptTimeMs;
+
+                // Add time for people already ahead in this specific slot/shift before this patient
+                estimatedArrivalMs += peopleAhead * (doctor.consultationTime || 15) * 60000;
+
+                const estDate = new Date(estimatedArrivalMs);
+                estimatedArrivalTime = formatTime12h(estDate.getHours().toString().padStart(2, '0') + ':' + estDate.getMinutes().toString().padStart(2, '0'));
+
+                // For future appointments, show scheduled time as primary
+                expectedTime = scheduledTime;
             } else {
-                // Past or current appointment time - calculate based on current time + wait
-                let baseWait = peopleAhead * 15;
-                if (doctor.delayMinutes > 0) baseWait += doctor.delayMinutes;
-                const estDate = new Date(now.getTime() + baseWait * 60000);
-                expectedTime = estDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+                // Scheduled time has passed/is current - show estimation as EST
+                expectedTime = scheduledTime;
+                estimatedArrivalTime = currentEstTimeStr;
             }
         } else {
-            let baseWait = peopleAhead * 15;
+            // This block is for WALK_INs or Walk-ins with a shift marker
+            let baseWait = peopleAhead * (doctor.consultationTime || 15);
             if (doctor.delayMinutes > 0) baseWait += doctor.delayMinutes;
-            const estDate = new Date(now.getTime() + baseWait * 60000);
-            expectedTime = estDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+            
+            // For advance walk-ins, if the shift hasn't started yet, calculate from shift start
+            const visitTimeStr = visit.appointmentTime || new Date(visit.timeAdded).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }).slice(0, 5);
+            const visitDate = visit.appointmentDate || new Date(visit.timeAdded).toISOString().split('T')[0];
+            const visitDateTime = new Date(visitDate + 'T' + visitTimeStr);
+            
+            if (visitDateTime.getTime() > now.getTime()) {
+                 // Future shift
+                 const estimatedArrivalMs = visitDateTime.getTime() + (peopleAhead * (doctor.consultationTime || 15) * 60000);
+                 const estDate = new Date(estimatedArrivalMs);
+                 expectedTime = formatTime12h(estDate.getHours().toString().padStart(2, '0') + ':' + estDate.getMinutes().toString().padStart(2, '0'));
+            } else {
+                 // Active shift
+                 const estDate = new Date(now.getTime() + baseWait * 60000);
+                 expectedTime = formatTime12h(estDate.getHours().toString().padStart(2, '0') + ':' + estDate.getMinutes().toString().padStart(2, '0'));
+            }
         }
 
         let message = "";
@@ -878,18 +954,22 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         const bookedTime = new Date(visit.timeAdded).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
         const bookedDate = new Date(visit.timeAdded).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
-        if (doctor.status === DoctorStatus.ON_BREAK) {
+        if (!actualIsToday && hasScheduledTime) { // Check if it's a scheduled visit for a future date
+            // Check if advance booking is disabled for this clinic
+            const clinic = clinics.find(c => c.id === visit.clinicId);
+            if (clinic?.enableAdvanceBooking === false) {
+                message = "Advance booking not allowed";
+                color = "text-red-700";
+                bgColor = "bg-red-50";
+            } else {
+                message = "Upcoming appointment";
+                color = "text-indigo-700";
+                bgColor = "bg-indigo-50";
+            }
+        } else if (doctor.status === DoctorStatus.ON_BREAK) {
             message = "Doctor is on break";
             color = "text-orange-700";
             bgColor = "bg-orange-100";
-        } else if (doctor.delayMinutes > 0) {
-            message = `Delayed by ${doctor.delayMinutes} mins`;
-            color = "text-red-700";
-            bgColor = "bg-red-100";
-        } else if (!isToday) {
-            message = "Upcoming appointment";
-            color = "text-indigo-700";
-            bgColor = "bg-indigo-50";
         } else if (visit.isCheckedIn) {
             if (peopleAhead === 0) {
                 message = "You are next! Get ready.";
@@ -938,6 +1018,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             peopleAhead,
             waitTime: peopleAhead * 15,
             expectedTime,
+            scheduledTime,
+            estimatedArrivalTime,
             currentToken,
             message,
             color,
@@ -985,7 +1067,29 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                     addToast("This shift is at full capacity. Please select another shift.", "error");
                     return;
                 }
-                bookingTime = shift.startTime;
+
+                // Determine if advance booking
+                const currentMins = clinicNow.getHours() * 60 + clinicNow.getMinutes();
+                const [sh, sm] = shift.startTime.split(':').map(Number);
+                const startTotal = sh * 60 + sm;
+                const isActive = currentMins >= startTotal;
+
+                // Calculate effective load (including this new booking)
+                const effectiveLoad = stats.load + 1;
+                let estimatedWaitDuration = effectiveLoad * (selectedDoctor!.consultationTime || 15);
+
+                if (isActive) {
+                    // For active shift, add doctor's delay and estimate from now
+                    estimatedWaitDuration += (selectedDoctor!.delayMinutes || 0);
+                    const finalEstDate = new Date(clinicNow.getTime() + estimatedWaitDuration * 60000);
+                    bookingTime = finalEstDate.getHours().toString().padStart(2, '0') + ':' + finalEstDate.getMinutes().toString().padStart(2, '0');
+                } else {
+                    // For advance shift, estimate from shift start
+                    let baseFutureTime = new Date(clinicNow);
+                    baseFutureTime.setHours(sh, sm, 0, 0);
+                    const finalEstDate = new Date(baseFutureTime.getTime() + estimatedWaitDuration * 60000);
+                    bookingTime = finalEstDate.getHours().toString().padStart(2, '0') + ':' + finalEstDate.getMinutes().toString().padStart(2, '0');
+                }
             }
         }
 
@@ -1014,14 +1118,15 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         const travelMins = parseInt(travelTime) || 0;
 
         if (visitType === 'WALK_IN') {
-            // Find chosen shift stats
-            const shiftStats = walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
-            // Fix: Accessing totalWaitMins from inside stats property
-            const estimatedWaitMins = shiftStats?.stats.totalWaitMins || 0;
-
-            if (travelMins > estimatedWaitMins + 15 && travelMins > 0) {
-                setShowLateWarningModal(true);
-                return;
+            // Late arrival warning only applies for LIVE shift context
+            const chosenShift = walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
+            const isLive = !!chosenShift?.isActive && !chosenShift?.isFull && !chosenShift?.isEnded;
+            if (isLive) {
+                const estimatedWaitMins = chosenShift?.stats.totalWaitMins || 0;
+                if (travelMins > estimatedWaitMins + 15 && travelMins > 0) {
+                    setShowLateWarningModal(true);
+                    return;
+                }
             }
         }
 
@@ -1152,7 +1257,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         const currentMins = now.getHours() * 60 + now.getMinutes();
 
         // Filter shifts that are not Appointment only
-        return schedule.slots.filter(s => s.active !== false && (!s.mode || s.mode === SessionMode.WALK_IN || s.mode === SessionMode.HYBRID)).map(shift => {
+        let shifts = schedule.slots.filter(s => s.active !== false && (!s.mode || s.mode === SessionMode.WALK_IN || s.mode === SessionMode.HYBRID)).map(shift => {
             const [sh, sm] = shift.startTime.split(':').map(Number);
             const [eh, em] = shift.endTime.split(':').map(Number);
             const startTotal = sh * 60 + sm;
@@ -1188,6 +1293,13 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 stats: { ...stats, totalWaitMins }
             };
         });
+
+        // Filter out future shifts if advance booking is disabled
+        if (selectedClinic.enableAdvanceBooking === false) {
+            shifts = shifts.filter(s => s.isActive);
+        }
+
+        return shifts;
     }, [selectedDoctor, selectedClinic]);
 
     // Initial Shift Selection Effect
@@ -1204,24 +1316,62 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
     // NEW: Memoize walk-in estimation for confirmation popup
     const walkInEstimation = useMemo(() => {
-        if (visitType !== 'WALK_IN' || !selectedWalkInShiftId || !selectedDoctor) return null;
+        if (visitType !== 'WALK_IN' || !selectedWalkInShiftId || !selectedDoctor || !selectedClinic) return null;
         const selectedShift = walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
         if (!selectedShift) return null;
 
-        const mins = selectedShift.stats.totalWaitMins;
-        const now = getClinicCurrentTime(selectedClinic?.timezone);
-        const estDate = new Date(now.getTime() + mins * 60000);
-        const estClockTime = estDate.getHours().toString().padStart(2, '0') + ':' + estDate.getMinutes().toString().padStart(2, '0');
+        // The 'stats.load' from selectedShift is the count of existing patients in that shift.
+        // For a new booking, we need to add 1 to this load for the calculation.
+        const effectiveLoad = selectedShift.stats.load + 1; // Include the new booking in the load
+
+        // Calculate base wait time from effective load and consultation time
+        let estimatedWaitDuration = effectiveLoad * (selectedDoctor.consultationTime || 15);
+
+        const now = getClinicCurrentTime(selectedClinic.timezone);
+        const [shiftStartH, shiftStartM] = selectedShift.shift.startTime.split(':').map(Number);
+
+        let finalEstDate: Date;
+        let finalEstMins: number; // This will represent the duration of the wait
+
+        if (selectedShift.isActive) { // This is for an active/live shift
+            // For active shifts, add doctor's current delay and estimate from 'now'
+            estimatedWaitDuration += (selectedDoctor.delayMinutes || 0);
+            finalEstDate = new Date(now.getTime() + estimatedWaitDuration * 60000);
+            finalEstMins = estimatedWaitDuration;
+        } else { // This is an advance booking for a future shift
+            // Base time is the shift start time on 'today's' date (relative to the clinic's timezone)
+            let baseFutureTime = new Date(now); // Clone 'now' to keep current date part
+            baseFutureTime.setHours(shiftStartH, shiftStartM, 0, 0); // Set time to shift start time
+
+            // If the shift starts in the future (later today or tomorrow etc.), calculate from shift start.
+            // If the shift start time has already passed today but is not "active" (meaning it has ended),
+            // then it implies booking for next day's same shift. For simplicity here, we assume if not active, it's future.
+            
+            finalEstDate = new Date(baseFutureTime.getTime() + estimatedWaitDuration * 60000);
+            finalEstMins = estimatedWaitDuration;
+        }
+
+        const estClockTime = finalEstDate.getHours().toString().padStart(2, '0') + ':' + finalEstDate.getMinutes().toString().padStart(2, '0');
 
         return {
-            count: selectedShift.stats.load,
-            mins,
-            label: mins === 0 ? 'Immediate' : `~${mins} mins`,
+            count: effectiveLoad,
+            mins: finalEstMins,
+            label: finalEstMins === 0 ? 'Immediate' : `~${finalEstMins} mins`,
             estClockTime: formatTime12h(estClockTime)
         };
     }, [visitType, selectedWalkInShiftId, selectedDoctor, walkInShiftsToday, selectedClinic]);
 
-    const isWalkInAllowed = walkInShiftsToday.length > 0 && walkInShiftsToday.some(s => !s.isEnded && !s.isFull) && isClinicOpen(selectedClinic?.operatingHours, selectedClinic?.timezone);
+    // Split walk-in availability:
+    // - canBookWalkInToday: any not-ended and not-full shift exists today (advance token allowed even if clinic closed)
+    // - canJoinLiveWalkInNow: there's an active, not-full shift and clinic is open (join live queue now)
+    const canBookWalkInToday = walkInShiftsToday.length > 0 && walkInShiftsToday.some(s => !s.isEnded && !s.isFull);
+    const canJoinLiveWalkInNow = walkInShiftsToday.some(s => s.isActive && !s.isFull) && isClinicOpen(selectedClinic?.operatingHours, selectedClinic?.timezone);
+
+    // Selection-aware allowance for BookingFormView
+    const selectedWalkInShift = selectedWalkInShiftId ? walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId) : undefined;
+    const isWalkInAllowed = selectedClinic?.enableAdvanceBooking === false
+        ? (selectedWalkInShift ? (!selectedWalkInShift.isEnded && !selectedWalkInShift.isFull && selectedWalkInShift.isActive) : canJoinLiveWalkInNow)
+        : (selectedWalkInShift ? (!selectedWalkInShift.isEnded && !selectedWalkInShift.isFull) : canBookWalkInToday);
 
     const isClinicDirectWalkInOnly = selectedClinic?.operationMode === ClinicOperationMode.DIRECT_WALK_IN;
     const isClinicOnlineWalkInAllowed = selectedClinic && [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(selectedClinic.operationMode);
@@ -1955,15 +2105,15 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 <div className="space-y-2">
                                     <div className="flex items-center gap-2 font-bold text-slate-800 text-sm">
                                         <Clock className="h-3.5 w-3.5 text-primary-500" />
-                                        {visitType === 'WALK_IN' ? (
-                                            <>Today • {walkInEstimation?.estClockTime} <span className="text-[10px] font-medium text-slate-400 ml-1">(est. turn)</span></>
-                                        ) : (
+                                        {visitType === 'WALK_IN' ? <>Today • {walkInEstimation?.estClockTime} <span className="text-[10px] font-medium text-slate-400 ml-1">(est. turn)</span></> : (
                                             <>{new Date(apptDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} • {formatTime12h(apptTime)}</>
                                         )}
                                     </div>
                                     {visitType === 'WALK_IN' && selectedWalkInShiftId && (() => {
                                         const selectedShift = walkInShiftsToday.find(s => (s.shift.id || s.shift.startTime) === selectedWalkInShiftId);
                                         if (!selectedShift) return null;
+                                        const isAdvance = !selectedShift.isActive;
+                                        if (isAdvance) return null; // Hide arrival for advance booking
 
                                         const now = getClinicCurrentTime(selectedClinic?.timezone);
                                         const travelMins = parseInt(travelTime);

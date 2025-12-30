@@ -10,9 +10,11 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 class StorageService {
   private clinics: Clinic[] = [];
   private listeners: ((clinics: Clinic[]) => void)[] = [];
+  private isLocalChange = false; // Track if change was made by this tab
 
   constructor() {
     this.load();
+    this.setupCrossTabSync();
   }
 
   private load() {
@@ -72,11 +74,32 @@ class StorageService {
   private save() {
     try {
       if (typeof window !== 'undefined') {
+        this.isLocalChange = true;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(this.clinics));
         this.notify();
+        // Reset flag after a short delay to allow storage event to be processed
+        setTimeout(() => { this.isLocalChange = false; }, 0);
       }
     } catch (e) {
       console.error("Storage Save Error", e);
+    }
+  }
+
+  private setupCrossTabSync() {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (event) => {
+        // Only react to changes in our storage key and if it's not from this tab
+        if (event.key === STORAGE_KEY && !this.isLocalChange) {
+          try {
+            if (event.newValue) {
+              this.clinics = JSON.parse(event.newValue);
+              this.notify();
+            }
+          } catch (e) {
+            console.error("Cross-tab sync error:", e);
+          }
+        }
+      });
     }
   }
 
@@ -374,6 +397,7 @@ class StorageService {
 
   resetSystem = async () => {
       await delay(500);
+      this.isLocalChange = true;
       localStorage.removeItem(STORAGE_KEY);
       this.clinics = JSON.parse(JSON.stringify(INITIAL_CLINICS));
       this.save();
@@ -381,6 +405,7 @@ class StorageService {
 
   deleteAllData = async () => {
       await delay(500);
+      this.isLocalChange = true;
       localStorage.removeItem(STORAGE_KEY);
       this.clinics = [];
       this.save();

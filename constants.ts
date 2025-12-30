@@ -425,7 +425,30 @@ CLINIC_5.doctors = [
 CLINIC_5.patients = createPatientsForClinic(CLINIC_5.id, CLINIC_5.doctors);
 
 
-export const INITIAL_CLINICS: Clinic[] = [CLINIC_1, CLINIC_2, CLINIC_3, CLINIC_4, CLINIC_5];
+const ALL_CLINICS_TEMP: Clinic[] = [CLINIC_1, CLINIC_2, CLINIC_3, CLINIC_4, CLINIC_5];
+
+// Enforce a maximum of 2 active visits for the demo patient across all clinics
+const DEMO_PATIENT_PHONE = "9876543210";
+let activeDemoPatientsCount = 0;
+
+ALL_CLINICS_TEMP.forEach(clinic => {
+    clinic.patients = clinic.patients.map(patient => {
+        if (patient.phone === DEMO_PATIENT_PHONE) {
+            if (patient.status === PatientStatus.WAITING || patient.status === PatientStatus.WITH_DOCTOR) {
+                if (activeDemoPatientsCount < 2) {
+                    activeDemoPatientsCount++;
+                    return patient; // Keep as active
+                } else {
+                    // Mark as completed if already 2 active visits exist for the demo user
+                    return { ...patient, status: PatientStatus.COMPLETED, timeCompleted: Date.now() };
+                }
+            }
+        }
+        return patient; // Return other patients as is
+    });
+});
+
+export const INITIAL_CLINICS: Clinic[] = ALL_CLINICS_TEMP;
 export const INITIAL_DOCTORS: Doctor[] = CLINIC_1.doctors;
 
 export const PRICING_PLANS: PricingPlan[] = [

@@ -96,11 +96,16 @@ export const BookingFormView = ({
 }) => {
     
     // Filter walk-in shifts: Must be WALK_IN or HYBRID mode (or undefined/default)
-    const validWalkInShifts = walkInShiftsToday.filter(s => 
+    const validWalkInShifts = walkInShiftsToday.filter(s =>
         !s.shift.mode || s.shift.mode === SessionMode.WALK_IN || s.shift.mode === SessionMode.HYBRID
     );
 
-    const hasWalkInToday = validWalkInShifts.length > 0;
+    // Filter out future shifts if advance booking is disabled
+    const filteredWalkInShifts = selectedClinic?.enableAdvanceBooking === false
+        ? validWalkInShifts.filter(s => s.isActive)
+        : validWalkInShifts;
+
+    const hasWalkInToday = filteredWalkInShifts.length > 0;
     
     const isAdvanceBooking = React.useMemo(() => {
         if (visitType !== 'WALK_IN' || !selectedWalkInShiftId) return false;
@@ -305,7 +310,8 @@ export const BookingFormView = ({
                                 <div className="space-y-3">
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Live Availability (Today)</label>
 
-                                    {/* Travel Time & Arrival Analysis - Side by Side */}
+                                    {/* Travel Time & Arrival Analysis - show only for live shift (not for advance booking) */}
+                                    {!isAdvanceBooking && (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         {/* Travel Time Selector */}
                                         <div className={`bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col ${!isWalkInAllowed ? 'opacity-50 grayscale' : ''}`}>
@@ -390,9 +396,10 @@ export const BookingFormView = ({
                                             )}
                                         </div>
                                     </div>
-
+                                    )}
+                                    
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        {validWalkInShifts.map(({ shift, statusLabel, statusColor, stats, isEnded, isFull, totalWaitMins, load }) => (
+                                        {filteredWalkInShifts.map(({ shift, statusLabel, statusColor, stats, isEnded, isFull, totalWaitMins, load }) => (
                                             <div key={shift.id || shift.startTime} onClick={() => !isEnded && !isFull && setSelectedWalkInShiftId(shift.id || shift.startTime)} className={`p-2 rounded-xl border-2 transition-all ${(!isEnded && !isFull) ? 'cursor-pointer' : 'cursor-not-allowed'} ${selectedWalkInShiftId === (shift.id || shift.startTime) ? 'border-primary-600 bg-white shadow-md' : (isEnded || isFull) ? 'bg-slate-100/50 border-transparent opacity-40 grayscale' : 'bg-white border-slate-200 hover:border-primary-300'}`}>
                                                 <div className="flex justify-between items-start mb-1"><div className={`p-1.5 rounded-lg ${selectedWalkInShiftId === (shift.id || shift.startTime) ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-400'}`}><Clock className="h-3 w-3" /></div><span className={`text-[7px] font-black uppercase tracking-wider ${statusColor}`}>{statusLabel}</span></div>
                                                 <h4 className="font-black text-slate-800 text-xs">{shift.label || 'Regular Shift'}</h4>
@@ -401,8 +408,13 @@ export const BookingFormView = ({
                                             </div>
                                         ))}
                                     </div>
-                                    {validWalkInShifts.length === 0 && (
-                                        <div className="text-center py-4 text-xs text-slate-400">No walk-in sessions available for today.</div>
+                                    {filteredWalkInShifts.length === 0 && (
+                                        <div className="text-center py-4 text-xs text-slate-400">
+                                            {selectedClinic?.enableAdvanceBooking === false
+                                                ? "No live walk-in sessions available. Advance booking is disabled for this clinic."
+                                                : "No walk-in sessions available for today."
+                                            }
+                                        </div>
                                     )}
                                 </div>
                             ) : (
