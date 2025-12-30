@@ -181,7 +181,7 @@ export const DoctorProfileModal: React.FC<DoctorProfileModalProps> = ({ isOpen, 
           className={`shadow-lg shadow-primary-200 px-8 whitespace-nowrap ${!(canGetToken || canBookForTomorrow) ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           {(canGetToken || canBookForTomorrow) ? <Zap className="h-4 w-4 mr-2 fill-current" /> : <Calendar className="h-4 w-4 mr-2" />}
-          {canGetToken ? (canQueue ? "Get Token / Join Queue" : "Book Appointment") : canBookForTomorrow ? "Book Tomorrow" : "Unavailable"}
+          {canGetToken ? "GET TOKEN" : canBookForTomorrow ? "BOOK TOMORROW" : "BOOK TODAY"}
         </Button>
       </div>
     </Modal>

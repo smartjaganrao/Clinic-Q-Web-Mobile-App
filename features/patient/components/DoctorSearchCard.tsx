@@ -133,6 +133,18 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
   const isTokenAvailable = summary.availableClinics > 0;
   const canBookAppointment = summary.availableForBooking > 0;
 
+
+  const formatTime12h = (time24: string) => {
+    if (!time24 || !time24.includes(':')) return time24;
+    const [hStr, mStr] = time24.split(':');
+    let h = parseInt(hStr);
+    const m = mStr.padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    return `${h}:${m} ${ampm}`;
+  };
+
   return (
     <div className={`bg-white rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group cursor-pointer mb-2 sm:mb-4 ${onClick ? 'hover:border-primary-300' : ''}`} onClick={onClick}>
       {/* TOP SECTION - DOCTOR HEADER */}
@@ -267,7 +279,7 @@ export const DoctorSearchCard: React.FC<DoctorSearchCardProps> = ({
                  disabled={!isTokenAvailable && !canBookAppointment}
                >
                  {isTokenAvailable ? <Zap className="h-3 w-3 fill-current" /> : <Calendar className="h-3 w-3" />}
-                 {isTokenAvailable ? 'Get Token' : (canBookAppointment ? 'Book Appointment' : 'Unavailable')}
+                 {isTokenAvailable ? 'GET TOKEN' : (canBookAppointment ? 'BOOK TOMORROW' : 'BOOK TODAY')}
                </button>
            </Tooltip>
       </div>

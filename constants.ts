@@ -40,7 +40,7 @@ const MASTER_DOCTORS = [
     { name: "Dr. Meera Patel", specialty: "Dermatologist", education: ["MBBS", "DDVL"], experience: 5, languages: ['English', 'Gujarati'], gender: "Female" as const, avatarUrl: "https://images.unsplash.com/photo-1614608682850-e0d6ed316d47?auto=format&fit=crop&q=80&w=300&h=300", bio: "Dr. Meera Patel is a skilled Dermatologist with 5 years of experience. She offers expert care for a variety of skin conditions, with a special interest in cosmetic dermatology." },
     { name: "Dr. Vikram Singh", specialty: "Dentist", education: ["BDS", "MDS"], experience: 9, languages: ['English', 'Tamil'], gender: "Male" as const, avatarUrl: "https://images.unsplash.com/photo-1582750433449-648ed127bb54?auto=format&fit=crop&q=80&w=300&h=300", bio: "Dr. Vikram Singh is a proficient Dentist with 9 years of experience. He is committed to providing high-quality dental care, from routine check-ups to complex procedures." },
     { name: "Dr. Sanjay Gupta", specialty: "ENT Specialist", education: ["MBBS", "MS (ENT)"], experience: 11, languages: ['English', 'Hindi'], gender: "Male" as const, avatarUrl: "https://images.unsplash.com/photo-1612531386530-97286d97c2d2?auto=format&fit=crop&q=80&w=300&h=300", bio: "Dr. Sanjay Gupta is an experienced ENT Specialist with 11 years in practice. He provides comprehensive care for ear, nose, and throat conditions in both adults and children." },
-    { name: "Dr. Anand Raj", specialty: "Emergency Physician", education: ["MBBS", "MD (Emergency Med)"], experience: 7, languages: ['English', 'Tamil'], gender: "Male" as const, avatarUrl: "https://images.unsplash.com/photo-1598256989800-fe5f928168ed?auto=format&fit=crop&q=80&w=300&h=300", bio: "Dr. Anand Raj is a sharp and responsive Emergency Physician with 7 years of experience in a high-volume ER setting. He excels in critical care and life-saving interventions." }
+    { name: "Dr. Anand Raj", specialty: "Emergency Physician", education: ["MBBS", "MD (Emergency Med)"], experience: 7, languages: ['English', 'Tamil'], gender: "Male" as const, avatarUrl: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=300&h=300", bio: "Dr. Anand Raj is a sharp and responsive Emergency Physician with 7 years of experience in a high-volume ER setting. He excels in critical care and life-saving interventions." }
 ];
 
 const createPatientsForClinic = (clinicId: string, doctors: Doctor[]) => {
@@ -305,7 +305,7 @@ const CLINIC_4: Clinic = {
     timezone: "Asia/Kolkata",
     operatingHours: "24 hours",
     geoLocation: { lat: 13.0067, lng: 80.2585 },
-    imageUrl: "https://images.unsplash.com/photo-1587351021759-3e566b9af953?auto=format&fit=crop&q=80&w=800",
+    imageUrl: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
     amenities: ["Emergency", "ICU", "Ambulance", "Cafeteria", "Pharmacy"],
     subscriptionStatus: "ACTIVE",
     doctors: [],
@@ -425,30 +425,7 @@ CLINIC_5.doctors = [
 CLINIC_5.patients = createPatientsForClinic(CLINIC_5.id, CLINIC_5.doctors);
 
 
-const ALL_CLINICS_TEMP: Clinic[] = [CLINIC_1, CLINIC_2, CLINIC_3, CLINIC_4, CLINIC_5];
-
-// Enforce a maximum of 2 active visits for the demo patient across all clinics
-const DEMO_PATIENT_PHONE = "9876543210";
-let activeDemoPatientsCount = 0;
-
-ALL_CLINICS_TEMP.forEach(clinic => {
-    clinic.patients = clinic.patients.map(patient => {
-        if (patient.phone === DEMO_PATIENT_PHONE) {
-            if (patient.status === PatientStatus.WAITING || patient.status === PatientStatus.WITH_DOCTOR) {
-                if (activeDemoPatientsCount < 2) {
-                    activeDemoPatientsCount++;
-                    return patient; // Keep as active
-                } else {
-                    // Mark as completed if already 2 active visits exist for the demo user
-                    return { ...patient, status: PatientStatus.COMPLETED, timeCompleted: Date.now() };
-                }
-            }
-        }
-        return patient; // Return other patients as is
-    });
-});
-
-export const INITIAL_CLINICS: Clinic[] = ALL_CLINICS_TEMP;
+export const INITIAL_CLINICS: Clinic[] = [CLINIC_1, CLINIC_2, CLINIC_3, CLINIC_4, CLINIC_5];
 export const INITIAL_DOCTORS: Doctor[] = CLINIC_1.doctors;
 
 export const PRICING_PLANS: PricingPlan[] = [

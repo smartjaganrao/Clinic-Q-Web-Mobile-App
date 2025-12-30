@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
-import { storage } from '../../../services/storage'; // Import storage service
-import { LogOut, Plus, Edit2, Trash2, Save, X, RotateCcw } from 'lucide-react';
+import { LogOut, Plus, Edit2, Trash2, Save, X } from 'lucide-react';
 
 export const ProfileView = ({
     userName,
@@ -19,13 +18,6 @@ export const ProfileView = ({
 }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editedProfile, setEditedProfile] = useState(userProfile);
-
-    const handleResetData = () => {
-        if (window.confirm("Are you sure you want to reset all app data to initial state? This cannot be undone and will log you out.")) {
-            storage.resetSystem();
-            window.location.reload();
-        }
-    };
 
     const onSave = () => {
         handleUpdateProfile(editedProfile);
@@ -131,15 +123,6 @@ export const ProfileView = ({
                         </div>
                     )}
                      <div className="pt-6 flex justify-end gap-2">
-                        {!isEditing && (
-                            <Button
-                                variant="destructive" // Using a destructive variant for reset, usually red
-                                onClick={handleResetData}
-                            >
-                                <RotateCcw className="h-4 w-4 mr-2" />
-                                Reset Data
-                            </Button>
-                        )}
                         {isEditing ? (
                             <>
                                 <Button

@@ -295,7 +295,7 @@ export const validateShiftWithinClinicHours = (shiftStart: string, shiftEnd: str
 
 export const hasSlotOverlap = (slots: TimeSlot[]): boolean => {
     if (!slots || slots.length < 2) return false;
-    
+
     const sorted = [...slots].sort((a, b) => {
         const sa = parseTimeMins(a.startTime) || 0;
         const sb = parseTimeMins(b.startTime) || 0;
@@ -305,7 +305,7 @@ export const hasSlotOverlap = (slots: TimeSlot[]): boolean => {
     for (let i = 0; i < sorted.length - 1; i++) {
         const current = sorted[i];
         const next = sorted[i+1];
-        
+
         if (!current.active || !next.active) continue;
 
         const startA = parseTimeMins(current.startTime) || 0;
@@ -313,7 +313,7 @@ export const hasSlotOverlap = (slots: TimeSlot[]): boolean => {
         if (endA <= startA) endA += 1440;
 
         const startB = parseTimeMins(next.startTime) || 0;
-        
+
         if (startB < endA) return true; // Overlap detected
     }
     return false;
