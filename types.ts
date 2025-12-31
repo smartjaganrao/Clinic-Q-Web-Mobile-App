@@ -213,6 +213,22 @@ export interface AppNotification {
   type: 'info' | 'success' | 'warning' | 'error';
 }
 
+export interface Shift {
+  start: string; // "HH:mm"
+  end: string;   // "HH:mm"
+}
+
+export interface ClinicDayConfig {
+  dayOfWeek: string; // 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'
+  isOpen: boolean;
+  shifts: Shift[];
+}
+
+export interface ClinicLeaveDay {
+  date: string;
+  reason?: string;
+}
+
 export interface Clinic {
   id: string;
   name: string;
@@ -241,6 +257,8 @@ export interface Clinic {
   // Admin Data
   subscriptionStatus?: 'ACTIVE' | 'SUSPENDED' | 'PAST_DUE';
   joinedDate?: number;
+  workingHours?: ClinicDayConfig[]; // New: Weekly Working Hours Configuration
+  leaveDays?: ClinicLeaveDay[];
 }
 
 // Pricing Types

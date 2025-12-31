@@ -92,6 +92,16 @@ const CLINIC_1: Clinic = {
     imageUrl: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
     amenities: ["Pharmacy", "Lab", "X-Ray", "Parking", "Wheelchair", "WiFi"],
     subscriptionStatus: "ACTIVE",
+    workingHours: [
+        { dayOfWeek: 'MON', isOpen: true, shifts: [{ start: '08:00', end: '22:00' }] },
+        { dayOfWeek: 'TUE', isOpen: true, shifts: [{ start: '08:00', end: '22:00' }] },
+        { dayOfWeek: 'WED', isOpen: true, shifts: [{ start: '08:00', end: '22:00' }] },
+        { dayOfWeek: 'THU', isOpen: true, shifts: [{ start: '08:00', end: '22:00' }] },
+        { dayOfWeek: 'FRI', isOpen: true, shifts: [{ start: '08:00', end: '22:00' }] },
+        { dayOfWeek: 'SAT', isOpen: true, shifts: [{ start: '09:00', end: '21:00' }] },
+        { dayOfWeek: 'SUN', isOpen: false, shifts: [] }
+    ],
+    leaveDays: [],
     doctors: [],
     patients: [],
     staff: [{ id: "staff_1", name: "Priya (Admin)", role: "RECEPTIONIST", phone: "9999999999", email: "admin@demo.com", password: "password", isActive: true, joinedDate: Date.now() }]
@@ -200,6 +210,7 @@ const CLINIC_2: Clinic = {
     imageUrl: "https://images.unsplash.com/photo-1536856136534-bb679c52a9aa?auto=format&fit=crop&q=80&w=800",
     amenities: ["Play Area", "Vaccination", "Nebulizer"],
     subscriptionStatus: "ACTIVE",
+    leaveDays: [],
     doctors: [],
     patients: [],
     staff: []
@@ -254,6 +265,7 @@ const CLINIC_3: Clinic = {
     imageUrl: "https://images.unsplash.com/photo-1606811841689-23dfddce3e95?auto=format&fit=crop&q=80&w=800",
     amenities: ["X-Ray", "Root Canal", "Whitening"],
     subscriptionStatus: "ACTIVE",
+    leaveDays: [],
     doctors: [],
     patients: [],
     staff: []
@@ -308,6 +320,7 @@ const CLINIC_4: Clinic = {
     imageUrl: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
     amenities: ["Emergency", "ICU", "Ambulance", "Cafeteria", "Pharmacy"],
     subscriptionStatus: "ACTIVE",
+    leaveDays: [],
     doctors: [],
     patients: [],
     staff: []
@@ -388,6 +401,7 @@ const CLINIC_5: Clinic = {
     imageUrl: "https://images.unsplash.com/photo-1616391182219-e080b4d1043a?auto=format&fit=crop&q=80&w=800",
     amenities: ["Laser", "Facial", "Cosmetology"],
     subscriptionStatus: "ACTIVE",
+    leaveDays: [],
     doctors: [],
     patients: [],
     staff: []

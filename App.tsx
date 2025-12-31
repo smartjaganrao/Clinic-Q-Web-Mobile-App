@@ -322,20 +322,31 @@ export default function App() {
   };
 
   // DOCTOR MANAGEMENT (Reception Context)
-  const handleAddDoctor = async (name: string, specialty: string, room: string, schedule: DaySchedule[], mobile?: string, regNo?: string, masterId?: string, avatarUrl?: string, fee?: number, time?: number) => {
+  const handleAddDoctor = async (data: Partial<Doctor>) => {
       if (!currentClinicId) return;
-      const newMasterId = masterId || `master_${Date.now()}`;
+      const newMasterId = data.masterId || `master_${Date.now()}`;
       const newDoc: Doctor = {
           id: `doc_${Date.now()}`,
           masterId: newMasterId,
-          name, specialty, roomNumber: room,
-          mobile: mobile || '', registrationNumber: regNo,
-          weeklySchedule: schedule,
+          name: data.name || 'Unnamed Doctor',
+          specialty: data.specialty || 'General',
+          roomNumber: data.roomNumber || 'N/A',
+          mobile: data.mobile || '',
+          registrationNumber: data.registrationNumber,
+          email: data.email,
+          password: data.password,
+          weeklySchedule: data.weeklySchedule || [],
           isAvailable: true, status: DoctorStatus.AVAILABLE,
           delayMinutes: 0,
-          consultationFee: fee || 500, rating: 5.0, reviewCount: 0,
-          consultationTime: time || 15,
-          avatarUrl: avatarUrl || `https://i.pravatar.cc/150?u=${newMasterId}`
+          consultationFee: data.consultationFee || 500,
+          consultationTime: data.consultationTime || 15,
+          avatarUrl: data.avatarUrl || `https://i.pravatar.cc/150?u=${newMasterId}`,
+          bio: data.bio,
+          education: data.education,
+          languages: data.languages,
+          experience: data.experience,
+          rating: 5.0, // default
+          reviewCount: 0, // default
       };
       await storage.addDoctor(currentClinicId, newDoc);
   };
