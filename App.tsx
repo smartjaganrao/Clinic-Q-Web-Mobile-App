@@ -18,6 +18,7 @@ import { Logo } from './components/Logo';
 import { Button } from './components/Button';
 import { LogOut } from 'lucide-react';
 import { storage } from './services/storage';
+import { saveSupabaseConfig, getSupabase } from './services/supabaseClient';
 
 // Utility to generate IDs
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -103,12 +104,29 @@ export default function App() {
   // ------------------------------------------------------------------
   // SUBSCRIPTION TO DATA LAYER
   // ------------------------------------------------------------------
+  const playNotificationSound = () => {
+      // Simple notification chime
+      const audio = new Audio('./assets/sounds/notification.mp3');
+      audio.play().catch(e => console.log("Audio play blocked (interaction required):", e));
+  };
+
   useEffect(() => {
       const unsubscribe = storage.subscribe((data) => {
           setClinics(data);
           setIsInitialized(true);
       });
-      return () => unsubscribe();
+
+      const unsubscribeAlerts = storage.subscribeToAlerts((msg, type) => {
+          addToast(msg, type);
+          if (msg.includes("New Patient")) {
+              playNotificationSound();
+          }
+      });
+
+      return () => {
+          unsubscribe();
+          unsubscribeAlerts();
+      };
   }, []);
 
   // ------------------------------------------------------------------
@@ -198,6 +216,7 @@ export default function App() {
   };
 
   const handleDoctorSelect = (doctorId: string) => {
+    setUserRole(UserRole.DOCTOR);
     setCurrentUserId(doctorId);
     navigate(`/clinic/${currentClinicId}/doctor`);
   };
@@ -262,7 +281,8 @@ export default function App() {
 
     const newPatient: Patient = {
       id: `pat_${Date.now()}`,
-      tokenNumber: (clinic.patients.length > 0 ? Math.max(...clinic.patients.map(p => p.tokenNumber)) : 0) + 1,
+      tokenNumber: 0, // Placeholder, calculated in storage
+      queueOrder: undefined, // Placeholder, calculated in storage
       name, phone, doctorId,
       status: PatientStatus.WAITING,
       timeAdded: Date.now(),
@@ -275,8 +295,9 @@ export default function App() {
       address, city, country, location
     };
 
-    await storage.addPatient(currentClinicId, newPatient);
-    addToast(`Token #${newPatient.tokenNumber} generated`, 'success');
+    const addedPatient = await storage.addPatient(currentClinicId, newPatient);
+    addToast(`Token #${addedPatient.tokenNumber} generated`, 'success');
+    playNotificationSound();
   };
 
   const handleUpdateStatus = async (patientId: string, status: PatientStatus) => {
@@ -420,8 +441,8 @@ export default function App() {
                   if (hasNokA !== hasNokB) return hasNokA ? 1 : -1; 
               }
               const getStatusPriority = (s: PatientStatus) => {
-                  if (s === PatientStatus.ON_HOLD) return 0;
-                  if (s === PatientStatus.WAITING) return 1;
+                  if (s === PatientStatus.WAITING) return 0;
+                  if (s === PatientStatus.ON_HOLD) return 1;
                   return 2;
               };
               const pA = getStatusPriority(a.status);
@@ -483,18 +504,18 @@ export default function App() {
         
         const newPatient: Patient = {
             id: `pat_remote_${Date.now()}`,
-            tokenNumber: Math.floor(Math.random() * 1000),
+            tokenNumber: 0, // Placeholder, calculated in storage
+            queueOrder: undefined, // Placeholder, calculated in storage
             name, phone, doctorId,
             status: PatientStatus.WAITING,
             timeAdded: Date.now(),
             visitType,
-            appointmentDate: date, appointmentTime: time,
+            appointmentDate: date || getLocalToday(), appointmentTime: time,
             age, gender, symptoms,
             isCheckedIn: false 
         };
         
         await storage.addPatient(clinicId, newPatient);
-        addToast(date ? 'Appointment Booked!' : 'Token Generated!', 'success');
     };
 
   const handleCancelVisit = async (clinicId: string, patientId: string) => {
@@ -568,6 +589,169 @@ export default function App() {
       addToast("Staff removed", "info");
   };
 
+  // SUPABASE SETUP HANDLER
+  const handleSupabaseSetup = async (url: string, key: string) => {
+      if(!url || !key) {
+          addToast("Please enter URL and Key", "error");
+          return;
+      }
+      saveSupabaseConfig(url, key);
+  };
+
+  const handleSeedData = async () => {
+      try {
+          addToast("Syncing data to Supabase...", "info");
+          await storage.seedDatabase();
+          addToast("Data synced successfully!", "success");
+      } catch (e: any) {
+          addToast(e.message, "error");
+      }
+  };
+
+  const handleClearPatients = async () => {
+      // Confirm before deleting
+      if (window.confirm("Are you sure you want to delete ALL patient data? This cannot be undone.")) {
+          await storage.clearAllPatients();
+          addToast("All patients cleared from Local & DB", "success");
+      }
+  };
+
+  const handleMigrateToHybrid = async () => {
+      if (window.confirm("This will copy all local data into new Relational Tables (Doctors, Patients) in Supabase. Continue?")) {
+          try {
+              addToast("Starting migration...", "info");
+              await storage.migrateToHybrid();
+              addToast("Migration successful! Tables populated.", "success");
+          } catch (e: any) {
+              addToast("Migration failed: " + e.message, "error");
+          }
+      }
+  };
+
+  // Setup Component (Inline for simplicity)
+  const SupabaseSetup = () => {
+      const [url, setUrl] = useState(localStorage.getItem('sb_url') || '');
+      const [key, setKey] = useState(localStorage.getItem('sb_key') || '');
+      const [showSql, setShowSql] = useState(false);
+
+      const sqlScript = `-- Run this in Supabase SQL Editor
+-- RESET SCHEMA (Fixes UUID vs Text ID mismatch)
+DROP TABLE IF EXISTS public.patients CASCADE;
+DROP TABLE IF EXISTS public.doctors CASCADE;
+DROP TABLE IF EXISTS public.clinics CASCADE;
+
+-- 1. Clinics Table (Parent)
+create table public.clinics (
+  id text primary key,
+  name text not null,
+  data jsonb
+);
+
+-- 2. Doctors Table (Hybrid)
+create table public.doctors (
+  id text primary key,
+  clinic_id text references public.clinics(id) on delete cascade,
+  name text,
+  data jsonb not null
+);
+
+-- 3. Patients Table (Hybrid)
+create table public.patients (
+  id text primary key,
+  clinic_id text references public.clinics(id) on delete cascade,
+  doctor_id text references public.doctors(id) on delete set null,
+  status text not null,
+  queue_order int default 0,
+  data jsonb not null
+);
+
+-- Enable Realtime (Safe to run multiple times)
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'clinics') then
+    alter publication supabase_realtime add table public.clinics;
+  end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'doctors') then
+    alter publication supabase_realtime add table public.doctors;
+  end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'patients') then
+    alter publication supabase_realtime add table public.patients;
+  end if;
+end;
+$$;
+
+-- Security (Demo Mode - Idempotent)
+alter table public.clinics enable row level security;
+create policy "Public Access" on public.clinics for all using (true);
+
+alter table public.doctors enable row level security;
+create policy "Public Access Docs" on public.doctors for all using (true);
+
+alter table public.patients enable row level security;
+create policy "Public Access Pts" on public.patients for all using (true);
+
+-- Atomic Update Function (Required for Booking)
+create or replace function add_patient(clinic_id text, patient_data jsonb)
+returns void as $$ begin update clinics set data = jsonb_set(data, '{patients}', coalesce(data->'patients', '[]'::jsonb) || patient_data) where id = clinic_id; end; $$ language plpgsql;
+
+-- Reload Schema Cache (Critical for 'Could not find column' errors)
+NOTIFY pgrst, 'reload config';`;
+
+      return (
+          <div className="p-6 max-w-2xl mx-auto bg-white rounded-xl shadow-sm border mt-10">
+              <h2 className="text-xl font-bold mb-4">Connect to Supabase</h2>
+              <div className="space-y-4">
+                  <div>
+                      <label className="block text-sm font-medium mb-1">Project URL</label>
+                      <input value={url} onChange={e => setUrl(e.target.value)} className="w-full p-2 border rounded" placeholder="https://xyz.supabase.co" />
+                  </div>
+                  <div>
+                      <label className="block text-sm font-medium mb-1">Anon Key</label>
+                      <input value={key} onChange={e => setKey(e.target.value)} className="w-full p-2 border rounded" placeholder="eyJh..." />
+                  </div>
+                  <div className="flex gap-4 pt-2">
+                      <Button onClick={() => handleSupabaseSetup(url, key)}>Save Config</Button>
+                      <Button variant="outline" onClick={handleSeedData} disabled={!getSupabase()}>Push Local Data to DB</Button>
+                      <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={handleClearPatients} disabled={!getSupabase()}>Clear All Patients</Button>
+                      <Button variant="outline" className="text-blue-600 border-blue-200 hover:bg-blue-50" onClick={handleMigrateToHybrid} disabled={!getSupabase()}>Migrate to Hybrid</Button>
+                  </div>
+                  
+                  <div className="mt-6 border-t pt-4">
+                      <button 
+                          onClick={() => setShowSql(!showSql)}
+                          className="text-sm text-blue-600 underline mb-2 hover:text-blue-800"
+                      >
+                          {showSql ? 'Hide SQL Script' : 'Show SQL Script to Create Tables'}
+                      </button>
+                      
+                      {showSql && (
+                          <div className="bg-slate-900 text-slate-50 p-4 rounded-md text-xs font-mono overflow-x-auto relative">
+                              <pre>{sqlScript}</pre>
+                              <Button 
+                                  size="sm" 
+                                  className="absolute top-2 right-2 h-6 text-xs bg-slate-700 hover:bg-slate-600"
+                                  onClick={() => {
+                                      navigator.clipboard.writeText(sqlScript);
+                                      addToast("SQL copied to clipboard", "success");
+                                  }}
+                              >
+                                  Copy
+                              </Button>
+                          </div>
+                      )}
+                  </div>
+
+                  <p className="text-xs text-slate-500 mt-2">
+                      1. Create a project on Supabase.<br/>
+                      2. Run the SQL script provided.<br/>
+                      3. Enter credentials here and click Save.<br/>
+                      4. Click "Push Local Data" to seed the database.
+                  </p>
+              </div>
+          </div>
+      );
+  };
+
   // --- COMPONENT RENDER ---
 
   // Ensure app is loaded before checking for empty data
@@ -634,11 +818,31 @@ export default function App() {
             <>
                 <RouteSyncer currentClinicId={currentClinicId} onSync={setCurrentClinicId} />
                 {currentClinic ? (
-                    <DoctorLogin 
-                        clinic={currentClinic}
-                        onSelectDoctor={handleDoctorSelect}
-                        onBack={() => navigate('/setup')}
-                    />
+                    <div className="min-h-screen bg-slate-50 flex flex-col">
+                        <DoctorLogin 
+                            clinic={currentClinic}
+                            onSelectDoctor={handleDoctorSelect}
+                            onBack={() => navigate('/setup')}
+                        />
+                        <div className="w-full max-w-md mx-auto p-4 pb-12">
+                            <div className="relative py-4">
+                                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-300" /></div>
+                                <div className="relative flex justify-center text-xs uppercase"><span className="bg-slate-50 px-2 text-slate-500">Demo: Quick Login</span></div>
+                            </div>
+                            <div className="grid gap-2">
+                                {currentClinic.doctors.length === 0 && <div className="text-center text-xs text-slate-400 italic">No doctors found.</div>}
+                                {currentClinic.doctors.map(d => (
+                                    <Button key={d.id} variant="outline" className="w-full justify-start gap-3 bg-white hover:bg-blue-50 hover:border-blue-200" onClick={() => handleDoctorSelect(d.id)}>
+                                        <div className="h-6 w-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{d.name.charAt(0)}</div>
+                                        <div className="flex flex-col items-start">
+                                            <span className="text-sm font-medium">{d.name}</span>
+                                            <span className="text-[10px] text-slate-500">{d.specialty}</span>
+                                        </div>
+                                    </Button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
                 ) : <div className="p-8 text-center">Loading Clinic Data...</div>}
             </>
         } />
@@ -648,43 +852,61 @@ export default function App() {
             <>
                 <RouteSyncer currentClinicId={currentClinicId} onSync={setCurrentClinicId} />
                 {currentClinic && (
-                    <ReceptionDashboard 
-                        doctors={currentClinic.doctors}
-                        patients={currentClinic.patients}
-                        staff={currentClinic.staff}
-                        clinicName={currentClinic.name}
-                        clinicType={currentClinic.type}
-                        operationMode={currentClinic.operationMode}
-                        clinicData={currentClinic}
-                        /* Fixed: Replaced short/incorrect names (oe, me, D, H, J, pt, ne, Ne, re, fe, ve, Ge, Ye, xe) with their correct handler function names */
-                        onAddPatient={handleAddPatient}
-                        onEditPatient={handleEditPatient}
-                        onDeletePatient={handleDeletePatient}
-                        onDeleteMultiplePatients={handleDeleteMultiplePatients}
-                        onAddDoctor={handleAddDoctor}
-                        onCheckMasterDoctor={checkMasterDoctor}
-                        onEditDoctor={handleEditDoctor}
-                        onDeleteDoctor={handleDeleteDoctor}
-                        onUpdateStatus={handleUpdateStatus}
-                        onCancelPatient={(id) => handleUpdateStatus(id, PatientStatus.CANCELLED)}
-                        onUpdateClinicSettings={(updates) => storage.updateClinic(currentClinic.id, updates)}
-                        onToggleEmergency={(id) => {
-                            const p = currentClinic.patients.find(pat => pat.id === id);
-                            if (p) handleEditPatient(id, { isEmergency: !p.isEmergency });
-                        }}
-                        onManualReorder={(id, direction) => {
-                            addToast("Reordering not fully implemented in demo", "info");
-                        }}
-                        onDragDrop={handleDragDrop}
-                        onManualCheckIn={(id) => handlePatientCheckIn(currentClinic.id, id)}
-                        onBulkUpdateStatus={handleBulkUpdateStatus}
-                        onAddStaff={handleLocalAddStaff}
-                        onUpdateStaff={handleLocalUpdateStaff}
-                        onDeleteStaff={handleLocalDeleteStaff}
-                        onLogout={handleLogout}
+                    <div className="relative min-h-screen">
+                        <ReceptionDashboard 
+                            doctors={currentClinic.doctors}
+                            patients={currentClinic.patients}
+                            staff={currentClinic.staff}
+                            clinicName={currentClinic.name}
+                            clinicType={currentClinic.type}
+                            operationMode={currentClinic.operationMode}
+                            clinicData={currentClinic}
+                            /* Fixed: Replaced short/incorrect names (oe, me, D, H, J, pt, ne, Ne, re, fe, ve, Ge, Ye, xe) with their correct handler function names */
+                            onAddPatient={handleAddPatient}
+                            onEditPatient={handleEditPatient}
+                            onDeletePatient={handleDeletePatient}
+                            onDeleteMultiplePatients={handleDeleteMultiplePatients}
+                            onAddDoctor={handleAddDoctor}
+                            onCheckMasterDoctor={checkMasterDoctor}
+                            onEditDoctor={handleEditDoctor}
+                            onDeleteDoctor={handleDeleteDoctor}
+                            onUpdateStatus={handleUpdateStatus}
+                            onCancelPatient={(id) => handleUpdateStatus(id, PatientStatus.CANCELLED)}
+                            onUpdateClinicSettings={(updates) => storage.updateClinic(currentClinic.id, updates)}
+                            onToggleEmergency={(id) => {
+                                const p = currentClinic.patients.find(pat => pat.id === id);
+                                if (p) handleEditPatient(id, { isEmergency: !p.isEmergency });
+                            }}
+                            onManualReorder={(id, direction) => {
+                                addToast("Reordering not fully implemented in demo", "info");
+                            }}
+                            onDragDrop={handleDragDrop}
+                            onManualCheckIn={(id) => handlePatientCheckIn(currentClinic.id, id)}
+                            onBulkUpdateStatus={handleBulkUpdateStatus}
+                            onAddStaff={handleLocalAddStaff}
+                            onUpdateStaff={handleLocalUpdateStaff}
+                            onDeleteStaff={handleLocalDeleteStaff}
+                            onLogout={handleLogout}
+                            addToast={addToast}
+                            onSetupKiosk={() => navigate(`/clinic/${currentClinic.id}/reception/kiosk-settings`)}
+                        />
+                    </div>
+                )}
+            </>
+        } />
+
+        <Route path="/clinic/:clinicId/reception/kiosk-settings" element={
+            <>
+                <RouteSyncer currentClinicId={currentClinicId} onSync={setCurrentClinicId} />
+                <div className="min-h-screen bg-slate-50 p-8">
+                    <KioskSettings 
+                        clinic={currentClinic}
+                        clinicId={currentClinicId}
+                        onUpdate={(id, data) => storage.updateClinic(id, data)}
+                        onBack={() => navigate(`/clinic/${currentClinicId}/reception`)}
                         addToast={addToast}
                     />
-                )}
+                </div>
             </>
         } />
 
@@ -750,6 +972,7 @@ export default function App() {
                     </Button>
                 </header>
                 <div className="flex-1 overflow-hidden">
+                    <div className="bg-slate-100 p-2 text-center text-xs"><a href="/#/admin/db-setup" className="text-blue-600 underline">Configure Database</a></div>
                     <AdminDashboard 
                         clinics={clinics}
                         onUpdatePlan={handleUpdateClinicPlan}
@@ -770,6 +993,10 @@ export default function App() {
                     />
                 </div>
             </div>
+        } />
+
+        <Route path="/admin/db-setup" element={
+            <div className="min-h-screen bg-slate-50 p-8"><SupabaseSetup /><Button className="mt-4" variant="ghost" onClick={() => navigate('/admin')}>Back to Admin</Button></div>
         } />
 
         {/* PATIENT TRACKER - Updated with Wildcard for Sub-Routes */}
@@ -804,3 +1031,50 @@ export default function App() {
     </>
   );
 }
+
+// Moved outside App to prevent re-renders wiping state
+const KioskSettings = ({ clinic, clinicId, onUpdate, onBack, addToast }: { 
+    clinic: Clinic | null, 
+    clinicId: string | null, 
+    onUpdate: (id: string, data: any) => Promise<void>, 
+    onBack: () => void,
+    addToast: (msg: string, type: any) => void 
+}) => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    
+    useEffect(() => {
+        if (clinic) {
+            setEmail((clinic as any).kioskEmail || '');
+            setPassword((clinic as any).kioskPassword || '');
+        }
+    }, [clinic]);
+
+    const handleSave = async () => {
+        if (!clinicId) return;
+        await onUpdate(clinicId, { ['kioskEmail' as any]: email.trim(), ['kioskPassword' as any]: password.trim() });
+        addToast("Kiosk credentials updated", "success");
+    };
+
+    if (!clinic) return <div>Loading...</div>;
+
+    return (
+        <div className="p-6 max-w-md mx-auto bg-white rounded-xl shadow-sm border mt-10">
+            <h2 className="text-xl font-bold mb-4">Kiosk Login Setup</h2>
+            <div className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium mb-1">Kiosk Email</label>
+                    <input value={email} onChange={e => setEmail(e.target.value)} className="w-full p-2 border rounded" placeholder="kiosk@clinic.com" />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium mb-1">Kiosk Password</label>
+                    <input value={password} onChange={e => setPassword(e.target.value)} className="w-full p-2 border rounded" type="password" placeholder="******" />
+                </div>
+                <div className="flex gap-4 pt-2">
+                    <Button onClick={handleSave}>Save Credentials</Button>
+                    <Button variant="outline" onClick={onBack}>Back to Dashboard</Button>
+                </div>
+            </div>
+        </div>
+    );
+};

@@ -111,6 +111,7 @@ interface ReceptionDashboardProps {
     onDeleteStaff?: (id: string) => void;
     onLogout?: () => void;
     addToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
+    onSetupKiosk?: () => void;
 }
 
 // Sub-component for Map Location Picker
@@ -140,7 +141,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     onAddPatient: y, onEditPatient: b, onDeletePatient: v, onDeleteMultiplePatients: N,
     onAddDoctor: T, onCheckMasterDoctor: C, onEditDoctor: k, onDeleteDoctor: R, onUpdateStatus: U, onCancelPatient: B, onUpdateClinicSettings: P, 
     onToggleEmergency: te, onManualReorder: M, onDragDrop: W, onManualCheckIn: G, 
-    onAddStaff: se, onUpdateStaff: Z, onDeleteStaff: De, onLogout, addToast: he
+    onAddStaff: se, onUpdateStaff: Z, onDeleteStaff: De, onLogout, addToast: he, onSetupKiosk
 }) => {
     const onAddPatient = y;
     const onEditPatient = b;
@@ -200,12 +201,41 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     const estimatedTimesMap = useMemo(() => {
         const times: Record<string, number> = {};
         s.forEach(doc => {
-            const docQueue = t.filter(p => p.doctorId === doc.id && p.status === PatientStatus.WAITING)
-                                    .sort((a, b) => a.timeAdded - b.timeAdded);
+            // Use robust sorting logic to match Doctor's view
+            const docQueue = t.filter(p => p.doctorId === doc.id && (p.status === PatientStatus.WAITING || p.status === PatientStatus.ON_HOLD))
+                .sort((a, b) => {
+                    // 1. Queue Order
+                    if (a.queueOrder !== undefined || b.queueOrder !== undefined) {
+                        const orderA = a.queueOrder ?? Number.MAX_SAFE_INTEGER;
+                        const orderB = b.queueOrder ?? Number.MAX_SAFE_INTEGER;
+                        if (orderA !== orderB) return orderA - orderB;
+                    }
+                    // 2. Emergency
+                    if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
+                    // 3. Status (WAITING before ON_HOLD)
+                    const getStatusPriority = (s: PatientStatus) => (s === PatientStatus.WAITING ? 0 : s === PatientStatus.ON_HOLD ? 1 : 2);
+                    const pA = getStatusPriority(a.status);
+                    const pB = getStatusPriority(b.status);
+                    if (pA !== pB) return pA - pB;
+                    // 4. Time
+                    const getSortTime = (p: Patient) => {
+                        if (p.visitType === 'APPOINTMENT' && p.appointmentDate && p.appointmentTime) {
+                            return new Date(`${p.appointmentDate}T${p.appointmentTime}:00`).getTime();
+                        }
+                        return p.timeAdded;
+                    };
+                    return getSortTime(a) - getSortTime(b);
+                });
+
             let nextAvailable = Date.now();
             if (doc.delayMinutes > 0) nextAvailable += doc.delayMinutes * 60000;
-            docQueue.forEach((p, idx) => {
-                times[p.id] = nextAvailable + (idx * (doc.consultationTime || 15) * 60000);
+            
+            let cumulativeTime = 0;
+            docQueue.forEach((p) => {
+                if (p.status === PatientStatus.WAITING) {
+                    times[p.id] = nextAvailable + cumulativeTime;
+                    cumulativeTime += (doc.consultationTime || 15) * 60000;
+                }
             });
         });
         return times;
@@ -228,6 +258,22 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         };
     }, [t, s, m, ut]);
 
+    const patientsForTabs = useMemo(() => {
+        let list = t.filter(p => {
+            const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : getPatientDateStr(p.timeAdded, m?.timezone);
+            return pDate === ut;
+        });
+        if (Ye !== 'ALL') list = list.filter(p => p.doctorId === Ye);
+        return list;
+    }, [t, Ye, ut, m?.timezone]);
+
+    const tabCounts = useMemo(() => ({
+        LIVE: patientsForTabs.filter(p => p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR).length,
+        HOLD: patientsForTabs.filter(p => p.status === PatientStatus.ON_HOLD).length,
+        DONE: patientsForTabs.filter(p => p.status === PatientStatus.COMPLETED).length,
+        ABSENT: patientsForTabs.filter(p => p.status === PatientStatus.SKIPPED).length
+    }), [patientsForTabs]);
+
     const filteredPatients = useMemo(() => {
         let list = t.filter(p => {
             const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : getPatientDateStr(p.timeAdded, m?.timezone);
@@ -247,20 +293,30 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             list = list.filter(p => p.name.toLowerCase().includes(q) || p.phone.includes(q) || p.tokenNumber.toString().includes(q));
         }
 
-        // Apply advanced sorting based on session mode if filtering by a specific doctor
-        if (Ye !== 'ALL' && m) {
-            const doctor = s.find(d => d.id === Ye);
-            if (doctor) {
-                // Mock clinic for utility if m is missing, but m is prop here
-                const session = getActiveSession(doctor, m);
-                const mode = session?.mode || SessionMode.HYBRID;
-                const sorter = getQueueSorter(mode);
-                return list.sort(sorter);
+        // Robust Sorting Logic (Matches Doctor View & Estimated Time Calculation)
+        return list.sort((a, b) => {
+            // 1. Queue Order
+            if (a.queueOrder !== undefined || b.queueOrder !== undefined) {
+                const orderA = a.queueOrder ?? Number.MAX_SAFE_INTEGER;
+                const orderB = b.queueOrder ?? Number.MAX_SAFE_INTEGER;
+                if (orderA !== orderB) return orderA - orderB;
             }
-        }
-        
-        // Default sorting
-        return list.sort((a, b) => a.timeAdded - b.timeAdded);
+            // 2. Emergency
+            if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
+            // 3. Status (WAITING before ON_HOLD)
+            const getStatusPriority = (s: PatientStatus) => (s === PatientStatus.WAITING ? 0 : s === PatientStatus.ON_HOLD ? 1 : 2);
+            const pA = getStatusPriority(a.status);
+            const pB = getStatusPriority(b.status);
+            if (pA !== pB) return pA - pB;
+            // 4. Time
+            const getSortTime = (p: Patient) => {
+                if (p.visitType === 'APPOINTMENT' && p.appointmentDate && p.appointmentTime) {
+                    return new Date(`${p.appointmentDate}T${p.appointmentTime}:00`).getTime();
+                }
+                return p.timeAdded;
+            };
+            return getSortTime(a) - getSortTime(b);
+        });
     }, [t, ke, O, Ye, ve, ut, m, s]);
 
     const sidebarItems = [
@@ -509,6 +565,17 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         <Settings className="h-5 w-5 shrink-0" />
                         {!isSidebarCollapsed && <span className="font-black text-xs uppercase tracking-widest animate-in fade-in slide-in-from-left-2">Clinic Setup</span>}
                     </button>
+                    <button 
+                        onClick={() => {
+                            if (onSetupKiosk) onSetupKiosk();
+                            setIsMobileMenuOpen(false);
+                        }} 
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${isSidebarCollapsed ? 'justify-center' : ''} text-slate-500 hover:text-white hover:bg-white/5`}
+                        title={isSidebarCollapsed ? 'Kiosk Setup' : undefined}
+                    >
+                        <Smartphone className="h-5 w-5 shrink-0" />
+                        {!isSidebarCollapsed && <span className="font-black text-xs uppercase tracking-widest animate-in fade-in slide-in-from-left-2">Kiosk Setup</span>}
+                    </button>
                     {!isSidebarCollapsed && (
                         <div className="mt-4 p-4 rounded-2xl bg-teal-500/5 border border-teal-500/10 animate-in fade-in slide-in-from-bottom-2">
                             <div className="flex items-center gap-2 mb-2">
@@ -532,7 +599,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             <div className="flex items-center gap-2 mt-1">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                 <div className="w-1 h-1 rounded-full bg-slate-300"></div>
-                                <span className="text-[10px] font-black text-teal-600 uppercase tracking-widest">{o}</span>
+                                <span className="text-sm font-black text-white bg-teal-600 px-2 py-0.5 rounded shadow-sm uppercase tracking-wide">{o}</span>
                             </div>
                         </div>
                         <div className="hidden xl:flex items-center gap-6">
@@ -560,7 +627,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="hidden lg:block text-right mr-3">
-                                <p className="text-[11px] font-black text-slate-900 leading-tight uppercase tracking-tight">{o}</p>
+                                <p className="text-sm font-black text-slate-900 leading-tight uppercase tracking-tight">{o}</p>
                                 <p className="text-[9px] font-bold text-slate-400 uppercase">{m?.city || 'Chennai'}</p>
                             </div>
                             <Button 
@@ -629,13 +696,18 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                     {(['LIVE', 'HOLD', 'DONE', 'ABSENT'] as const).map(t => {
                                         const isActive = O === t;
                                         const colorSet = queueTabColors[t];
+                                        const count = tabCounts[t];
+                                        const Icon = t === 'LIVE' ? Activity : t === 'HOLD' ? PauseCircle : t === 'DONE' ? CheckCircle2 : XCircle;
+
                                         return (
                                             <button 
                                                 key={t}
                                                 onClick={() => ee(t)}
-                                                className={`px-4 sm:px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap flex-1 sm:flex-none ${isActive ? `${colorSet.active} border-transparent shadow-md` : `${colorSet.inactive} border-transparent hover:border-slate-100`}`}
+                                                className={`px-4 sm:px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap flex-1 sm:flex-none flex items-center gap-2 ${isActive ? `${colorSet.active} border-transparent shadow-md` : `${colorSet.inactive} border-transparent hover:border-slate-100`}`}
                                             >
+                                                <Icon className="h-3.5 w-3.5" />
                                                 {t}
+                                                <span className={`ml-1 px-1.5 py-0.5 rounded-md text-[9px] ${isActive ? 'bg-white/20' : 'bg-slate-200/50'}`}>{count}</span>
                                             </button>
                                         );
                                     })}

@@ -856,7 +856,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
         // SHIFT SPECIFIC PEOPLE AHEAD CALCULATION
         const getPatientShiftMins = (p: Patient, doc: Doctor) => {
-            const pTimeStr = p.visitType === 'APPOINTMENT' ? p.appointmentTime : new Date(p.timeAdded).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            const pTimeStr = p.appointmentTime || new Date(p.timeAdded).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: clinic.timezone });
             if (!pTimeStr) return null;
             const [ph, pm] = pTimeStr.split(':').map(Number);
             const pTotalMins = ph * 60 + pm;
@@ -879,8 +879,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             if (p.doctorId !== visit.doctorId || p.status !== PatientStatus.WAITING || p.id === visit.id) return false;
 
             // Verify it's the same date (Appointment Date or Added Date)
-            const pDate = p.visitType === 'APPOINTMENT' ? p.appointmentDate : new Date(p.timeAdded).toISOString().split('T')[0];
-            const myDate = visit.visitType === 'APPOINTMENT' ? visit.appointmentDate : new Date(visit.timeAdded).toISOString().split('T')[0];
+            const pDate = p.appointmentDate || new Date(p.timeAdded).toISOString().split('T')[0];
+            const myDate = visit.appointmentDate || new Date(visit.timeAdded).toISOString().split('T')[0];
             if (pDate !== myDate) return false;
 
             // Same Shift Check
