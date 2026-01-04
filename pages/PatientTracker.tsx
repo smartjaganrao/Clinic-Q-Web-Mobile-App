@@ -60,12 +60,27 @@ interface PatientTrackerProps {
     initialSearchMode?: 'DOCTOR' | 'CLINIC';
 }
 
+const SPECIALTY_CATEGORIES = [
+    { term: 'General Physician', label: 'General', icon: '🩺', color: 'bg-blue-50 text-blue-700 border-blue-100', category: 'General' },
+    { term: 'Dentist', label: 'Dentist', icon: '🦷', color: 'bg-teal-50 text-teal-700 border-teal-100', category: 'Dental' },
+    { term: 'Pediatrician', label: 'Kids', icon: '👶', color: 'bg-orange-50 text-orange-700 border-orange-100', category: 'Pediatric' },
+    { term: 'Gynecologist', label: 'Women', icon: '👩‍⚕️', color: 'bg-pink-50 text-pink-700 border-pink-100', category: 'Gynecology' },
+    { term: 'Dermatologist', label: 'Skin', icon: '🧴', color: 'bg-purple-50 text-purple-700 border-purple-100', category: 'Dermatology' },
+    { term: 'Orthopedic', label: 'Bones', icon: '🦴', color: 'bg-slate-100 text-slate-700 border-slate-200', category: 'Orthopedic' },
+    { term: 'Cardiologist', label: 'Heart', icon: '❤️', color: 'bg-rose-50 text-rose-700 border-rose-100', category: 'Cardiology' },
+    { term: 'ENT Specialist', label: 'ENT', icon: '👂', color: 'bg-yellow-50 text-yellow-700 border-yellow-100', category: 'ENT' },
+    { term: 'Ophthalmologist', label: 'Eye', icon: '👁️', color: 'bg-cyan-50 text-cyan-700 border-cyan-100', category: 'Ophthalmology' },
+    { term: 'Neurologist', label: 'Brain', icon: '🧠', color: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+    { term: 'Psychiatrist', label: 'Mental', icon: '🧘', color: 'bg-violet-50 text-violet-700 border-violet-100' },
+    { term: 'Physiotherapist', label: 'Physio', icon: '🤸', color: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+];
+
 export const PatientTracker: React.FC<PatientTrackerProps> = ({
     clinics, userPhone, userName, isGuest, onLoginClick, onBack, onGetToken, addToast, onUpdateDetails, onCancelVisit, onCheckIn, preSelectedClinicId, onClearPendingAction, initialSearchMode
 }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(window.innerWidth < 1024);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isHoveringSidebar, setIsHoveringSidebar] = useState(false);
@@ -115,8 +130,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     const quickSearches = [
         { term: 'Fever', emoji: '🤒' },
         { term: 'Cold & Cough', emoji: '🤧' },
-        { term: 'Tooth Pain', emoji: '🦷' },
-        { term: 'Child Doctor', emoji: '👶' },
         { term: 'Heart Specialist', emoji: '❤️' }
     ];
 
@@ -217,13 +230,23 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     const [selectedDoctorGender, setSelectedDoctorGender] = useState<string>('ALL');
     const [selectedMinExperience, setSelectedMinExperience] = useState<number>(0);
 
+    const isSearchLanding = bookingView === 'LIST' && !searchQuery && selectedCategory === 'ALL' && selectedSpecialty === 'All Specialties';
+
     useEffect(() => {
         const q = searchParams.get('q');
         const city = searchParams.get('city');
+        const cat = searchParams.get('cat');
+        const spec = searchParams.get('spec');
+        const gen = searchParams.get('gen');
+        const exp = searchParams.get('exp');
 
         if (q) {
             setSearchQuery(q);
         }
+        if (cat) setSelectedCategory(cat);
+        if (spec) setSelectedSpecialty(spec);
+        if (gen) setSelectedDoctorGender(gen);
+        if (exp) setSelectedMinExperience(Number(exp));
 
         if (city) {
             const hasCity = clinics.some(c => c.city.toLowerCase() === city.toLowerCase());
@@ -232,7 +255,39 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 if (matchedCity) setSelectedCity(matchedCity);
             }
         }
-    }, [searchParams, clinics]);
+    }, [clinics]); // Run once on mount/clinics load
+
+    // Sync State to URL for Back Button Support
+    useEffect(() => {
+        const params: any = {};
+        if (searchQuery) params.q = searchQuery;
+        if (selectedCity !== 'All Cities') params.city = selectedCity;
+        if (selectedCategory !== 'ALL') params.cat = selectedCategory;
+        if (selectedSpecialty !== 'All Specialties') params.spec = selectedSpecialty;
+        if (selectedDoctorGender !== 'ALL') params.gen = selectedDoctorGender;
+        if (selectedMinExperience > 0) params.exp = selectedMinExperience.toString();
+        setSearchParams(params, { replace: true });
+    }, [searchQuery, selectedCity, selectedCategory, selectedSpecialty, selectedDoctorGender, selectedMinExperience, setSearchParams]);
+
+    // Sync: When Specialty changes, update Category
+    useEffect(() => {
+        if (selectedSpecialty !== 'All Specialties') {
+            const match = SPECIALTY_CATEGORIES.find(s => s.term === selectedSpecialty);
+            if (match && match.category && match.category !== selectedCategory) {
+                setSelectedCategory(match.category);
+            }
+        }
+    }, [selectedSpecialty, selectedCategory]);
+
+    // Sync: When Category changes, validate Specialty
+    useEffect(() => {
+        if (selectedCategory !== 'ALL' && selectedSpecialty !== 'All Specialties') {
+            const match = SPECIALTY_CATEGORIES.find(s => s.term === selectedSpecialty);
+            if (match && match.category !== selectedCategory) {
+                setSelectedSpecialty('All Specialties');
+            }
+        }
+    }, [selectedCategory, selectedSpecialty]);
 
     // Click outside listener for global suggestions
     useEffect(() => {
@@ -277,7 +332,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     const [selectedWalkInShiftId, setSelectedWalkInShiftId] = useState<string | null>(null);
 
     // Initialize showMap based on screen width
-    const [showMap, setShowMap] = useState(window.innerWidth >= 768);
+    const [showMap, setShowMap] = useState(false);
     
     const clinicCardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const [highlightedClinicId, setHighlightedClinicId] = useState<string | null>(null);
@@ -385,16 +440,13 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         // For terms with symptom mappings, use symptom search
         if (term === 'Fever' || term === 'Cold & Cough' || term === 'Tooth Pain' || term === 'Child Doctor') {
             setSearchQuery(term);
-            setSelectedCategory('ALL'); // Don't filter by category for symptom searches
         } else if (term === 'Heart Specialist') {
             // For terms without symptom mappings, use specialty search
             setSearchQuery('Cardiologist');
-            setSelectedCategory('ALL');
         }
 
         setSearchMode('DOCTOR');
         setShowSuggestions(true); // Show suggestions dropdown
-        setSelectedSpecialty('All Specialties'); // Reset specialty to avoid conflicts
     };
 
     const travelEstimate = useMemo(() => {
@@ -1541,6 +1593,11 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                         onChange={(e) => {
                                             setSearchQuery(e.target.value);
                                             setShowSuggestions(true);
+                                            // Fix 1: Clear conflicting filters when searching to avoid "Zero Results" trap
+                                            if (e.target.value.trim()) {
+                                                setSelectedCategory('ALL');
+                                                setSelectedSpecialty('All Specialties');
+                                            }
                                         }}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter' && searchQuery.trim()) {
@@ -1554,13 +1611,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                             onClick={() => {
                                                 setSearchQuery('');
                                                 setShowSuggestions(false);
-                                                setSelectedCategory('ALL');
-                                                setSelectedCity('All Cities');
-                                                setSelectedSpecialty('All Specialties');
-                                                setShowOpenOnly(false);
-                                                setSelectedDoctorGender('ALL');
-                                                setSelectedMinExperience(0);
-                                                setSortBy('NEAR');
                                             }}
                                             className="absolute right-3.5 top-1/2 -translate-y-1/2 p-2 bg-red-100 hover:bg-red-200 text-red-600 hover:text-red-800 rounded-lg transition-all shadow-sm"
                                         >
@@ -1636,18 +1686,6 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 )}
                             </div>
 
-                            {/* Search Mode Toggle */}
-                            <div className="flex bg-slate-100 p-1 rounded-xl md:rounded-2xl shrink-0 h-10 md:h-11 items-center border border-slate-200/50">
-                                <button onClick={() => setSearchMode('CLINIC')} className={`h-8 md:h-9 px-3 md:px-4 rounded-lg md:rounded-xl transition-all flex items-center gap-1.5 md:gap-2 ${searchMode === 'CLINIC' ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                                    <Building2 className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                    <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest hidden sm:inline">Clinics</span>
-                                </button>
-                                <button onClick={() => setSearchMode('DOCTOR')} className={`h-8 md:h-9 px-3 md:px-4 rounded-lg md:rounded-xl transition-all flex items-center gap-1.5 md:gap-2 ${searchMode === 'DOCTOR' ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                                    <Stethoscope className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                    <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest hidden sm:inline">Doctors</span>
-                                </button>
-                            </div>
-
                             {/* Desktop Only Controls */}
                             <div className="hidden xl:flex items-center gap-3">
                                 {/* Desktop Location Selector */}
@@ -1692,21 +1730,20 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                         </div>
 
                         {/* Quick Suggestions */}
-                        {isGuest && (
-                            <div className="flex items-center gap-2 pt-2 overflow-x-auto">
-                                <span className="text-sm font-bold text-slate-500 shrink-0">Popular:</span>
-                                {quickSearches.map(search => (
-                                    <button
-                                        key={search.term}
-                                        onClick={() => handleQuickSearch(search.term)}
-                                        className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-bold text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-all shrink-0"
-                                    >
-                                        <span>{search.emoji}</span>
-                                        <span>{search.term}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
+                        {/* Fix 3: Removed !isSearchLanding check to prevent "Jump" context switching */}
+                        <div className="flex items-center gap-2 pt-2 overflow-x-auto no-scrollbar">
+                            <span className="text-[10px] font-black text-slate-400 shrink-0 uppercase tracking-wider">Quick Find:</span>
+                            {quickSearches.map(search => (
+                                <button
+                                    key={search.term}
+                                    onClick={() => handleQuickSearch(search.term)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-700 hover:bg-primary-50 hover:border-primary-200 hover:text-primary-700 transition-all shrink-0 shadow-sm"
+                                >
+                                    <span>{search.emoji}</span>
+                                    <span>{search.term}</span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </header>
 
@@ -1774,8 +1811,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 
                                 {(bookingView === 'LIST' || bookingView === 'CLINIC_DETAILS') && (
                                     <button
-                                        onClick={() => setShowMap(!showMap)}
-                                        className={`lg:hidden flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${
+                                        onClick={() => setShowMap(!showMap)} // Fix 2: Decoupled Map from Search Mode
+                                        className={`md:hidden flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${
                                             showMap 
                                             ? 'bg-emerald-600 border-emerald-600 text-white' 
                                             : 'bg-indigo-600 border-indigo-600 text-white'
@@ -1823,6 +1860,8 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     selectedCategory={selectedCategory}
                                     setSelectedCategory={setSelectedCategory}
                                     CATEGORIES={CATEGORIES}
+                                    selectedSpecialty={selectedSpecialty}
+                                    setSelectedSpecialty={setSelectedSpecialty}
                                     bookingView={bookingView}
                                 />
                             </div>
@@ -1830,8 +1869,134 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                             {/* Content Area */}
                             <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden relative">
                                 <div className={`flex-1 overflow-y-auto p-2 sm:p-4 md:p-6 pt-0 custom-scrollbar ${showMap && (bookingView === 'LIST' || bookingView === 'CLINIC_DETAILS') ? 'hidden md:block' : 'block'} pb-32 md:pb-8`}>
+                                    {/* SEARCH LANDING HERO - Shows when no search is active */}
+                                    {isSearchLanding && (
+                                        <div className="mb-2 px-1 mt-2">
+                                            {/* Hero Banner */}
+                                            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-600 to-indigo-700 p-4 text-white shadow-lg mb-3">
+                                                <div className="relative z-10 flex items-center justify-between gap-4">
+                                                    <div className="flex-1">
+                                                        <h2 className="text-lg md:text-xl font-black mb-0.5 tracking-tight">
+                                                            {isGuest ? "Find your doctor." : `Hi ${userName.split(' ')[0]}, feel better.`}
+                                                        </h2>
+                                                        <p className="text-primary-100 font-medium text-xs leading-relaxed opacity-90">
+                                                            Book appointments or join live walk-in queues at top clinics near you.
+                                                        </p>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => document.querySelector<HTMLInputElement>('input[type="text"]')?.focus()}
+                                                        className="shrink-0 bg-white text-primary-700 px-3 py-2 rounded-lg font-bold text-[10px] shadow-md hover:bg-primary-50 transition-colors inline-flex items-center gap-1.5"
+                                                    >
+                                                        <Search className="h-3 w-3" /> Start Searching
+                                                    </button>
+                                                </div>
+                                                <div className="absolute top-0 right-0 -mr-10 -mt-10 w-32 h-32 rounded-full bg-white/10 blur-2xl"></div>
+                                                <div className="absolute bottom-0 right-10 w-16 h-16 rounded-full bg-indigo-500/30 blur-xl"></div>
+                                            </div>
+
+                                            {/* Visual Categories */}
+                                            <div className="mb-2">
+                                                <div className="flex items-center justify-between mb-2 px-1">
+                                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Browse Specialists</h3>
+                                                </div>
+                                                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                                                    {SPECIALTY_CATEGORIES.map(cat => (
+                                                        <button
+                                                            key={cat.term}
+                                                            onClick={() => {
+                                                                setSelectedSpecialty(cat.term);
+                                                                if (cat.category) setSelectedCategory(cat.category);
+                                                                setSearchMode('DOCTOR');
+                                                                // Fix 4: Removed auto-reset of Experience/Gender to persist user preferences
+                                                            }}
+                                                            className={`flex flex-col items-center justify-center p-4 rounded-2xl border ${cat.color} hover:scale-105 transition-all shadow-sm active:scale-95 bg-white`}
+                                                        >
+                                                            <span className="text-2xl mb-2 filter drop-shadow-sm">{cat.icon}</span>
+                                                            <span className="text-[11px] font-bold">{cat.label}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {bookingView === 'LIST' && (
+                                        <div className="flex items-center justify-between mb-4 px-1 mt-2 sticky top-0 z-10 bg-slate-50 py-2">
+                                            <div className="flex items-center gap-2 md:gap-4 flex-1 overflow-hidden">
+                                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                                                    {searchMode === 'CLINIC' ? 'Clinics Nearby' : 'Doctors Nearby'}
+                                                </h3>
+                                                {(selectedSpecialty !== 'All Specialties' || selectedCategory !== 'ALL') && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedSpecialty('All Specialties');
+                                                            setSelectedCategory('ALL');
+                                                        }}
+                                                        className="flex items-center gap-1 px-2 py-1 bg-primary-50 hover:bg-red-50 text-primary-700 hover:text-red-600 border border-primary-100 hover:border-red-100 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap animate-in fade-in zoom-in-95"
+                                                    >
+                                                        <span>{selectedSpecialty !== 'All Specialties' ? selectedSpecialty : selectedCategory}</span>
+                                                        <X className="h-3 w-3" />
+                                                    </button>
+                                                )}
+                                                <div className="h-px bg-slate-200 flex-1 min-w-[20px]"></div>
+                                            </div>
+                                            
+                                            <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm ml-4">
+                                                <button
+                                                    onClick={() => setSearchMode('CLINIC')}
+                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${searchMode === 'CLINIC' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                                                >
+                                                    <Building2 className="h-3 w-3" />
+                                                    <span>Clinics</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => setSearchMode('DOCTOR')}
+                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${searchMode === 'DOCTOR' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                                                >
+                                                    <Stethoscope className="h-3 w-3" />
+                                                    <span>Doctors</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {bookingView === 'LIST' ? (
-                                        searchMode === 'CLINIC' ? (
+                                        // Fix 6: Hidden "Zero State" Guidance
+                                        (searchMode === 'CLINIC' ? filteredClinics.length === 0 : groupedDoctors.length === 0) ? (
+                                            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                                                <div className="bg-slate-100 p-4 rounded-full mb-4">
+                                                    <Search className="h-8 w-8 text-slate-400" />
+                                                </div>
+                                                <h3 className="text-lg font-bold text-slate-900 mb-2">No matches found</h3>
+                                                <p className="text-sm text-slate-500 max-w-xs mb-6">
+                                                    We couldn't find any {searchMode === 'CLINIC' ? 'clinics' : 'doctors'} matching your current filters.
+                                                </p>
+                                                <div className="flex flex-wrap gap-2 justify-center">
+                                                    {selectedDoctorGender !== 'ALL' && (
+                                                        <button onClick={() => setSelectedDoctorGender('ALL')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50">
+                                                            Clear "{selectedDoctorGender}"
+                                                        </button>
+                                                    )}
+                                                    {selectedMinExperience > 0 && (
+                                                        <button onClick={() => setSelectedMinExperience(0)} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50">
+                                                            Clear "{selectedMinExperience}+ Years"
+                                                        </button>
+                                                    )}
+                                                    <button 
+                                                        onClick={() => {
+                                                            setSearchQuery('');
+                                                            setSelectedCategory('ALL');
+                                                            setSelectedSpecialty('All Specialties');
+                                                            setSelectedDoctorGender('ALL');
+                                                            setSelectedMinExperience(0);
+                                                        }}
+                                                        className="px-4 py-1.5 bg-primary-600 text-white rounded-lg text-xs font-bold hover:bg-primary-700 shadow-sm"
+                                                    >
+                                                        Clear All Filters
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : searchMode === 'CLINIC' ? (
                                             <ClinicListView
                                                 filteredClinics={filteredClinics}
                                                 getClinicWaitStats={getClinicWaitStats}

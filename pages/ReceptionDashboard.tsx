@@ -174,6 +174,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     const [settingsForm, setSettingsForm] = useState<Partial<Clinic>>({});
     const [amenityInput, setAmenityInput] = useState('');
     const [isLocating, setIsLocating] = useState(false);
+    const [clinicSettingsUpdated, setClinicSettingsUpdated] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [currentTime, setCurrentTime] = useState(() => getClinicCurrentTime(m?.timezone));
@@ -189,14 +190,14 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 ...m,
                 amenities: [...(m.amenities || [])],
                 geoLocation: m.geoLocation || { lat: 13.085, lng: 80.21 },
-                workingHours: m.workingHours || DAYS.map(day => ({
+                workingHours: m.workingHours && m.workingHours.length > 0 ? m.workingHours : DAYS.map(day => ({
                     dayOfWeek: day,
-                    isOpen: false,
-                    shifts: []
+                    isOpen: day === 'MON' || day === 'TUE' || day === 'WED' || day === 'THU' || day === 'FRI', // Default work week
+                    shifts: day === 'MON' || day === 'TUE' || day === 'WED' || day === 'THU' || day === 'FRI' ? [{ start: '09:00', end: '17:00' }] : []
                 }))
             });
         }
-    }, [ke, m?.id]); // Fixed: Only re-initialize when switching tabs or clinic ID changes, not on every queue update
+    }, [ke, m?.id, m?.workingHours]); // Update when working hours change
 
     const estimatedTimesMap = useMemo(() => {
         const times: Record<string, number> = {};
@@ -336,6 +337,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         e.preventDefault();
         P(settingsForm);
         he("Clinic settings updated!", "success");
+        setClinicSettingsUpdated(prev => prev + 1); // Increment to force DoctorFormModal refresh
     };
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1015,11 +1017,12 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             <PatientHistoryModal isOpen={!!historyPatient} onClose={() => setHistoryPatient(null)} patient={historyPatient} allClinicsPatients={t} doctors={s} />
             <VitalsModal isOpen={!!vitalsPatient} onClose={() => setVitalsPatient(null)} patient={vitalsPatient} onSave={(pid, vitals) => onEditPatient(pid, { vitals })} />
             
-            <DoctorFormModal 
-                isOpen={isDoctorModalOpen || !!editingDoctor} 
-                onClose={() => { setIsDoctorModalOpen(false); setEditingDoctor(null); }} 
-                mode={editingDoctor ? 'EDIT' : 'ADD'} 
-                initialData={editingDoctor || undefined} 
+            <DoctorFormModal
+                key={`${isDoctorModalOpen}-${editingDoctor?.id || 'new'}-${m?.workingHours?.length || 0}-${clinicSettingsUpdated}`}
+                isOpen={isDoctorModalOpen || !!editingDoctor}
+                onClose={() => { setIsDoctorModalOpen(false); setEditingDoctor(null); }}
+                mode={editingDoctor ? 'EDIT' : 'ADD'}
+                initialData={editingDoctor || undefined}
                 onCheckMasterDoctor={C}
                 addToast={he}
                 clinicOperatingHours={m?.operatingHours} // Pass clinic operating hours for validation
