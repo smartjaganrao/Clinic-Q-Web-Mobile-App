@@ -68,9 +68,126 @@ const RouteSyncer = ({ currentClinicId, onSync }: { currentClinicId: string | nu
     return null;
 };
 
+// Helper Component for Pull-to-Refresh
+const PullToRefresh = ({ onRefresh, children, className }: { onRefresh: () => Promise<void>, children: React.ReactNode, className?: string }) => {
+    const [startY, setStartY] = useState(0);
+    const [pullDistance, setPullDistance] = useState(0);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [hasVibrated, setHasVibrated] = useState(false);
+    const threshold = 80;
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if (window.scrollY <= 5) {
+            setStartY(e.touches[0].clientY);
+        }
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (startY > 0 && window.scrollY <= 5 && !isRefreshing) {
+            const currentY = e.touches[0].clientY;
+            const diff = currentY - startY;
+            if (diff > 0) {
+                const newDist = Math.min(diff * 0.5, threshold * 1.5);
+                setPullDistance(newDist);
+                
+                if (newDist >= threshold && !hasVibrated) {
+                    if (navigator.vibrate) navigator.vibrate(15);
+                    setHasVibrated(true);
+                } else if (newDist < threshold && hasVibrated) {
+                    setHasVibrated(false);
+                }
+            }
+        }
+    };
+
+    const handleTouchEnd = async () => {
+        if (pullDistance > threshold * 0.8) {
+            setIsRefreshing(true);
+            setPullDistance(threshold);
+            await onRefresh();
+            setIsRefreshing(false);
+        }
+        setStartY(0);
+        setPullDistance(0);
+        setHasVibrated(false);
+    };
+
+    return (
+        <div onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} className={className} style={{ overscrollBehaviorY: 'contain' }}>
+            <div className="fixed top-0 left-0 w-full flex justify-center pt-4 pointer-events-none z-40 transition-opacity duration-200" style={{ opacity: pullDistance > 0 ? Math.min(pullDistance / threshold, 1) : 0, transform: `translateY(${pullDistance > 0 ? 0 : -50}px)` }}>
+                <div className={`bg-white rounded-full p-2 shadow-md border border-slate-200 ${isRefreshing ? 'animate-spin' : ''}`}>
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                </div>
+            </div>
+            <div style={{ transform: `translateY(${pullDistance}px)`, transition: isRefreshing ? 'transform 0.2s' : 'transform 0.1s ease-out' }}>{children}</div>
+        </div>
+    );
+};
+
+// Helper Component for Back to Top
+const BackToTop = () => {
+    const [isVisible, setIsVisible] = useState(false);
+
+    useEffect(() => {
+        const toggleVisibility = () => {
+            if (window.scrollY > 300) {
+                setIsVisible(true);
+            } else {
+                setIsVisible(false);
+            }
+        };
+
+        window.addEventListener('scroll', toggleVisibility);
+        return () => window.removeEventListener('scroll', toggleVisibility);
+    }, []);
+
+    const scrollToTop = () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    if (!isVisible) return null;
+
+    return (
+        <button onClick={scrollToTop} className="fixed bottom-6 right-6 z-50 p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-all duration-300 opacity-90 hover:opacity-100" aria-label="Back to top">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+        </button>
+    );
+};
+
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // ------------------------------------------------------------------
+  // ENVIRONMENT CONFIGURATION
+  // ------------------------------------------------------------------
+  useEffect(() => {
+      // Attempt to load Supabase config from environment variables
+      const getEnv = (key: string) => {
+          // @ts-ignore
+          if (typeof import.meta !== 'undefined' && import.meta.env) {
+              // @ts-ignore
+              return import.meta.env[`VITE_${key}`] || import.meta.env[key];
+          }
+          if (typeof process !== 'undefined' && process.env) {
+              return process.env[`REACT_APP_${key}`] || process.env[key];
+          }
+          return null;
+      };
+
+      const envUrl = getEnv('SB_URL');
+      const envKey = getEnv('SB_KEY');
+
+      if (envUrl && envKey) {
+          const storedUrl = localStorage.getItem('sb_url');
+          if (storedUrl !== envUrl) {
+              console.log("Initializing Supabase from Environment Variables");
+              saveSupabaseConfig(envUrl, envKey);
+              localStorage.removeItem('clinicq_data');
+              window.location.reload();
+          }
+      }
+  }, []);
 
   // ------------------------------------------------------------------
   // SESSION PERSISTENCE
@@ -97,6 +214,7 @@ export default function App() {
   
   // Pending Action
   const [pendingAction, setPendingAction] = useState<{ type: 'CHECK_IN', clinicId: string, patientId: string } | null>(null);
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
 
   // Notifications
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -114,6 +232,8 @@ export default function App() {
       const unsubscribe = storage.subscribe((data) => {
           setClinics(data);
           setIsInitialized(true);
+          setLastSynced(new Date());
+          console.log("Realtime Update Received:", new Date().toISOString());
       });
 
       const unsubscribeAlerts = storage.subscribeToAlerts((msg, type) => {
@@ -232,7 +352,24 @@ export default function App() {
     
     // Redirect logic
     if (pendingAction && pendingAction.type === 'CHECK_IN') {
-        handlePatientCheckIn(pendingAction.clinicId, pendingAction.patientId);
+        let targetPatientId = pendingAction.patientId;
+
+        // Resolve 'current' placeholder if coming from QR scan
+        if (targetPatientId === 'current') {
+            const clinic = clinics.find(c => c.id === pendingAction.clinicId);
+            const visit = clinic?.patients.find(p => p.phone === phone && (p.status === PatientStatus.WAITING || p.status === PatientStatus.ON_HOLD));
+            
+            if (visit) {
+                targetPatientId = visit.id;
+            } else {
+                addToast("No active visit found to check-in.", "error");
+                setPendingAction(null);
+                navigate('/patient');
+                return;
+            }
+        }
+
+        handlePatientCheckIn(pendingAction.clinicId, targetPatientId);
         addToast("Check-in confirmed!", "success");
         setPendingAction(null);
         navigate('/patient');
@@ -596,6 +733,9 @@ export default function App() {
           return;
       }
       saveSupabaseConfig(url, key);
+      localStorage.removeItem('clinicq_data');
+      addToast("Config saved. Reloading to sync with Database...", "success");
+      setTimeout(() => window.location.reload(), 1500);
   };
 
   const handleSeedData = async () => {
@@ -636,6 +776,13 @@ export default function App() {
 
       const sqlScript = `-- Run this in Supabase SQL Editor
 -- RESET SCHEMA (Fixes UUID vs Text ID mismatch)
+DROP TRIGGER IF EXISTS trigger_sync_patients_json ON public.patients;
+DROP TRIGGER IF EXISTS trigger_sync_doctors_json ON public.doctors;
+DROP FUNCTION IF EXISTS sync_patients_to_clinic_json;
+DROP FUNCTION IF EXISTS sync_doctors_to_clinic_json;
+DROP TRIGGER IF EXISTS sync_doctors_cols ON public.doctors;
+DROP TRIGGER IF EXISTS sync_patients_cols ON public.patients;
+DROP FUNCTION IF EXISTS sync_generated_columns;
 DROP TABLE IF EXISTS public.patients CASCADE;
 DROP TABLE IF EXISTS public.doctors CASCADE;
 DROP TABLE IF EXISTS public.clinics CASCADE;
@@ -644,41 +791,32 @@ DROP TABLE IF EXISTS public.clinics CASCADE;
 create table public.clinics (
   id text primary key,
   name text not null,
-  data jsonb
+  data jsonb default '{}'::jsonb -- Stores only clinic settings/metadata, NO nested patients/doctors
 );
 
--- 2. Doctors Table (Hybrid)
+-- 2. Doctors Table (Normalized)
 create table public.doctors (
   id text primary key,
   clinic_id text references public.clinics(id) on delete cascade,
   name text,
-  data jsonb not null
+  data jsonb not null -- Doctor details
 );
 
--- 3. Patients Table (Hybrid)
+-- 3. Patients Table (Normalized)
 create table public.patients (
   id text primary key,
   clinic_id text references public.clinics(id) on delete cascade,
   doctor_id text references public.doctors(id) on delete set null,
-  status text not null,
+  name text, -- Populated via trigger
+  status text, -- Populated via trigger
   queue_order int default 0,
-  data jsonb not null
+  data jsonb not null -- Patient details
 );
 
--- Enable Realtime (Safe to run multiple times)
-do $$
-begin
-  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'clinics') then
-    alter publication supabase_realtime add table public.clinics;
-  end if;
-  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'doctors') then
-    alter publication supabase_realtime add table public.doctors;
-  end if;
-  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'patients') then
-    alter publication supabase_realtime add table public.patients;
-  end if;
-end;
-$$;
+-- Enable Realtime
+alter publication supabase_realtime add table public.clinics;
+alter publication supabase_realtime add table public.doctors;
+alter publication supabase_realtime add table public.patients;
 
 -- Security (Demo Mode - Idempotent)
 alter table public.clinics enable row level security;
@@ -690,9 +828,62 @@ create policy "Public Access Docs" on public.doctors for all using (true);
 alter table public.patients enable row level security;
 create policy "Public Access Pts" on public.patients for all using (true);
 
--- Atomic Update Function (Required for Booking)
-create or replace function add_patient(clinic_id text, patient_data jsonb)
-returns void as $$ begin update clinics set data = jsonb_set(data, '{patients}', coalesce(data->'patients', '[]'::jsonb) || patient_data) where id = clinic_id; end; $$ language plpgsql;
+-- Indexes for Performance (Optimization)
+create index idx_doctors_clinic_id on public.doctors(clinic_id);
+create index idx_patients_clinic_id on public.patients(clinic_id);
+create index idx_patients_doctor_id on public.patients(doctor_id);
+create index idx_patients_status on public.patients(status);
+
+-- 5. Data Sync Triggers (Auto-populate columns from JSON)
+-- Ensures 'name' and 'status' columns are always in sync with 'data' JSON
+create or replace function sync_generated_columns() returns trigger as $$
+begin
+  if new.data ? 'name' then
+    new.name := new.data->>'name';
+  end if;
+  if TG_TABLE_NAME = 'patients' and new.data ? 'status' then
+    new.status := new.data->>'status';
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger sync_doctors_cols before insert or update on doctors
+for each row execute function sync_generated_columns();
+
+create trigger sync_patients_cols before insert or update on patients
+for each row execute function sync_generated_columns();
+
+-- 4. Master View (Simplifies Fetching for Frontend)
+-- Aggregates Doctors and Patients back into the Clinic JSON structure
+create or replace view public.clinics_master as
+select 
+  c.id,
+  c.name,
+  c.data || jsonb_build_object(
+    'doctors', (
+      select coalesce(jsonb_agg(
+        d.data || jsonb_build_object('id', d.id, 'clinicId', d.clinic_id, 'name', d.name)
+      ), '[]'::jsonb)
+      from doctors d 
+      where d.clinic_id = c.id
+    ),
+    'patients', (
+      select coalesce(jsonb_agg(
+        p.data || jsonb_build_object(
+          'id', p.id, 
+          'clinicId', p.clinic_id, 
+          'doctorId', p.doctor_id, 
+          'name', p.name,
+          'status', p.status, 
+          'queueOrder', p.queue_order
+        ) order by p.queue_order asc, p.id asc
+      ), '[]'::jsonb)
+      from patients p 
+      where p.clinic_id = c.id
+    )
+  ) as data
+from clinics c;
 
 -- Reload Schema Cache (Critical for 'Could not find column' errors)
 NOTIFY pgrst, 'reload config';`;
@@ -710,7 +901,11 @@ NOTIFY pgrst, 'reload config';`;
                       <input value={key} onChange={e => setKey(e.target.value)} className="w-full p-2 border rounded" placeholder="eyJh..." />
                   </div>
                   <div className="flex gap-4 pt-2">
-                      <Button onClick={() => handleSupabaseSetup(url, key)}>Save Config</Button>
+                      <Button onClick={() => handleSupabaseSetup(url, key)}>Save & Connect</Button>
+                      <Button variant="outline" onClick={() => {
+                          localStorage.removeItem('clinicq_data');
+                          window.location.reload();
+                      }} disabled={!getSupabase()}>Force Sync from DB</Button>
                       <Button variant="outline" onClick={handleSeedData} disabled={!getSupabase()}>Push Local Data to DB</Button>
                       <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={handleClearPatients} disabled={!getSupabase()}>Clear All Patients</Button>
                       <Button variant="outline" className="text-blue-600 border-blue-200 hover:bg-blue-50" onClick={handleMigrateToHybrid} disabled={!getSupabase()}>Migrate to Hybrid</Button>
@@ -744,7 +939,7 @@ NOTIFY pgrst, 'reload config';`;
                   <p className="text-xs text-slate-500 mt-2">
                       1. Create a project on Supabase.<br/>
                       2. Run the SQL script provided.<br/>
-                      3. Enter credentials here and click Save.<br/>
+                      3. Enter credentials here and click Save & Connect.<br/>
                       4. Click "Push Local Data" to seed the database.
                   </p>
               </div>
@@ -795,12 +990,14 @@ NOTIFY pgrst, 'reload config';`;
         } />
 
         <Route path="/login/patient" element={
-            <PatientLogin 
-              onLogin={handlePatientLogin}
-              onBack={handlePatientLoginBack}
-              addToast={addToast}
-              pendingActionMessage={pendingAction?.type === 'CHECK_IN' ? 'Login to confirm your arrival' : undefined}
-            />
+            patientAuth ? <Navigate to="/patient" replace /> : (
+                <PatientLogin 
+                  onLogin={handlePatientLogin}
+                  onBack={handlePatientLoginBack}
+                  addToast={addToast}
+                  pendingActionMessage={pendingAction?.type === 'CHECK_IN' ? 'Login to confirm your arrival' : undefined}
+                />
+            )
         } />
 
         {/* CLINIC REGISTRATION / SETUP - PUBLIC ACCESS */}
@@ -853,6 +1050,16 @@ NOTIFY pgrst, 'reload config';`;
                 <RouteSyncer currentClinicId={currentClinicId} onSync={setCurrentClinicId} />
                 {currentClinic && (
                     <div className="relative min-h-screen">
+                        {lastSynced && (
+                            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
+                                <div className="flex items-center bg-white/90 backdrop-blur border border-green-200 rounded-full shadow-sm px-3 py-1.5">
+                                    <div className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse mr-2" />
+                                    <span className="text-xs text-green-700 font-medium">
+                                        Live Sync: {lastSynced.toLocaleTimeString()}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
                         <ReceptionDashboard 
                             doctors={currentClinic.doctors}
                             patients={currentClinic.patients}
@@ -861,7 +1068,6 @@ NOTIFY pgrst, 'reload config';`;
                             clinicType={currentClinic.type}
                             operationMode={currentClinic.operationMode}
                             clinicData={currentClinic}
-                            /* Fixed: Replaced short/incorrect names (oe, me, D, H, J, pt, ne, Ne, re, fe, ve, Ge, Ye, xe) with their correct handler function names */
                             onAddPatient={handleAddPatient}
                             onEditPatient={handleEditPatient}
                             onDeletePatient={handleDeletePatient}
@@ -932,10 +1138,8 @@ NOTIFY pgrst, 'reload config';`;
                             onCompletePatient={handleCompletePatient}
                             onUpdateStatus={handleUpdateDoctorStatus}
                             onUpdatePatientDetails={(id, updates) => storage.updatePatient(currentClinic.id, id, updates)}
-                            /* Fixed: Replaced incorrect handler name Vn with handleHoldPatient */
                             onHoldPatient={handleHoldPatient}
                             onResumePatient={handleHoldPatientResume}
-                            /* Fixed: Replaced incorrect handler name xe with handleLogout */
                             onLogout={handleLogout}
                         />
                     );
@@ -966,6 +1170,11 @@ NOTIFY pgrst, 'reload config';`;
                     >
                         <Logo className="h-8 w-8" />
                         <span className="font-bold text-xl">Super Admin</span>
+                        {lastSynced && (
+                            <span className="ml-4 text-xs bg-green-900 text-green-300 px-2 py-1 rounded-full animate-pulse border border-green-700">
+                                ● Live Sync: {lastSynced.toLocaleTimeString()}
+                            </span>
+                        )}
                     </button>
                     <Button variant="ghost" size="sm" onClick={handleLogout} className="text-white hover:bg-white/10">
                         <LogOut className="h-4 w-4 mr-2" /> Logout
@@ -987,7 +1196,6 @@ NOTIFY pgrst, 'reload config';`;
                         onAddDoctor={(clinicId, doc) => storage.addDoctor(clinicId, doc)}
                         onEditDoctor={(clinicId, docId, updates) => storage.updateDoctor(clinicId, docId, updates)}
                         onDeleteDoctor={(clinicId, docId) => storage.deleteDoctor(clinicId, docId)}
-                        /* Fixed: Replaced pt with checkMasterDoctor */
                         onCheckMasterDoctor={checkMasterDoctor}
                         addToast={addToast}
                     />
@@ -1001,28 +1209,36 @@ NOTIFY pgrst, 'reload config';`;
 
         {/* PATIENT TRACKER - Updated with Wildcard for Sub-Routes */}
         <Route path="/patient/*" element={
-            <PatientTracker 
-                clinics={clinics}
-                userPhone={patientAuth?.phone || ''}
-                userName={patientAuth?.name || 'Guest'}
-                isGuest={!patientAuth}
-                onLoginClick={(phone, name) => {
-                    if (phone && name) {
-                        handlePatientLogin(phone, name);
-                    } else {
-                        navigate('/login/patient');
-                    }
-                }}
-                onBack={handleLogout}
-                onGetToken={handleGetToken}
-                addToast={addToast}
-                onUpdateDetails={storage.updatePatient}
-                onCancelVisit={handleCancelVisit}
-                onCheckIn={handlePatientCheckIn}
-                preSelectedClinicId={currentClinicId || undefined}
-                onClearPendingAction={() => setCurrentClinicId(null)}
-                initialSearchMode={initialSearchMode}
-            />
+            <>
+                <PullToRefresh 
+                    className="relative min-h-screen bg-slate-50"
+                    onRefresh={async () => { await new Promise(r => setTimeout(r, 800)); window.location.reload(); }}
+                >
+                <PatientTracker 
+                    clinics={clinics}
+                    userPhone={patientAuth?.phone || ''}
+                    userName={patientAuth?.name || 'Guest'}
+                    isGuest={!patientAuth}
+                    onLoginClick={(phone, name) => {
+                        if (phone && name) {
+                            handlePatientLogin(phone, name);
+                        } else {
+                            navigate('/login/patient');
+                        }
+                    }}
+                    onBack={handleLogout}
+                    onGetToken={handleGetToken}
+                    addToast={addToast}
+                    onUpdateDetails={storage.updatePatient}
+                    onCancelVisit={handleCancelVisit}
+                    onCheckIn={handlePatientCheckIn}
+                    preSelectedClinicId={currentClinicId || undefined}
+                    onClearPendingAction={() => setCurrentClinicId(null)}
+                    initialSearchMode={initialSearchMode}
+                />
+                </PullToRefresh>
+                <BackToTop />
+            </>
         } />
 
         {/* Fallback */}

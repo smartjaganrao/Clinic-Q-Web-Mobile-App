@@ -67,7 +67,7 @@ const format12h = (time24: string) => {
     const ampm = h >= 12 ? 'PM' : 'AM';
     h = h % 12;
     h = h ? h : 12; 
-    return `${h}:${m} ${ampm}`;
+    return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
 };
 
 const parseTimeTo24h = (timeStr: string) => {
@@ -335,7 +335,23 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
     const handleSettingsSave = (e: React.FormEvent) => {
         e.preventDefault();
-        P(settingsForm);
+        
+        // Sync operatingHours string for Patient App display
+        const updates = { ...settingsForm };
+        if (updates.workingHours) {
+            const openDays = updates.workingHours.filter(d => d.isOpen);
+            let summary = "Temporarily Closed";
+            if (openDays.length > 0) {
+                const first = openDays[0];
+                const last = openDays[openDays.length - 1];
+                const start = first.shifts[0]?.start ? format12h(first.shifts[0].start) : "09:00 AM";
+                const end = first.shifts[first.shifts.length - 1]?.end ? format12h(first.shifts[first.shifts.length - 1].end) : "05:00 PM";
+                summary = openDays.length === 1 ? `${first.dayOfWeek}: ${start} - ${end}` : `${first.dayOfWeek} - ${last.dayOfWeek}: ${start} - ${end}`;
+            }
+            (updates as any).operatingHours = summary;
+        }
+
+        P(updates);
         he("Clinic settings updated!", "success");
         setClinicSettingsUpdated(prev => prev + 1); // Increment to force DoctorFormModal refresh
     };
