@@ -9,6 +9,9 @@ import { PatientQueueSidebar } from '../features/doctor/components/PatientQueueS
 import { ConsultationWorkspace } from '../features/doctor/components/ConsultationWorkspace';
 import { Logo } from '../components/Logo';
 import { getActiveSession, getQueueSorter } from '../utils/time';
+import { patientService } from '../services/patientService';
+import { useRealtimeQueue } from '../hooks/useRealtimeQueue';
+import { useDoctorStatusSync } from '../hooks/useDoctorStatusSync';
 
 interface DoctorProps {
   doctor: Doctor;
@@ -31,6 +34,17 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({
     doctor, queue, linkedClinics, currentClinicId, clinicName, clinicCity, onSwitchClinic,
     onNextPatient, onCompletePatient, onUpdateStatus, onUpdatePatientDetails, onHoldPatient, onResumePatient, onLogout
 }) => {
+  // Real-time queue subscription for live updates
+  const { patients: realtimeQueue, isConnected } = useRealtimeQueue(currentClinicId || '', queue);
+  
+  // Real-time doctor status synchronization
+  const { status: realtimeStatus, delayMinutes: realtimeDelayMinutes, updateStatus } = useDoctorStatusSync(doctor.id, doctor.status);
+  
+  // Use real-time data if connected, fallback to props
+  const activeQueue = isConnected ? realtimeQueue : queue;
+  const doctorStatus = realtimeStatus;
+  const doctorDelayMinutes = realtimeDelayMinutes;
+  
   const [showMobileQueue, setShowMobileQueue] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
 
@@ -48,22 +62,17 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({
 
   // SMART HYBRID QUEUE LOGIC
   const { currentPatient, sortedQueue, heldPatients, currentSessionMode } = useMemo(() => {
-    const current = queue.find(p => p.status === PatientStatus.WITH_DOCTOR);
-    const waiting = queue.filter(p => p.status === PatientStatus.WAITING);
-    const held = queue.filter(p => p.status === PatientStatus.ON_HOLD).sort((a, b) => a.timeAdded - b.timeAdded);
+    const current = activeQueue.find(p => p.status === PatientStatus.WITH_DOCTOR);
+    const waiting = activeQueue.filter(p => p.status === PatientStatus.WAITING);
+    const held = activeQueue.filter(p => p.status === PatientStatus.ON_HOLD).sort((a, b) => a.timeAdded - b.timeAdded);
     
     // Determine active session mode
-    // We need a pseudo-clinic object for the utility if real one isn't passed fully populated
-    // but here we can construct a minimal one or assume defaults.
-    // Ideally we should pass the full clinic object to DoctorDashboard.
-    // For now, let's assume a default timezone if missing or reuse what we have.
-    const mockClinic = { timezone: 'Asia/Kolkata' } as Clinic; // Fallback
+    const mockClinic = { timezone: 'Asia/Kolkata' } as Clinic;
     const activeSession = getActiveSession(doctor, mockClinic);
     const mode = activeSession?.mode || SessionMode.HYBRID;
 
-    const sorter = getQueueSorter(mode);
-
-    const sorted = waiting.sort(sorter);
+    // Use standardized sorting for consistency
+    const sorted = waiting.sort(patientService.standardQueueSort);
 
     return { 
         currentPatient: current, 
@@ -71,18 +80,19 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({
         heldPatients: held,
         currentSessionMode: mode
     };
-  }, [queue, currentTime, doctor]);
+  }, [activeQueue, currentTime, doctor]);
 
   // Check for Delay Expiry
   useEffect(() => {
-      if (doctor.delayMinutes > 0 && doctor.delayStartTime) {
+      if (doctorDelayMinutes > 0 && doctor.delayStartTime) {
           const elapsed = Date.now() - doctor.delayStartTime;
-          const delayMs = doctor.delayMinutes * 60 * 1000;
+          const delayMs = doctorDelayMinutes * 60 * 1000;
           if (elapsed >= delayMs) {
-              onUpdateStatus(doctor.id, doctor.status, 0);
+              updateStatus(doctorStatus, 0);
+              onUpdateStatus(doctor.id, doctorStatus, 0);
           }
       }
-  }, [currentTime, doctor.delayMinutes, doctor.delayStartTime]);
+  }, [currentTime, doctorDelayMinutes, doctor.delayStartTime]);
 
   const handleConsultationComplete = (notes: string, prescriptions: any[], vitals: any, painPoints: PainPoint[]) => {
     if (currentPatient) {
@@ -96,21 +106,23 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({
   };
 
   const toggleBreak = () => {
-    const newStatus = doctor.status === DoctorStatus.ON_BREAK ? DoctorStatus.AVAILABLE : DoctorStatus.ON_BREAK;
-    onUpdateStatus(doctor.id, newStatus, doctor.delayMinutes);
+    const newStatus = doctorStatus === DoctorStatus.ON_BREAK ? DoctorStatus.AVAILABLE : DoctorStatus.ON_BREAK;
+    updateStatus(newStatus, doctorDelayMinutes);
+    onUpdateStatus(doctor.id, newStatus, doctorDelayMinutes);
   };
 
   const toggleDelay = () => {
-      const newDelay = doctor.delayMinutes > 0 ? 0 : 15;
-      onUpdateStatus(doctor.id, doctor.status, newDelay);
+      const newDelay = doctorDelayMinutes > 0 ? 0 : 15;
+      updateStatus(doctorStatus, newDelay);
+      onUpdateStatus(doctor.id, doctorStatus, newDelay);
   };
 
-  const breakDuration = doctor.status === DoctorStatus.ON_BREAK && doctor.statusUpdateTime 
+  const breakDuration = doctorStatus === DoctorStatus.ON_BREAK && doctor.statusUpdateTime 
       ? currentTime - doctor.statusUpdateTime 
       : 0;
   
-  const delayRemaining = doctor.delayMinutes > 0 && doctor.delayStartTime
-      ? (doctor.delayMinutes * 60 * 1000) - (currentTime - doctor.delayStartTime)
+  const delayRemaining = doctorDelayMinutes > 0 && doctor.delayStartTime
+      ? (doctorDelayMinutes * 60 * 1000) - (currentTime - doctor.delayStartTime)
       : 0;
 
   // Check if doctor is technically "OFF SHIFT"
@@ -146,7 +158,7 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({
 
               <div className="relative">
                   <img src={doctor.avatarUrl} className="w-10 h-10 sm:w-11 sm:h-11 rounded-full border border-slate-100 object-cover" />
-                  <div className={`absolute bottom-0 right-0 w-3 h-3 sm:w-3.5 sm:h-3.5 border-2 border-white rounded-full ${doctor.status === DoctorStatus.AVAILABLE ? 'bg-green-500' : doctor.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-400'}`}></div>
+                  <div className={`absolute bottom-0 right-0 w-3 h-3 sm:w-3.5 sm:h-3.5 border-2 border-white rounded-full ${doctorStatus === DoctorStatus.AVAILABLE ? 'bg-green-500' : doctorStatus === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-400'}`}></div>
               </div>
               <div>
                   <h1 className="text-lg sm:text-xl font-bold text-slate-900 leading-none flex items-center gap-2">
@@ -195,14 +207,14 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({
               {/* Break Button */}
               <button 
                   onClick={toggleBreak}
-                  className={`flex-1 sm:flex-none flex items-center justify-center gap-2 sm:gap-3 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border transition-all ${doctor.status === DoctorStatus.ON_BREAK ? 'bg-orange-500 text-white border-orange-600 shadow-lg shadow-orange-200' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                  className={`flex-1 sm:flex-none flex items-center justify-center gap-2 sm:gap-3 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border transition-all ${doctorStatus === DoctorStatus.ON_BREAK ? 'bg-orange-500 text-white border-orange-600 shadow-lg shadow-orange-200' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
               >
                   <Coffee className="h-4 w-4 sm:h-5 sm:w-5" />
                   <div className="text-left leading-none">
                       <div className="text-[10px] sm:text-xs font-semibold opacity-80 uppercase tracking-wide">
-                          {doctor.status === DoctorStatus.ON_BREAK ? 'On Break' : 'Break'}
+                          {doctorStatus === DoctorStatus.ON_BREAK ? 'On Break' : 'Break'}
                       </div>
-                      {doctor.status === DoctorStatus.ON_BREAK && (
+                      {doctorStatus === DoctorStatus.ON_BREAK && (
                           <div className="font-mono text-sm sm:text-lg font-bold">{formatTime(breakDuration)}</div>
                       )}
                   </div>
@@ -211,14 +223,14 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({
               {/* Delay Button */}
               <button 
                   onClick={toggleDelay}
-                  className={`flex-1 sm:flex-none flex items-center justify-center gap-2 sm:gap-3 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border transition-all ${doctor.delayMinutes > 0 ? 'bg-red-500 text-white border-red-600 shadow-lg shadow-red-200' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                  className={`flex-1 sm:flex-none flex items-center justify-center gap-2 sm:gap-3 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border transition-all ${doctorDelayMinutes > 0 ? 'bg-red-500 text-white border-red-600 shadow-lg shadow-red-200' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
               >
                   <Clock12 className="h-4 w-4 sm:h-5 sm:w-5" />
                   <div className="text-left leading-none">
                       <div className="text-[10px] sm:text-xs font-semibold opacity-80 uppercase tracking-wide">
-                          {doctor.delayMinutes > 0 ? 'Delayed' : 'Delay'}
+                          {doctorDelayMinutes > 0 ? 'Delayed' : 'Delay'}
                       </div>
-                      {doctor.delayMinutes > 0 ? (
+                      {doctorDelayMinutes > 0 ? (
                           <div className="font-mono text-sm sm:text-lg font-bold">{formatTime(delayRemaining)}</div>
                       ) : (
                           <div className="text-xs sm:text-sm font-bold mt-0.5">15m</div>
@@ -264,7 +276,7 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({
                       </div>
                       <h3 className="text-lg font-bold text-slate-600">No Active Consultation</h3>
                       <p className="text-sm text-center px-6">Select a patient from the queue to start.</p>
-                      {sortedQueue.length > 0 && doctor.status === DoctorStatus.AVAILABLE && (
+                      {sortedQueue.length > 0 && doctorStatus === DoctorStatus.AVAILABLE && (
                           <Button onClick={onNextPatient} className="mt-6 shadow-xl w-full sm:w-auto justify-center" size="lg">
                               <PlayCircle className="h-5 w-5 mr-2" /> Call Next Patient
                           </Button>
@@ -278,7 +290,7 @@ export const DoctorDashboard: React.FC<DoctorProps> = ({
               queue={sortedQueue}
               heldPatients={heldPatients}
               currentPatient={currentPatient}
-              doctorStatus={doctor.status}
+              doctorStatus={doctorStatus}
               showMobileQueue={showMobileQueue}
               onCloseMobileQueue={() => setShowMobileQueue(false)}
               onNextPatient={onNextPatient}

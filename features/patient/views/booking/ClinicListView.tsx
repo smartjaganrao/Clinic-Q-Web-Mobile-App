@@ -53,7 +53,7 @@ export const ClinicListView = ({
             {showHelper && <HelperStrip onClose={handleCloseHelper} />}
             
             {filteredClinics.length > 0 ? (
-                <div className={`w-full grid gap-4 mb-4 ${showMap ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'}`}>
+                <div className={`relative w-full grid gap-4 mb-4 ${showMap ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'}`}>
                     {filteredClinics.map(clinic => {
                         const waitInfo = getClinicWaitStats(clinic);
                         const relevantDoctors = getRelevantDoctors(clinic);

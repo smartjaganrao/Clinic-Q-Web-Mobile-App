@@ -438,8 +438,322 @@ CLINIC_5.doctors = [
 ];
 CLINIC_5.patients = createPatientsForClinic(CLINIC_5.id, CLINIC_5.doctors);
 
+// 6. Avadi Health Center (General, Hybrid Full, Multiple Shifts)
+const CLINIC_6: Clinic = {
+    id: "clinic_avadi_health_center",
+    name: "Avadi Health Center",
+    slug: "avadi-health-center",
+    type: ClinicType.GENERAL,
+    plan: PlanType.SMALL,
+    operationMode: ClinicOperationMode.HYBRID_FULL,
+    enableAdvanceBooking: true,
+    city: "Chennai",
+    address: "123, Main Road, Avadi",
+    pincode: "600054",
+    timezone: "Asia/Kolkata",
+    operatingHours: "09:00 AM - 10:00 PM",
+    geoLocation: { lat: 13.1143, lng: 80.0978 },
+    imageUrl: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=800",
+    contactPhone: "044-26351234",
+    about: "Avadi Health Center provides comprehensive healthcare services with modern facilities and experienced doctors. We offer both walk-in and appointment-based consultations.",
+    amenities: ["Pharmacy", "Lab", "X-Ray", "Parking", "WiFi", "Emergency Care"],
+    subscriptionStatus: "ACTIVE",
+    workingHours: [
+        { dayOfWeek: 'MON', isOpen: true, shifts: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '18:00' }, { start: '19:00', end: '22:00' }] },
+        { dayOfWeek: 'TUE', isOpen: true, shifts: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '18:00' }, { start: '19:00', end: '22:00' }] },
+        { dayOfWeek: 'WED', isOpen: true, shifts: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '18:00' }, { start: '19:00', end: '22:00' }] },
+        { dayOfWeek: 'THU', isOpen: true, shifts: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '18:00' }, { start: '19:00', end: '22:00' }] },
+        { dayOfWeek: 'FRI', isOpen: true, shifts: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '18:00' }, { start: '19:00', end: '22:00' }] },
+        { dayOfWeek: 'SAT', isOpen: true, shifts: [{ start: '10:00', end: '14:00' }, { start: '15:00', end: '19:00' }] },
+        { dayOfWeek: 'SUN', isOpen: false, shifts: [] }
+    ],
+    leaveDays: [],
+    doctors: [],
+    patients: [],
+    staff: [{ id: "staff_6", name: "Ravi (Admin)", role: "RECEPTIONIST", phone: "9999999998", email: "admin@avadihealth.com", password: "password", isActive: true, joinedDate: Date.now() }]
+};
+CLINIC_6.doctors = [
+    // Dr. Priya: Morning Shift
+    {
+        clinicId: CLINIC_6.id,
+        name: MASTER_DOCTORS[1].name,
+        specialty: MASTER_DOCTORS[1].specialty,
+        education: MASTER_DOCTORS[1].education,
+        experience: MASTER_DOCTORS[1].experience,
+        languages: MASTER_DOCTORS[1].languages,
+        gender: MASTER_DOCTORS[1].gender,
+        avatarUrl: MASTER_DOCTORS[1].avatarUrl,
+        bio: MASTER_DOCTORS[1].bio,
+        id: "doc_6_1",
+        masterId: "master_priya",
+        mobile: "9000000010",
+        email: "priya@avadihealth.com",
+        password: "password",
+        roomNumber: "101",
+        isAvailable: true,
+        status: DoctorStatus.AVAILABLE,
+        delayMinutes: 0,
+        consultationFee: 550,
+        consultationTime: 15,
+        rating: 4.7,
+        reviewCount: 95,
+        reviews: [
+            { id: 'rev7', patientName: 'Sneha', rating: 5, comment: 'Very caring doctor.', date: '2023-10-13' },
+        ],
+        weeklySchedule: createSchedule([{ start: "09:00", end: "13:00", mode: SessionMode.HYBRID, label: "Morning OPD" }])
+    },
+    // Dr. Sanjay: Afternoon Shift
+    {
+        clinicId: CLINIC_6.id,
+        name: MASTER_DOCTORS[7].name,
+        specialty: MASTER_DOCTORS[7].specialty,
+        education: MASTER_DOCTORS[7].education,
+        experience: MASTER_DOCTORS[7].experience,
+        languages: MASTER_DOCTORS[7].languages,
+        gender: MASTER_DOCTORS[7].gender,
+        avatarUrl: MASTER_DOCTORS[7].avatarUrl,
+        bio: MASTER_DOCTORS[7].bio,
+        id: "doc_6_2",
+        masterId: "master_sanjay",
+        mobile: "9000000011",
+        email: "sanjay@avadihealth.com",
+        password: "password",
+        roomNumber: "102",
+        isAvailable: true,
+        status: DoctorStatus.AVAILABLE,
+        delayMinutes: 0,
+        consultationFee: 650,
+        consultationTime: 20,
+        rating: 4.8,
+        reviewCount: 110,
+        reviews: [
+            { id: 'rev8', patientName: 'Rahul', rating: 4, comment: 'Good, but waiting time.', date: '2023-10-14' },
+        ],
+        weeklySchedule: createSchedule([{ start: "14:00", end: "18:00", mode: SessionMode.APPOINTMENT, label: "Afternoon ENT" }])
+    },
+    // Dr. Vikram: Evening Shift
+    {
+        clinicId: CLINIC_6.id,
+        name: MASTER_DOCTORS[6].name,
+        specialty: MASTER_DOCTORS[6].specialty,
+        education: MASTER_DOCTORS[6].education,
+        experience: MASTER_DOCTORS[6].experience,
+        languages: MASTER_DOCTORS[6].languages,
+        gender: MASTER_DOCTORS[6].gender,
+        avatarUrl: MASTER_DOCTORS[6].avatarUrl,
+        bio: MASTER_DOCTORS[6].bio,
+        id: "doc_6_3",
+        masterId: "master_vikram",
+        mobile: "9000000012",
+        email: "vikram@avadihealth.com",
+        password: "password",
+        roomNumber: "103",
+        isAvailable: true,
+        status: DoctorStatus.AVAILABLE,
+        delayMinutes: 0,
+        consultationFee: 400,
+        consultationTime: 15,
+        rating: 4.6,
+        reviewCount: 85,
+        weeklySchedule: createSchedule([{ start: "19:00", end: "22:00", mode: SessionMode.WALK_IN, label: "Evening Dental" }])
+    }
+];
+CLINIC_6.patients = createPatientsForClinic(CLINIC_6.id, CLINIC_6.doctors);
 
-export const INITIAL_CLINICS: Clinic[] = [CLINIC_1, CLINIC_2, CLINIC_3, CLINIC_4, CLINIC_5];
+// 7. Ambattur Orthopedic Clinic (Orthopedic, Hybrid Direct)
+const CLINIC_7: Clinic = {
+    id: "clinic_ambattur_ortho",
+    name: "Ambattur Orthopedic Clinic",
+    slug: "ambattur-orthopedic-clinic",
+    type: ClinicType.ORTHOPEDIC,
+    plan: PlanType.SOLO,
+    operationMode: ClinicOperationMode.HYBRID_DIRECT_APPT,
+    enableAdvanceBooking: true,
+    city: "Chennai",
+    address: "456, North Street, Ambattur",
+    pincode: "600053",
+    timezone: "Asia/Kolkata",
+    operatingHours: "08:00 AM - 08:00 PM",
+    geoLocation: { lat: 13.1186, lng: 80.1574 },
+    imageUrl: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?auto=format&fit=crop&q=80&w=800",
+    contactPhone: "044-26541234",
+    about: "Specialized orthopedic care in Ambattur. We provide treatment for bone and joint issues with advanced equipment and experienced surgeons.",
+    amenities: ["X-Ray", "Physiotherapy", "Parking", "Wheelchair", "Lab"],
+    subscriptionStatus: "ACTIVE",
+    workingHours: [
+        { dayOfWeek: 'MON', isOpen: true, shifts: [{ start: '08:00', end: '12:00' }, { start: '13:00', end: '17:00' }, { start: '18:00', end: '20:00' }] },
+        { dayOfWeek: 'TUE', isOpen: true, shifts: [{ start: '08:00', end: '12:00' }, { start: '13:00', end: '17:00' }, { start: '18:00', end: '20:00' }] },
+        { dayOfWeek: 'WED', isOpen: true, shifts: [{ start: '08:00', end: '12:00' }, { start: '13:00', end: '17:00' }, { start: '18:00', end: '20:00' }] },
+        { dayOfWeek: 'THU', isOpen: true, shifts: [{ start: '08:00', end: '12:00' }, { start: '13:00', end: '17:00' }, { start: '18:00', end: '20:00' }] },
+        { dayOfWeek: 'FRI', isOpen: true, shifts: [{ start: '08:00', end: '12:00' }, { start: '13:00', end: '17:00' }, { start: '18:00', end: '20:00' }] },
+        { dayOfWeek: 'SAT', isOpen: true, shifts: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '18:00' }] },
+        { dayOfWeek: 'SUN', isOpen: false, shifts: [] }
+    ],
+    leaveDays: [],
+    doctors: [],
+    patients: [],
+    staff: [{ id: "staff_7", name: "Kavya (Admin)", role: "RECEPTIONIST", phone: "9999999997", email: "admin@ambatturortho.com", password: "password", isActive: true, joinedDate: Date.now() }]
+};
+CLINIC_7.doctors = [
+    // Dr. Suresh: Morning and Afternoon
+    {
+        clinicId: CLINIC_7.id,
+        name: MASTER_DOCTORS[4].name,
+        specialty: MASTER_DOCTORS[4].specialty,
+        education: MASTER_DOCTORS[4].education,
+        experience: MASTER_DOCTORS[4].experience,
+        languages: MASTER_DOCTORS[4].languages,
+        gender: MASTER_DOCTORS[4].gender,
+        avatarUrl: MASTER_DOCTORS[4].avatarUrl,
+        bio: MASTER_DOCTORS[4].bio,
+        id: "doc_7_1",
+        masterId: "master_suresh",
+        mobile: "9000000013",
+        email: "suresh@ambatturortho.com",
+        password: "password",
+        roomNumber: "1",
+        isAvailable: true,
+        status: DoctorStatus.AVAILABLE,
+        delayMinutes: 0,
+        consultationFee: 800,
+        consultationTime: 20,
+        rating: 4.7,
+        reviewCount: 150,
+        reviews: [
+            { id: 'rev9', patientName: 'Amit', rating: 5, comment: 'Excellent orthopedic care.', date: '2023-10-15' },
+        ],
+        weeklySchedule: createSchedule([
+            { start: "08:00", end: "12:00", mode: SessionMode.APPOINTMENT, label: "Morning Ortho" },
+            { start: "13:00", end: "17:00", mode: SessionMode.WALK_IN, label: "Afternoon Ortho" }
+        ])
+    },
+    // Dr. Anand Raj: Evening
+    {
+        clinicId: CLINIC_7.id,
+        name: MASTER_DOCTORS[8].name,
+        specialty: MASTER_DOCTORS[8].specialty,
+        education: MASTER_DOCTORS[8].education,
+        experience: MASTER_DOCTORS[8].experience,
+        languages: MASTER_DOCTORS[8].languages,
+        gender: MASTER_DOCTORS[8].gender,
+        avatarUrl: MASTER_DOCTORS[8].avatarUrl,
+        bio: MASTER_DOCTORS[8].bio,
+        id: "doc_7_2",
+        masterId: "master_anand",
+        mobile: "9000000014",
+        email: "anand@ambatturortho.com",
+        password: "password",
+        roomNumber: "2",
+        isAvailable: true,
+        status: DoctorStatus.AVAILABLE,
+        delayMinutes: 0,
+        consultationFee: 900,
+        consultationTime: 15,
+        rating: 4.9,
+        reviewCount: 75,
+        weeklySchedule: createSchedule([{ start: "18:00", end: "20:00", mode: SessionMode.HYBRID, label: "Evening Emergency" }])
+    }
+];
+CLINIC_7.patients = createPatientsForClinic(CLINIC_7.id, CLINIC_7.doctors);
+
+// 8. T. Nagar Family Clinic (General, Both Walk-in, Multiple Doctors)
+const CLINIC_8: Clinic = {
+    id: "clinic_t_nagar_family",
+    name: "T. Nagar Family Clinic",
+    slug: "t-nagar-family-clinic",
+    type: ClinicType.GENERAL,
+    plan: PlanType.SMALL,
+    operationMode: ClinicOperationMode.BOTH_WALK_IN,
+    enableAdvanceBooking: false,
+    city: "Chennai",
+    address: "78, South Usman Road, T. Nagar",
+    pincode: "600017",
+    timezone: "Asia/Kolkata",
+    operatingHours: "09:00 AM - 08:00 PM",
+    geoLocation: { lat: 13.0410, lng: 80.2340 },
+    imageUrl: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?auto=format&fit=crop&q=80&w=800",
+    contactPhone: "044-28123456",
+    about: "T. Nagar Family Clinic offers comprehensive family healthcare with both walk-in and online token booking options. We provide quality medical care for all ages.",
+    amenities: ["Pharmacy", "Lab", "Parking", "WiFi", "Family Counseling"],
+    subscriptionStatus: "ACTIVE",
+    workingHours: [
+        { dayOfWeek: 'MON', isOpen: true, shifts: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '18:00' }, { start: '19:00', end: '20:00' }] },
+        { dayOfWeek: 'TUE', isOpen: true, shifts: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '18:00' }, { start: '19:00', end: '20:00' }] },
+        { dayOfWeek: 'WED', isOpen: true, shifts: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '18:00' }, { start: '19:00', end: '20:00' }] },
+        { dayOfWeek: 'THU', isOpen: true, shifts: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '18:00' }, { start: '19:00', end: '20:00' }] },
+        { dayOfWeek: 'FRI', isOpen: true, shifts: [{ start: '09:00', end: '13:00' }, { start: '14:00', end: '18:00' }, { start: '19:00', end: '20:00' }] },
+        { dayOfWeek: 'SAT', isOpen: true, shifts: [{ start: '10:00', end: '14:00' }, { start: '15:00', end: '18:00' }] },
+        { dayOfWeek: 'SUN', isOpen: false, shifts: [] }
+    ],
+    leaveDays: [],
+    doctors: [],
+    patients: [],
+    staff: [{ id: "staff_8", name: "Vijay (Admin)", role: "RECEPTIONIST", phone: "9999999996", email: "admin@tnagarfamily.com", password: "password", isActive: true, joinedDate: Date.now() }]
+};
+CLINIC_8.doctors = [
+    // Dr. Meera: Morning and Afternoon
+    {
+        clinicId: CLINIC_8.id,
+        name: MASTER_DOCTORS[5].name,
+        specialty: MASTER_DOCTORS[5].specialty,
+        education: MASTER_DOCTORS[5].education,
+        experience: MASTER_DOCTORS[5].experience,
+        languages: MASTER_DOCTORS[5].languages,
+        gender: MASTER_DOCTORS[5].gender,
+        avatarUrl: MASTER_DOCTORS[5].avatarUrl,
+        bio: MASTER_DOCTORS[5].bio,
+        id: "doc_8_1",
+        masterId: "master_meera",
+        mobile: "9000000015",
+        email: "meera@tnagarfamily.com",
+        password: "password",
+        roomNumber: "1",
+        isAvailable: true,
+        status: DoctorStatus.AVAILABLE,
+        delayMinutes: 0,
+        consultationFee: 450,
+        consultationTime: 15,
+        rating: 4.8,
+        reviewCount: 120,
+        reviews: [
+            { id: 'rev10', patientName: 'Priya', rating: 5, comment: 'Excellent family doctor.', date: '2023-10-16' },
+        ],
+        weeklySchedule: createSchedule([
+            { start: "09:00", end: "13:00", mode: SessionMode.WALK_IN, label: "Morning Walk-in" },
+            { start: "14:00", end: "18:00", mode: SessionMode.WALK_IN, label: "Afternoon Walk-in" }
+        ])
+    },
+    // Dr. Vikram: Evening
+    {
+        clinicId: CLINIC_8.id,
+        name: MASTER_DOCTORS[6].name,
+        specialty: MASTER_DOCTORS[6].specialty,
+        education: MASTER_DOCTORS[6].education,
+        experience: MASTER_DOCTORS[6].experience,
+        languages: MASTER_DOCTORS[6].languages,
+        gender: MASTER_DOCTORS[6].gender,
+        avatarUrl: MASTER_DOCTORS[6].avatarUrl,
+        bio: MASTER_DOCTORS[6].bio,
+        id: "doc_8_2",
+        masterId: "master_vikram",
+        mobile: "9000000016",
+        email: "vikram@tnagarfamily.com",
+        password: "password",
+        roomNumber: "2",
+        isAvailable: true,
+        status: DoctorStatus.AVAILABLE,
+        delayMinutes: 0,
+        consultationFee: 350,
+        consultationTime: 15,
+        rating: 4.7,
+        reviewCount: 90,
+        weeklySchedule: createSchedule([{ start: "19:00", end: "20:00", mode: SessionMode.WALK_IN, label: "Evening Walk-in" }])
+    }
+];
+CLINIC_8.patients = createPatientsForClinic(CLINIC_8.id, CLINIC_8.doctors);
+
+
+export const INITIAL_CLINICS: Clinic[] = [CLINIC_1, CLINIC_2, CLINIC_3, CLINIC_4, CLINIC_5, CLINIC_6, CLINIC_7, CLINIC_8];
 export const INITIAL_DOCTORS: Doctor[] = CLINIC_1.doctors;
 
 export const PRICING_PLANS: PricingPlan[] = [

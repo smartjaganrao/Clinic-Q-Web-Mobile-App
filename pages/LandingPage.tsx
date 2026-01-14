@@ -32,6 +32,7 @@ interface LandingPageProps {
   onStaffLogin: () => void;
   onSimulateQRScan: (clinicId: string) => void;
   clinics: Clinic[];
+  onLoadClinics?: () => Promise<void>;
 }
 
 const SPECIALTIES: { label: string; query: string; icon: React.ElementType }[] = [
@@ -53,9 +54,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onStaffLogin,
   onSimulateQRScan,
   clinics,
+  onLoadClinics,
 }) => {
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
+  const [isLoadingClinics, setIsLoadingClinics] = useState(false);
 
   const [mockQueue, setMockQueue] = useState(8);
   const [mockEta, setMockEta] = useState(22);
@@ -66,6 +69,38 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     }, 4000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    if (clinics.length > 0) {
+      setIsLoadingClinics(false);
+    }
+  }, [clinics.length]);
+
+  // Lazy load clinics when clinics section comes into view
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && clinics.length === 0 && onLoadClinics && !isLoadingClinics) {
+            setIsLoadingClinics(true);
+            onLoadClinics().finally(() => setIsLoadingClinics(false));
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    const clinicsSection = document.getElementById('popular-clinics');
+    if (clinicsSection) {
+      observer.observe(clinicsSection);
+    }
+
+    return () => {
+      if (clinicsSection) {
+        observer.unobserve(clinicsSection);
+      }
+    };
+  }, [clinics.length, onLoadClinics, isLoadingClinics]);
 
   const topClinics = useMemo(() => {
     return [...clinics]
@@ -286,7 +321,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* POPULAR CLINICS NEARBY */}
-      <section className="py-16 bg-white">
+      <section id="popular-clinics" className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between mb-6">
             <div>
@@ -296,11 +331,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {topClinics.map((c) => (
-              <ClinicCard key={c.id} clinic={c} onClick={() => onPatientEnter('CLINIC', c.name, c.city)} />
-            ))}
-            {topClinics.length === 0 && (
-              <div className="col-span-full text-slate-500 text-sm">No clinics found in your data. Try importing mock data.</div>
+            {isLoadingClinics || clinics.length === 0 ? (
+              <div className="col-span-full flex items-center justify-center py-12">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+                  <div className="text-slate-500 text-sm">Loading clinics...</div>
+                </div>
+              </div>
+            ) : (
+              <>
+                {topClinics.map((c) => (
+                  <ClinicCard key={c.id} clinic={c} onClick={() => onPatientEnter('CLINIC', c.name, c.city)} />
+                ))}
+                {topClinics.length === 0 && (
+                  <div className="col-span-full text-slate-500 text-sm">No clinics found in your data. Try importing mock data.</div>
+                )}
+              </>
             )}
           </div>
         </div>

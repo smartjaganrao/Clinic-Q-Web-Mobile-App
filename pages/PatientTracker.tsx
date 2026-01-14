@@ -28,6 +28,7 @@ import { createDoctorSlug } from '../utils/slugs';
 import { calculateDistance, reverseGeocode } from '../utils/geolocation';
 import { isClinicOpen, getClinicCurrentTime, getLocalToday, formatTime12h, getDoctorTodayShifts } from '../utils/time';
 import { CATEGORIES, RELATIONSHIP_OPTIONS, SYMPTOM_MAP, INITIAL_USER_PROFILE } from '../constants';
+import { patientService } from '../services/patientService';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import { GuestLoginCard } from '../features/patient/components/GuestLoginCard';
 import { ActiveVisitsView } from '../features/patient/views/ActiveVisitsView';
@@ -344,6 +345,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
     const clinicCardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const [highlightedClinicId, setHighlightedClinicId] = useState<string | null>(null);
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [hasUserRequestedLocation, setHasUserRequestedLocation] = useState(false);
     const [pinnedAddress, setPinnedAddress] = useState<string | null>('Locate Me');
     const [isLocating, setIsLocating] = useState(false);
     const [isPickingLocation, setIsPickingLocation] = useState(false);
@@ -946,8 +948,15 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
             const otherShift = getPatientShiftMins(p, doctor);
             if (!myShift || !otherShift || otherShift.startTime !== myShift.startTime) return false;
 
-            // Sequence check (timeAdded is the reliable sequence order)
-            return p.timeAdded < visit.timeAdded;
+            // Use standardized sorting to determine position
+            const sortedPatients = clinic.patients
+                .filter(sp => sp.doctorId === visit.doctorId && sp.status === PatientStatus.WAITING)
+                .sort(patientService.standardQueueSort);
+            
+            const myIndex = sortedPatients.findIndex(sp => sp.id === visit.id);
+            const otherIndex = sortedPatients.findIndex(sp => sp.id === p.id);
+            
+            return otherIndex < myIndex;
         }).length;
 
         const servingPatient = clinic.patients.find(p => p.doctorId === visit.doctorId && p.status === PatientStatus.WITH_DOCTOR);
@@ -1157,9 +1166,13 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
         }
     };
     const handleLocateMe = async () => {
+        if (!hasUserRequestedLocation) {
+            setHasUserRequestedLocation(true);
+        }
+        
         setIsLocating(true);
         if (!navigator.geolocation) {
-            addToast("Geolocation is not supported by your browser", "error");
+            addToast("Location not available. Browse by city instead.", "info");
             setIsLocating(false);
             return;
         }
@@ -1187,19 +1200,13 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                 }
             },
             (error) => {
-                console.error("Geolocation error details:", error);
-                let msg = "Unable to retrieve location.";
-                if (error.code === 1) msg = "Location permission denied. Allow access in settings.";
-                else if (error.code === 2) msg = "Location unavailable. Check GPS/Network.";
-                else if (error.code === 3) msg = "Location request timed out. Try again.";
-                else if (error.message) msg = `Location error: ${error.message}`;
-                addToast(msg, "error");
+                console.log("Location not available:", error.code);
                 setIsLocating(false);
             },
             {
-                timeout: 10000, // 10 second timeout
-                maximumAge: 60000, // Allow cached positions up to 1 minute old
-                enableHighAccuracy: true // Request GPS when available
+                timeout: 8000,
+                maximumAge: 300000,
+                enableHighAccuracy: false
             }
         );
     };
@@ -1878,19 +1885,16 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                 <div className={`flex-1 overflow-y-auto p-2 sm:p-4 md:p-6 pt-0 custom-scrollbar ${showMap && (bookingView === 'LIST' || bookingView === 'CLINIC_DETAILS') ? 'hidden md:block' : 'block'} pb-32 md:pb-8`}>
                                     {/* SEARCH LANDING HERO - Shows when no search is active */}
                                     {isSearchLanding && (
-                                        <div className="mb-2 px-1 mt-2">
+                                        <div className="px-1">
                                             {/* Hero Banner */}
                                             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-600 to-indigo-700 p-4 text-white shadow-lg mb-3">
                                                 <div className="relative z-10 flex items-center justify-between gap-4">
                                                     <div className="flex-1">
-                                                        <h2 className="text-lg md:text-xl font-black mb-0.5 tracking-tight">
-                                                            {isGuest ? "Find your doctor." : `Hi ${userName.split(' ')[0]}, feel better.`}
-                                                        </h2>
-                                                        <p className="text-primary-100 font-medium text-xs leading-relaxed opacity-90">
-                                                            Book appointments or join live walk-in queues at top clinics near you.
+                                                        <p className="text-lg md:text-xl font-black tracking-tight">
+                                                            {isGuest ? "Find your doctor. Book appointments or join live walk-in queues at top clinics near you." : `Hi ${userName.split(' ')[0]}, feel better. Book appointments or join live walk-in queues at top clinics near you.`}
                                                         </p>
                                                     </div>
-                                                    <button 
+                                                    <button
                                                         onClick={() => document.querySelector<HTMLInputElement>('input[type="text"]')?.focus()}
                                                         className="shrink-0 bg-white text-primary-700 px-3 py-2 rounded-lg font-bold text-[10px] shadow-md hover:bg-primary-50 transition-colors inline-flex items-center gap-1.5"
                                                     >
@@ -1928,7 +1932,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                     )}
 
                                     {bookingView === 'LIST' && (
-                                        <div className="flex items-center justify-between mb-4 px-1 mt-2 sticky top-0 z-10 bg-slate-50 py-2">
+                                        <div className="flex items-center justify-between mb-4 px-1 mt-2  top-0 z-10 bg-slate-50 py-2">
                                             <div className="flex items-center gap-2 md:gap-4 flex-1 overflow-hidden">
                                                 <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
                                                     {searchMode === 'CLINIC' ? 'Clinics Nearby' : 'Doctors Nearby'}
@@ -1969,7 +1973,7 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
 
                                     {bookingView === 'LIST' ? (
                                         // Fix 6: Hidden "Zero State" Guidance
-                                        (searchMode === 'CLINIC' ? filteredClinics.length === 0 : groupedDoctors.length === 0) ? (
+                                        (searchMode === 'CLINIC' ? filteredClinics.length === 0 : groupedDoctors.length === 0) && clinics.length > 0 ? (
                                             <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
                                                 <div className="bg-slate-100 p-4 rounded-full mb-4">
                                                     <Search className="h-8 w-8 text-slate-400" />
@@ -2002,6 +2006,12 @@ export const PatientTracker: React.FC<PatientTrackerProps> = ({
                                                         Clear All Filters
                                                     </button>
                                                 </div>
+                                            </div>
+                                        ) : clinics.length === 0 ? (
+                                            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mb-4"></div>
+                                                <h3 className="text-lg font-bold text-slate-900 mb-2">Loading clinics...</h3>
+                                                <p className="text-sm text-slate-500">Finding the best healthcare options for you</p>
                                             </div>
                                         ) : searchMode === 'CLINIC' ? (
                                             <ClinicListView

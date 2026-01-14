@@ -6,7 +6,7 @@ import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 import { Building2, Plus, LogIn, CheckCircle, Footprints, CalendarClock, Shuffle, Stethoscope, Mail, Lock, ArrowRight, Check } from 'lucide-react';
 import { Logo } from '../components/Logo';
-import { storage } from '../services/storage';
+import { clinicService } from '../services/clinicService';
 
 interface ClinicAuthProps {
   clinics: Clinic[];
@@ -63,33 +63,37 @@ export const ClinicAuth: React.FC<ClinicAuthProps> = ({ clinics, onSelectClinic,
       const adminId = `staff_admin_${Date.now()}`;
       
       const newClinic: Clinic = {
-          id: `clinic_${Date.now()}`,
-          name: newClinicName,
-          slug: newClinicName.toLowerCase().replace(/\s+/g, '-'),
-          plan: selectedPlan,
-          type: clinicType,
-          operationMode: operationMode,
-          doctors: [],
-          patients: [],
-          staff: [{
-              id: adminId,
-              name: 'Admin',
-              role: 'MANAGER',
-              phone: clinicPhone,
-              email: adminEmail,
-              password: adminPassword,
-              isActive: true,
-              joinedDate: Date.now()
-          }],
-          city: city,
-          address: address,
-          pincode: pincode,
-          contactPhone: clinicPhone,
-          about: clinicAbout,
-          amenities: selectedServices
+        id: `clinic_${Date.now()}`,
+        name: newClinicName,
+        slug: newClinicName.toLowerCase().replace(/\s+/g, '-'),
+        plan: selectedPlan,
+        type: clinicType,
+        operationMode: operationMode,
+        doctors: [],
+        patients: [],
+        staff: [{
+          id: adminId,
+          name: 'Admin',
+          role: 'MANAGER',
+          phone: clinicPhone,
+          email: adminEmail,
+          password: adminPassword,
+          isActive: true,
+          joinedDate: Date.now()
+        }],
+        city: city,
+        address: address,
+        pincode: pincode,
+        contactPhone: clinicPhone,
+        about: clinicAbout,
+        amenities: selectedServices,
+        enableAdvanceBooking: false
       };
 
-      await storage.createClinic(newClinic);
+        const res = await clinicService.createClinic(newClinic);
+        if (!res.success) {
+          console.error('Clinic creation failed:', res.error);
+        }
       
       if (onRegister) {
           onRegister(newClinic.id, adminId);
@@ -131,7 +135,7 @@ export const ClinicAuth: React.FC<ClinicAuthProps> = ({ clinics, onSelectClinic,
             </div>
             
             <Button onClick={onBack} className="w-full h-12 text-lg justify-center shadow-lg" variant="primary">
-                <LogIn className="h-5 w-5 mr-2" /> Login to Account
+                <LogIn className="h-5 w-5 mr-2" /> Partner Login
             </Button>
 
             <div className="relative">
@@ -140,19 +144,26 @@ export const ClinicAuth: React.FC<ClinicAuthProps> = ({ clinics, onSelectClinic,
             </div>
 
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-              {clinics.map(clinic => (
-                <button
-                  key={clinic.id}
-                  onClick={() => onSelectClinic(clinic.id)}
-                  className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-primary-500 hover:bg-primary-50 transition-all group flex items-center justify-between"
-                >
-                  <div>
-                    <div className="font-bold text-slate-900 text-sm">{clinic.name}</div>
-                    <div className="text-[10px] text-slate-500">{clinic.city} • {clinic.doctors.length} Docs</div>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-primary-500 transition-colors" />
-                </button>
-              ))}
+              {clinics.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  <p className="text-sm">No demo clinics available</p>
+                  <p className="text-xs mt-1">Register a new clinic to get started</p>
+                </div>
+              ) : (
+                clinics.map(clinic => (
+                  <button
+                    key={clinic.id}
+                    onClick={() => onSelectClinic(clinic.id)}
+                    className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-primary-500 hover:bg-primary-50 transition-all group flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="font-bold text-slate-900 text-sm">{clinic.name}</div>
+                      <div className="text-[10px] text-slate-500">{clinic.city} • {clinic.doctors.length} Docs</div>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-primary-500 transition-colors" />
+                  </button>
+                ))
+              )}
             </div>
           </div>
         ) : (

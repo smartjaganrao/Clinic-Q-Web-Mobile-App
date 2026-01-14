@@ -26,12 +26,19 @@ class StorageService {
       // 1. Load from LocalStorage first (Cache/Offline support)
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          this.clinics = JSON.parse(stored);
-        } else {
-          this.clinics = JSON.parse(JSON.stringify(INITIAL_CLINICS));
-          this.saveLocal();
-        }
+                if (stored) {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        this.clinics = Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+                    } catch (e) {
+                        console.warn('Failed to parse stored clinics, falling back to initial clinics.', e);
+                        this.clinics = JSON.parse(JSON.stringify(INITIAL_CLINICS));
+                        this.saveLocal();
+                    }
+                } else {
+                    this.clinics = JSON.parse(JSON.stringify(INITIAL_CLINICS));
+                    this.saveLocal();
+                }
         this.sanitizeData();
         this.notify(); // Render cached data immediately
       }
@@ -40,16 +47,17 @@ class StorageService {
       const supabase = getSupabase();
       if (supabase) {
         const { data, error } = await supabase.from('clinics').select('*');
-        if (!error && data) {
+                    if (!error && data) {
           if (data.length === 0 && this.clinics.length > 0) {
             // Remote is empty but we have local data (Fresh Sync). Keep local data.
             console.log("Remote DB is empty. Preserving local data for seeding.");
           } else {
-            // Update local state with Cloud data
-            this.clinics = data.map((row: any) => row.data);
-            this.saveLocal(); // Update cache
-            this.notify();
-          }
+                        // Update local state with Cloud data (filter out null rows)
+                        const mapped = data.map((row: any) => row && row.data).filter(Boolean);
+                        this.clinics = Array.isArray(mapped) ? mapped : [];
+                        this.saveLocal(); // Update cache
+                        this.notify();
+                    }
           
           // 3. Enable Realtime Subscriptions
           supabase.channel('public:clinics')
@@ -93,6 +101,12 @@ class StorageService {
       let changed = false;
 
       this.clinics.forEach(clinic => {
+          if (!clinic) return; // Skip corrupt/null entries
+          // Ensure arrays exist to avoid runtime errors
+          clinic.doctors = Array.isArray(clinic.doctors) ? clinic.doctors : [];
+          clinic.patients = Array.isArray(clinic.patients) ? clinic.patients : [];
+          clinic.staff = Array.isArray(clinic.staff) ? clinic.staff : [];
+
           clinic.doctors.forEach(doc => {
               if (!doc.weeklySchedule || !Array.isArray(doc.weeklySchedule) || doc.weeklySchedule.length !== 7) {
                   // Rebuild schedule if missing or incomplete

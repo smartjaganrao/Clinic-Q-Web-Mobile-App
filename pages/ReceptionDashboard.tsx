@@ -25,6 +25,8 @@ import { Logo } from '../components/Logo';
 import { reverseGeocode } from '../utils/geolocation';
 import { getActiveSession, getQueueSorter, parseTimeMins } from '../utils/time';
 import { validateDoctorSchedule } from '../services/validation';
+import { patientService } from '../services/patientService';
+import { useRealtimeQueue } from '../hooks/useRealtimeQueue';
 
 // Leaflet icon fix
 const DefaultIcon = L.icon({
@@ -143,6 +145,12 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     onToggleEmergency: te, onManualReorder: M, onDragDrop: W, onManualCheckIn: G, 
     onAddStaff: se, onUpdateStaff: Z, onDeleteStaff: De, onLogout, addToast: he, onSetupKiosk
 }) => {
+    // Real-time queue subscription for live updates
+    const { patients: realtimePatients, isConnected } = useRealtimeQueue(m?.id || '', t);
+    
+    // Use real-time patients if connected, fallback to props
+    const patients = isConnected ? realtimePatients : t;
+    
     const onAddPatient = y;
     const onEditPatient = b;
     const onDeletePatient = v;
@@ -244,7 +252,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
     const stats = useMemo(() => {
         const today = ut;
-        const todayPatients = t.filter(p => {
+        const todayPatients = patients.filter(p => {
             const pDate = p.visitType === 'APPOINTMENT' ? p.appointmentDate : getPatientDateStr(p.timeAdded, m?.timezone);
             return pDate === today;
         });
@@ -257,16 +265,16 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 return acc + (doc?.consultationFee || 0);
             }, 0)
         };
-    }, [t, s, m, ut]);
+    }, [patients, s, m, ut]);
 
     const patientsForTabs = useMemo(() => {
-        let list = t.filter(p => {
+        let list = patients.filter(p => {
             const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : getPatientDateStr(p.timeAdded, m?.timezone);
             return pDate === ut;
         });
         if (Ye !== 'ALL') list = list.filter(p => p.doctorId === Ye);
         return list;
-    }, [t, Ye, ut, m?.timezone]);
+    }, [patients, Ye, ut, m?.timezone]);
 
     const tabCounts = useMemo(() => ({
         LIVE: patientsForTabs.filter(p => p.status === PatientStatus.WAITING || p.status === PatientStatus.WITH_DOCTOR).length,
@@ -276,7 +284,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
     }), [patientsForTabs]);
 
     const filteredPatients = useMemo(() => {
-        let list = t.filter(p => {
+        let list = patients.filter(p => {
             const pDate = p.visitType === 'APPOINTMENT' && p.appointmentDate ? p.appointmentDate : getPatientDateStr(p.timeAdded, m?.timezone);
             return pDate === ut;
         });
@@ -294,31 +302,9 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
             list = list.filter(p => p.name.toLowerCase().includes(q) || p.phone.includes(q) || p.tokenNumber.toString().includes(q));
         }
 
-        // Robust Sorting Logic (Matches Doctor View & Estimated Time Calculation)
-        return list.sort((a, b) => {
-            // 1. Queue Order
-            if (a.queueOrder !== undefined || b.queueOrder !== undefined) {
-                const orderA = a.queueOrder ?? Number.MAX_SAFE_INTEGER;
-                const orderB = b.queueOrder ?? Number.MAX_SAFE_INTEGER;
-                if (orderA !== orderB) return orderA - orderB;
-            }
-            // 2. Emergency
-            if (a.isEmergency !== b.isEmergency) return a.isEmergency ? -1 : 1;
-            // 3. Status (WAITING before ON_HOLD)
-            const getStatusPriority = (s: PatientStatus) => (s === PatientStatus.WAITING ? 0 : s === PatientStatus.ON_HOLD ? 1 : 2);
-            const pA = getStatusPriority(a.status);
-            const pB = getStatusPriority(b.status);
-            if (pA !== pB) return pA - pB;
-            // 4. Time
-            const getSortTime = (p: Patient) => {
-                if (p.visitType === 'APPOINTMENT' && p.appointmentDate && p.appointmentTime) {
-                    return new Date(`${p.appointmentDate}T${p.appointmentTime}:00`).getTime();
-                }
-                return p.timeAdded;
-            };
-            return getSortTime(a) - getSortTime(b);
-        });
-    }, [t, ke, O, Ye, ve, ut, m, s]);
+        // Use standardized sorting logic for consistency
+        return list.sort(patientService.standardQueueSort);
+    }, [patients, ke, O, Ye, ve, ut, m, s]);
 
     const sidebarItems = [
         { id: 'QUEUE', label: 'Control Tower', icon: Monitor },
@@ -421,13 +407,13 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
 
     const doctorQueueStats = useMemo(() => {
         const statsArray = s.map(F => {
-            const waitingPatients = t.filter(Ze => {
+            const waitingPatients = patients.filter(Ze => {
                 const pDateStr = Ze.visitType === "APPOINTMENT" && Ze.appointmentDate 
                     ? Ze.appointmentDate 
                     : getPatientDateStr(Ze.timeAdded, m?.timezone);
                 return Ze.doctorId === F.id && (Ze.status === PatientStatus.WAITING || Ze.status === PatientStatus.ON_HOLD) && pDateStr === ut;
             });
-            const servingPatient = t.find(Ze => Ze.doctorId === F.id && Ze.status === PatientStatus.WITH_DOCTOR);
+            const servingPatient = patients.find(Ze => Ze.doctorId === F.id && Ze.status === PatientStatus.WITH_DOCTOR);
             const nextPatient = waitingPatients.length > 0 ? waitingPatients[0] : null;
             return {
                 doc: F,
@@ -438,7 +424,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
         });
         // Updated sorting: Descending order (highest count first)
         return statsArray.sort((a, b) => b.count - a.count);
-    }, [s, t, ut, m?.timezone]);
+    }, [s, patients, ut, m?.timezone]);
 
     const handleAddAmenity = (val?: string) => {
         const amenity = typeof val === 'string' ? val : amenityInput;
@@ -630,6 +616,14 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Revenue</span>
                                 <span className="text-lg font-black text-teal-600">₹{stats.revenue}</span>
                             </div>
+                            <div className="w-px h-8 bg-slate-100"></div>
+                            <div className="flex flex-col items-center">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Live Sync</span>
+                                <div className={`flex items-center gap-1 text-xs font-bold ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
+                                    {isConnected ? <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div> : <div className="w-2 h-2 bg-red-500 rounded-full"></div>}
+                                    {isConnected ? 'Active' : 'Offline'}
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 sm:gap-4">
@@ -765,6 +759,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                                         doctors={s} 
                                         estimatedTimes={estimatedTimesMap} 
                                         isFiltered={true}
+                                        isConnected={isConnected}
                                         onUpdateStatus={onUpdateStatus} 
                                         onManualReorder={M} 
                                         onDragDrop={W} 
@@ -779,7 +774,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                         </div>
                     )}
 
-                    {ke === 'DATABASE' && <div className="p-4 md:p-8 h-full overflow-hidden"><div className="h-full bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden"><PatientDatabaseTable patients={t} doctors={s} onHistoryClick={(p) => setHistoryPatient(p)} onEditClick={(p) => setEditingPatient(p)} onDeleteClick={(p) => onDeletePatient(p.id)} /></div></div>}
+                    {ke === 'DATABASE' && <div className="p-4 md:p-8 h-full overflow-hidden"><div className="h-full bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden"><PatientDatabaseTable patients={patients} doctors={s} onHistoryClick={(p) => setHistoryPatient(p)} onEditClick={(p) => setEditingPatient(p)} onDeleteClick={(p) => onDeletePatient(p.id)} /></div></div>}
                     {ke === 'DOCTORS' && (
                         <DoctorManager 
                             doctors={s} 
@@ -790,7 +785,7 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                             onStatusChange={(id, status) => onEditDoctor(id, { status })} 
                         />
                     )}
-                    {ke === 'REPORTS' && <ReceptionStats patients={t} doctors={s} />}
+                    {ke === 'REPORTS' && <ReceptionStats patients={patients} doctors={s} />}
                     {ke === 'SETTINGS' && (
                         <div className="p-4 md:p-8 h-full overflow-hidden">
                             <div className="h-full bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden flex flex-col">
@@ -1029,8 +1024,8 @@ export const ReceptionDashboard: React.FC<ReceptionDashboardProps> = ({
                 </div>
             </main>
 
-            <AddPatientModal isOpen={isPatientModalOpen || !!editingPatient} onClose={() => { setIsPatientModalOpen(false); setEditingPatient(null); }} mode={editingPatient ? 'EDIT' : 'ADD'} initialData={editingPatient} operationMode={f} onAdd={onAddPatient} onEdit={onEditPatient} doctors={s} patients={t} addToast={he} />
-            <PatientHistoryModal isOpen={!!historyPatient} onClose={() => setHistoryPatient(null)} patient={historyPatient} allClinicsPatients={t} doctors={s} />
+            <AddPatientModal isOpen={isPatientModalOpen || !!editingPatient} onClose={() => { setIsPatientModalOpen(false); setEditingPatient(null); }} mode={editingPatient ? 'EDIT' : 'ADD'} initialData={editingPatient} operationMode={f} onAdd={onAddPatient} onEdit={onEditPatient} doctors={s} patients={patients} addToast={he} />
+            <PatientHistoryModal isOpen={!!historyPatient} onClose={() => setHistoryPatient(null)} patient={historyPatient} allClinicsPatients={patients} doctors={s} />
             <VitalsModal isOpen={!!vitalsPatient} onClose={() => setVitalsPatient(null)} patient={vitalsPatient} onSave={(pid, vitals) => onEditPatient(pid, { vitals })} />
             
             <DoctorFormModal

@@ -18,17 +18,20 @@ export const DoctorListView = ({ groupedDoctors, navigateToView, showMap, loadin
         groupedDoctors.length > 0 ? (
             <div className={`w-full grid gap-6 mb-4 ${showMap ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'}`}>
                 {groupedDoctors.map(({ masterDoc, locations }, index) => {
+                    const safeMaster = masterDoc || {};
+                    const keyId = safeMaster.masterId || safeMaster.id || `doc-${index}`;
+                    const profileDoc = { ...safeMaster, masterId: safeMaster.masterId || safeMaster.id };
                     return (
                         <div
-                            key={masterDoc.masterId}
+                            key={keyId}
                             className="animate-in slide-in-from-bottom-2 duration-300"
                             style={{ animationDelay: `${index * 50}ms` }}
                         >
                             <DoctorSearchCard
-                                doctor={masterDoc}
-                                locations={locations}
+                                doctor={profileDoc}
+                                locations={locations || []}
                                 onBook={(clinic, doc) => navigateToView(null, clinic, doc)}
-                                onClick={() => navigateToView('DOCTOR_PROFILE', null, masterDoc)}
+                                onClick={() => navigateToView('DOCTOR_PROFILE', null, profileDoc)}
                                 searchQuery={searchQuery}
                             />
                         </div>

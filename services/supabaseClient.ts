@@ -1,9 +1,18 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Clinic } from '../types';
 
-// These will be set dynamically from the UI
-let supabaseUrl = localStorage.getItem('sb_url') || '';
-let supabaseKey = localStorage.getItem('sb_key') || '';
+// AI Studio / Production fallback credentials
+const FALLBACK_SUPABASE_URL = 'https://vifytjbuhnbcfyuxxqhe.supabase.co';
+const FALLBACK_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZpZnl0amJ1aG5iY2Z5dXh4cWhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0MjI0NTMsImV4cCI6MjA4Mjk5ODQ1M30.NLyfnqQCuhT-7FDUVoJi_ToLEHHiBxtSZF04Zmv4Wbc';
+
+// Prefer environment variables injected by Vite (from .env.local)
+// Fallback to values stored in browser localStorage for runtime overrides
+// Final fallback to hardcoded credentials for AI Studio deployment
+const envUrl = (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL) || (process.env as any).VITE_SUPABASE_URL || '';
+const envKey = (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_ANON_KEY) || (process.env as any).VITE_SUPABASE_ANON_KEY || '';
+
+let supabaseUrl = envUrl || localStorage.getItem('sb_url') || FALLBACK_SUPABASE_URL;
+let supabaseKey = envKey || localStorage.getItem('sb_key') || FALLBACK_SUPABASE_KEY;
 let supabaseInstance: SupabaseClient | null = null;
 
 export const getSupabase = () => {

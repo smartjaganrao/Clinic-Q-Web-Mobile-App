@@ -145,7 +145,13 @@ export const ClinicDetailView = ({
                                             {/* Left: Avatar & Status */}
                                             <div className="flex-shrink-0 flex flex-col items-center gap-2">
                                                 <div className="relative">
-                                                    <img src={doc.avatarUrl} className="w-16 h-16 rounded-xl object-cover bg-slate-50 border border-slate-100 shadow-sm" />
+                                                    {doc.avatarUrl ? (
+                                                        <img src={doc.avatarUrl} className="w-16 h-16 rounded-xl object-cover bg-slate-50 border border-slate-100 shadow-sm" />
+                                                    ) : (
+                                                        <div className="w-16 h-16 rounded-xl bg-slate-100 border border-slate-100 shadow-sm flex items-center justify-center">
+                                                            <div className="w-8 h-8 rounded-full bg-slate-200"></div>
+                                                        </div>
+                                                    )}
                                                     <div className={`absolute -bottom-1 -right-1 w-4 h-4 border-2 border-white rounded-full ${isAvailable ? 'bg-green-500' : doc.status === DoctorStatus.ON_BREAK ? 'bg-orange-500' : 'bg-slate-400'}`}></div>
                                                 </div>
                                                 <div className="flex flex-col items-center">

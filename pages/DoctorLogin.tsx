@@ -1,9 +1,9 @@
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Doctor, Clinic } from '../types';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
-import { User, Stethoscope, ArrowLeft, AlertCircle } from 'lucide-react';
+import { User, Stethoscope, ArrowLeft, AlertCircle, Loader } from 'lucide-react';
+import { doctorService } from '../services/doctorService';
 
 interface DoctorLoginProps {
   clinic: Clinic;
@@ -12,6 +12,28 @@ interface DoctorLoginProps {
 }
 
 export const DoctorLogin: React.FC<DoctorLoginProps> = ({ clinic, onSelectDoctor, onBack }) => {
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadDoctors = async () => {
+      try {
+        setLoading(true);
+        const result = await doctorService.getDoctors(clinic.id);
+        setDoctors(result);
+        setError(null);
+      } catch (err) {
+        setError('Failed to load doctors');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDoctors();
+  }, [clinic.id]);
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -24,8 +46,18 @@ export const DoctorLogin: React.FC<DoctorLoginProps> = ({ clinic, onSelectDoctor
         </div>
 
         <div className="space-y-3">
-          {clinic.doctors.length > 0 ? (
-            clinic.doctors.map((doc) => (
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <Loader className="h-6 w-6 text-primary-600 animate-spin" />
+            </div>
+          ) : error ? (
+            <div className="bg-white p-8 rounded-xl border border-red-200 text-center shadow-sm">
+              <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-3" />
+              <h3 className="font-bold text-slate-900">Error</h3>
+              <p className="text-sm text-slate-500 mt-2">{error}</p>
+            </div>
+          ) : doctors.length > 0 ? (
+            doctors.map((doc) => (
               <Card 
                 key={doc.id} 
                 className="p-4 cursor-pointer hover:ring-2 hover:ring-primary-500 transition-all group"
@@ -33,7 +65,11 @@ export const DoctorLogin: React.FC<DoctorLoginProps> = ({ clinic, onSelectDoctor
               >
                 <div className="flex items-center gap-4">
                   <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm group-hover:border-primary-200">
-                    <img src={doc.avatarUrl} alt={doc.name} className="h-full w-full object-cover" />
+                    {doc.avatar_url ? (
+                      <img src={doc.avatar_url} alt={doc.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <User className="h-6 w-6 text-slate-400" />
+                    )}
                   </div>
                   <div className="flex-1">
                     <h3 className="font-bold text-slate-900">{doc.name}</h3>

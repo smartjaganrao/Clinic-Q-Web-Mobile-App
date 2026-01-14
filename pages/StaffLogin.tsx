@@ -1,10 +1,9 @@
-
 import React, { useState } from 'react';
 import { UserRole } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { ArrowLeft, Stethoscope, Mail, Lock, LogIn, ArrowRight } from 'lucide-react';
-import { storage } from '../services/storage';
+import { authService } from '../services/authService';
 import { useNavigate } from 'react-router-dom';
 
 interface StaffLoginProps {
@@ -25,12 +24,14 @@ export const StaffLogin: React.FC<StaffLoginProps> = ({ onLoginSuccess, onBack }
       setLoading(true);
 
       try {
-          const result = await storage.authenticatePartner(email, password);
+          const result = await authService.login({ email, password });
           
-          if (result) {
-              onLoginSuccess(result.role, result.clinicId, result.userId);
+          if (result.success && result.user) {
+              const role = (result.user.role || 'RECEPTIONIST') as UserRole;
+              const clinicId = result.user.clinic_id || '';
+              onLoginSuccess(role, clinicId, result.user.id);
           } else {
-              setError("Invalid email or password.");
+              setError(result.error || "Invalid email or password.");
           }
       } catch (err) {
           setError("An error occurred. Please try again.");
@@ -39,11 +40,11 @@ export const StaffLogin: React.FC<StaffLoginProps> = ({ onLoginSuccess, onBack }
       }
   };
 
-  const handleFillDemo = (role: 'ADMIN' | 'RECEPTION' | 'DOCTOR' | 'KIOSK') => {
-      if (role === 'ADMIN') { setEmail('arjun@smartqflow.com'); setPassword('password'); }
-      if (role === 'RECEPTION') { setEmail('admin@demo.com'); setPassword('password'); }
-      if (role === 'DOCTOR') { setEmail('ravi@demo.com'); setPassword('password'); }
-      if (role === 'KIOSK') { setEmail('kiosk@demo.com'); setPassword('password'); }
+  const handleFillDemo = (role: 'ADMIN' | 'RECEPTIONIST' | 'DOCTOR' | 'KIOSK') => {
+      if (role === 'ADMIN') { setEmail('admin@smartqflow.com'); setPassword('Admin@123456'); }
+      if (role === 'RECEPTIONIST') { setEmail('reception@clinic.com'); setPassword('Reception@123456'); }
+      if (role === 'DOCTOR') { setEmail('doctor@clinic.com'); setPassword('Doctor@123456'); }
+      if (role === 'KIOSK') { setEmail('kiosk@clinic.com'); setPassword('Kiosk@123456'); }
   };
 
   return (
@@ -109,7 +110,7 @@ export const StaffLogin: React.FC<StaffLoginProps> = ({ onLoginSuccess, onBack }
             <div className="mt-8 pt-6 border-t border-slate-100">
                 <p className="text-center text-xs font-bold text-slate-400 uppercase tracking-wide mb-4">Demo Accounts</p>
                 <div className="flex flex-wrap justify-center gap-2">
-                    <button onClick={() => handleFillDemo('RECEPTION')} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-medium">Reception</button>
+                    <button onClick={() => handleFillDemo('RECEPTIONIST')} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-medium">Reception</button>
                     <button onClick={() => handleFillDemo('DOCTOR')} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-medium">Doctor</button>
                     <button onClick={() => handleFillDemo('ADMIN')} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-600 font-medium">Super Admin</button>
                     <button onClick={() => handleFillDemo('KIOSK')} className="text-xs bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg font-bold shadow-sm">Kiosk Display</button>

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './Button';
 import { Input } from './Input';
 import { ShieldCheck, Mail, Lock, User, ArrowRight, X, UserPlus, LogIn } from 'lucide-react';
+import { authService } from '../services/authService';
+import { UserRole } from '../types';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -42,33 +44,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
-    // Check local storage (Consistent with PatientLogin.tsx)
-    setTimeout(() => {
-        const storedUser = localStorage.getItem(`clinicq_patient_${email}`);
-        if (!storedUser) {
-            addToast("Account not found. Please register.", "error");
-            setLoading(false);
-            return;
-        }
 
-        const user = JSON.parse(storedUser);
-        if (user.password !== password) {
-            addToast("Invalid password.", "error");
-            setLoading(false);
-            return;
-        }
+    try {
+        const result = await authService.login({ email, password });
 
-        addToast(`Welcome back, ${user.name}!`, "success");
-        onSuccess(user.phone, user.name, true);
+        if (result.success) {
+            addToast(`Welcome back, ${result.user!.name}!`, "success");
+            onSuccess(result.user!.phone || '', result.user!.name, true);
+        } else {
+            addToast(result.error || "Login failed", "error");
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        addToast("Login failed. Please try again.", "error");
+    } finally {
         setLoading(false);
-    }, 600);
+    }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password || !phone || !age) {
         addToast("Please fill all required fields", "error");
@@ -76,30 +73,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     setLoading(true);
-    setTimeout(() => {
-        if (localStorage.getItem(`clinicq_patient_${email}`)) {
-            addToast("User already exists. Please sign in.", "error");
-            setMode('LOGIN');
-            setLoading(false);
-            return;
-        }
-
-        const newUser = {
-            name,
+    try {
+        const result = await authService.signup({
             email,
-            phone,
             password,
-            age,
-            gender,
-            isVerified: true, // Auto-verify for guest booking convenience in demo
-            joined: Date.now()
-        };
+            name,
+            phone,
+            role: UserRole.PATIENT
+        });
 
-        localStorage.setItem(`clinicq_patient_${email}`, JSON.stringify(newUser));
-        addToast("Account created successfully!", "success");
-        onSuccess(newUser.phone, newUser.name, false);
+        if (result.success) {
+            if (result.error) {
+                // Email confirmation required
+                addToast(result.error, "info");
+                setMode('LOGIN');
+            } else {
+                // User is confirmed and logged in
+                addToast("Account created successfully!", "success");
+                onSuccess(result.user!.phone || phone, result.user!.name, false);
+            }
+        } else {
+            addToast(result.error || "Registration failed", "error");
+        }
+    } catch (error) {
+        console.error('Registration error:', error);
+        addToast("Registration failed. Please try again.", "error");
+    } finally {
         setLoading(false);
-    }, 800);
+    }
   };
 
   return (

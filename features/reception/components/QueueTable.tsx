@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Patient, Doctor, PatientStatus } from '../../../types';
 import { Badge } from '../../../components/Badge';
-import { PlayCircle, CheckSquare, Edit2, UserCheck, Activity, AlertTriangle, ArrowUp, Calendar, User, CheckCircle, GripVertical, Clock, ChevronRight, Timer, Stethoscope, PauseCircle, Play, Phone, Zap, PhoneCall, UserX, MoreHorizontal, Thermometer, Weight, Heart } from 'lucide-react';
+import { PlayCircle, CheckSquare, Edit2, UserCheck, Activity, AlertTriangle, ArrowUp, Calendar, User, CheckCircle, GripVertical, Clock, ChevronRight, Timer, Stethoscope, PauseCircle, Play, Phone, Zap, PhoneCall, UserX, MoreHorizontal, Thermometer, Weight, Heart, Wifi, WifiOff } from 'lucide-react';
 import { ConfirmationModal } from '../../../components/ConfirmationModal';
+import { useOptimisticUpdates } from '../../../hooks/useOptimisticUpdates';
 
 interface QueueTableProps {
   patients: Patient[];
@@ -10,6 +11,7 @@ interface QueueTableProps {
   estimatedTimes: Record<string, number>;
   isFiltered: boolean;
   nextUpPatientIds?: Set<string>;
+  isConnected?: boolean; // Real-time connection status
   onUpdateStatus: (id: string, status: PatientStatus) => void;
   onManualReorder: (id: string, direction: 'UP' | 'DOWN') => void;
   onDragDrop: (draggedId: string, targetId: string) => void;
@@ -21,10 +23,28 @@ interface QueueTableProps {
 }
 
 export const QueueTable: React.FC<QueueTableProps> = ({
-  patients, doctors, estimatedTimes, isFiltered, nextUpPatientIds, onUpdateStatus, onManualReorder, onDragDrop, onManualCheckIn, onEditPatient, onVitalsClick, onToggleEmergency, onNoShowPatient
+  patients, doctors, estimatedTimes, isFiltered, nextUpPatientIds, isConnected = true, onUpdateStatus, onManualReorder, onDragDrop, onManualCheckIn, onEditPatient, onVitalsClick, onToggleEmergency, onNoShowPatient
 }) => {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [patientForNoShow, setPatientForNoShow] = useState<Patient | null>(null);
+  const { updatePatientStatus, isPending } = useOptimisticUpdates();
+
+  const handleStatusUpdate = async (patientId: string, newStatus: PatientStatus) => {
+    const patient = patients.find(p => p.id === patientId);
+    if (!patient) return;
+
+    try {
+      await updatePatientStatus(
+        patientId,
+        newStatus,
+        patient.status,
+        (id, status) => onUpdateStatus(id, status), // Optimistic update
+        (id, status) => onUpdateStatus(id, status), // Rollback
+      );
+    } catch (error) {
+      console.error('Failed to update patient status:', error);
+    }
+  };
 
   if (patients.length === 0) {
       return (
@@ -33,6 +53,11 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                 <UserCheck className="h-8 w-8 text-slate-300" />
             </div>
             <p className="font-medium text-sm">No patients in current view.</p>
+            {/* Connection Status Indicator */}
+            <div className={`flex items-center gap-2 mt-2 px-3 py-1 rounded-full text-xs font-bold ${isConnected ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                {isConnected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+                {isConnected ? 'Live Updates Active' : 'Connection Lost'}
+            </div>
         </div>
       );
   }
@@ -128,13 +153,23 @@ export const QueueTable: React.FC<QueueTableProps> = ({
 
                       <div className="flex gap-2">
                           {isServing ? (
-                                <button onClick={() => onUpdateStatus(patient.id, PatientStatus.COMPLETED)} className="flex-1 bg-green-600 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-md shadow-green-100 min-w-0">
-                                    <CheckSquare className="h-4 w-4 flex-shrink-0" /> <span className="truncate">Finish Consultation</span>
+                                <button 
+                                    onClick={() => handleStatusUpdate(patient.id, PatientStatus.COMPLETED)} 
+                                    disabled={isPending(patient.id)}
+                                    className={`flex-1 bg-green-600 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-md shadow-green-100 min-w-0 ${isPending(patient.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    <CheckSquare className="h-4 w-4 flex-shrink-0" /> 
+                                    <span className="truncate">{isPending(patient.id) ? 'Updating...' : 'Finish Consultation'}</span>
                                 </button>
                           ) : (
                               (isWaiting && !isOnHold) ? (isCheckedIn ? (
-                                  <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WITH_DOCTOR)} className="flex-1 bg-blue-600 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-md shadow-blue-100 min-w-0">
-                                      <PlayCircle className="h-4 w-4 flex-shrink-0" /> <span className="truncate">Call Patient Now</span>
+                                  <button 
+                                      onClick={() => handleStatusUpdate(patient.id, PatientStatus.WITH_DOCTOR)} 
+                                      disabled={isPending(patient.id)}
+                                      className={`flex-1 bg-blue-600 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-md shadow-blue-100 min-w-0 ${isPending(patient.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  >
+                                      <PlayCircle className="h-4 w-4 flex-shrink-0" /> 
+                                      <span className="truncate">{isPending(patient.id) ? 'Calling...' : 'Call Patient Now'}</span>
                                   </button>
                               ) : (
                                   <button onClick={() => onManualCheckIn(patient.id)} className="flex-1 bg-emerald-600 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-md shadow-emerald-100 min-w-0">
@@ -142,8 +177,13 @@ export const QueueTable: React.FC<QueueTableProps> = ({
                                   </button>
                               )) : (
                                   isOnHold && (
-                                    <button onClick={() => onUpdateStatus(patient.id, PatientStatus.WAITING)} className="flex-1 bg-orange-500 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 min-w-0">
-                                      <PlayCircle className="h-4 w-4 flex-shrink-0" /> <span className="truncate">Resume Queue</span>
+                                    <button 
+                                        onClick={() => handleStatusUpdate(patient.id, PatientStatus.WAITING)} 
+                                        disabled={isPending(patient.id)}
+                                        className={`flex-1 bg-orange-500 text-white h-11 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 min-w-0 ${isPending(patient.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                      <PlayCircle className="h-4 w-4 flex-shrink-0" /> 
+                                      <span className="truncate">{isPending(patient.id) ? 'Resuming...' : 'Resume Queue'}</span>
                                     </button>
                                   )
                               )

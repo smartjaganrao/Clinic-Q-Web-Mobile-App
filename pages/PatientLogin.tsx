@@ -1,8 +1,11 @@
+
 import React, { useState } from 'react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { ArrowLeft, Mail, Lock, User, ArrowRight, CheckCircle2, ShieldCheck, Sparkles } from 'lucide-react';
 import { Logo } from '../components/Logo';
+import { authService } from '../services/authService';
+import { UserRole } from '../types';
 
 interface PatientLoginProps {
   onLogin: (phone: string, name: string) => void;
@@ -15,6 +18,7 @@ type View = 'LOGIN' | 'REGISTER' | 'VERIFY';
 
 export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, addToast, pendingActionMessage }) => {
   const [view, setView] = useState<View>('LOGIN');
+  const [isLoading, setIsLoading] = useState(false);
   
   // Form State
   const [email, setEmail] = useState('');
@@ -22,56 +26,29 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  
-  // Verification Mock
-  const [isVerified, setIsVerified] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
       e.preventDefault();
+      setIsLoading(true);
       
-      // Handle Hardcoded Demo Account
-      if (email === 'aarav@demo.com' && password === 'password') {
-          const demoUser = {
-              name: 'Aarav Sharma',
-              email: 'aarav@demo.com',
-              phone: '9876543210',
-              password: 'password',
-              isVerified: true
-          };
-          // Persist if not present
-          if (!localStorage.getItem(`clinicq_patient_${email}`)) {
-              localStorage.setItem(`clinicq_patient_${email}`, JSON.stringify(demoUser));
-          }
-          addToast(`Logged in as Demo Patient: Aarav`, "success");
-          onLogin(demoUser.phone, demoUser.name);
+      try {
+        const result = await authService.login({ email, password });
+        if (result.success && result.user) {
+          addToast(`Welcome back, ${result.user.name}!`, "success");
+          // Use phone from user profile, fallback to email if no phone
+          const userPhone = result.user.phone || email;
+          onLogin(userPhone, result.user.name);
           return;
+        }
+        addToast(result.error || "Login failed", "error");
+      } catch (error) {
+        addToast("Login error: " + (error instanceof Error ? error.message : "Unknown error"), "error");
+      } finally {
+        setIsLoading(false);
       }
-
-      // Check local storage for user
-      const storedUser = localStorage.getItem(`clinicq_patient_${email}`);
-      
-      if (!storedUser) {
-          addToast("User not found. Please register.", "error");
-          return;
-      }
-
-      const user = JSON.parse(storedUser);
-      if (user.password !== password) {
-          addToast("Invalid password.", "error");
-          return;
-      }
-
-      if (!user.isVerified) {
-          setView('VERIFY');
-          addToast("Please verify your email first.", "warning");
-          return;
-      }
-
-      addToast(`Welcome back, ${user.name}!`, "success");
-      onLogin(user.phone, user.name);
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
       e.preventDefault();
       
       if (password !== confirmPassword) {
@@ -79,44 +56,51 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
           return;
       }
 
-      // Check if user exists
-      if (localStorage.getItem(`clinicq_patient_${email}`)) {
-          addToast("User already exists. Please login.", "error");
-          return;
-      }
-
-      const newUser = {
-          name,
+      setIsLoading(true);
+      try {
+        const result = await authService.signup({
           email,
-          phone,
           password,
-          isVerified: false,
-          joined: Date.now()
-      };
+          name,
+          phone,
+          role: UserRole.PATIENT
+        });
 
-      localStorage.setItem(`clinicq_patient_${email}`, JSON.stringify(newUser));
-      setView('VERIFY');
-      addToast("Account created! Verify your email.", "success");
+        if (result.success && result.user) {
+          addToast(`Welcome, ${result.user.name}!`, "success");
+          // Use phone from user profile, fallback to email if no phone
+          const userPhone = result.user.phone || email;
+          onLogin(userPhone, result.user.name);
+          return;
+        } else if (result.success && result.requiresConfirmation) {
+          setView('VERIFY');
+          addToast("Account created! Check your email.", "success");
+          return;
+        }
+        addToast(result.error || "Registration failed", "error");
+      } catch (error) {
+        addToast("Registration error: " + (error instanceof Error ? error.message : "Unknown error"), "error");
+      } finally {
+        setIsLoading(false);
+      }
   };
 
-  const handleVerify = () => {
-      const storedUser = localStorage.getItem(`clinicq_patient_${email}`);
-      if (storedUser) {
-          const user = JSON.parse(storedUser);
-          user.isVerified = true;
-          localStorage.setItem(`clinicq_patient_${email}`, JSON.stringify(user));
-          setIsVerified(true);
-          addToast("Email Verified! Logging you in...", "success");
-          setTimeout(() => {
-              onLogin(user.phone, user.name);
-          }, 1500);
+  const handleVerify = async () => {
+      setIsLoading(true);
+      try {
+        // Email verification happens via Supabase link (check email)
+        addToast("Check your email for verification link", "info");
+        // After user clicks link, they can login
+        setTimeout(() => setView('LOGIN'), 3000);
+      } finally {
+        setIsLoading(false);
       }
   };
 
   const fillDemoPatient = () => {
-      setEmail('aarav@demo.com');
-      setPassword('password');
-      addToast("Demo credentials filled", "info");
+      setEmail('demo@patient.com');
+      setPassword('Demo@123456');
+      addToast("Demo credentials filled (signup or use existing)", "info");
   };
 
   return (
@@ -199,8 +183,8 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
                                 />
                             </div>
                         </div>
-                        <Button type="submit" className="w-full h-12 text-lg font-bold rounded-xl shadow-lg shadow-primary-200">
-                            Sign In <ArrowRight className="ml-2 h-5 w-5" />
+                        <Button type="submit" disabled={isLoading} className="w-full h-12 text-lg font-bold rounded-xl shadow-lg shadow-primary-200">
+                            {isLoading ? 'Signing in...' : 'Sign In'} <ArrowRight className="ml-2 h-5 w-5" />
                         </Button>
                         <div className="text-center text-sm text-slate-500 mt-4">
                             Don't have an account? <button type="button" onClick={() => setView('REGISTER')} className="text-primary-600 font-bold hover:underline">Sign Up</button>
@@ -215,7 +199,7 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
                                 className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-primary-50 hover:text-primary-700 hover:border-primary-200 transition-all group"
                             >
                                 <Sparkles className="h-3.5 w-3.5 text-primary-500 group-hover:animate-pulse" />
-                                Demo Patient: Aarav
+                                Demo: demo@patient.com
                             </button>
                         </div>
                     </div>
@@ -249,7 +233,9 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
                             <input type="password" className="w-full px-3 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 outline-none text-sm" placeholder="••••••" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
                         </div>
                     </div>
-                    <Button type="submit" className="w-full h-12 text-lg font-bold rounded-xl mt-2">Create Account</Button>
+                    <Button type="submit" disabled={isLoading} className="w-full h-12 text-lg font-bold rounded-xl mt-2">
+                      {isLoading ? 'Creating...' : 'Create Account'}
+                    </Button>
                     <div className="text-center text-sm text-slate-500">
                         Already have an account? <button type="button" onClick={() => setView('LOGIN')} className="text-primary-600 font-bold hover:underline">Sign In</button>
                     </div>
@@ -265,27 +251,21 @@ export const PatientLogin: React.FC<PatientLoginProps> = ({ onLogin, onBack, add
                         <h3 className="text-xl font-bold text-slate-900">Verify your email</h3>
                         <p className="text-slate-500 mt-2 text-sm">
                             We've sent a verification link to <br/>
-                            <span className="font-bold text-slate-800">{email}</span>
+                            <span className="font-bold text-slate-800">{email.replace(/[<>"'&]/g, '')}</span>
                         </p>
                     </div>
                     
-                    {!isVerified ? (
-                        <div className="space-y-3">
-                            <Button onClick={handleVerify} className="w-full">
-                                <CheckCircle2 className="mr-2 h-5 w-5" /> I've Verified It
-                            </Button>
-                            <button className="text-sm text-slate-400 hover:text-primary-600 font-medium">Resend Email</button>
-                        </div>
-                    ) : (
-                        <div className="bg-green-50 p-4 rounded-xl text-green-700 font-bold flex items-center justify-center gap-2">
-                            <CheckCircle2 className="h-5 w-5" /> Verified Successfully!
-                        </div>
-                    )}
+                    <div className="space-y-3">
+                        <Button onClick={handleVerify} disabled={isLoading} className="w-full">
+                            <CheckCircle2 className="mr-2 h-5 w-5" /> {isLoading ? 'Sending...' : 'Check Email & Click Link'}
+                        </Button>
+                        <button className="text-sm text-slate-400 hover:text-primary-600 font-medium">Resend Email</button>
+                    </div>
                     
                     <button onClick={() => setView('LOGIN')} className="text-sm text-slate-400 hover:text-slate-600">Back to Login</button>
                 </div>
             )}
-         </div>
+        </div>
       </div>
     </div>
   );

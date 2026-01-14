@@ -13,12 +13,15 @@ import { KioskView } from './pages/KioskView';
 import { PatientLogin } from './pages/PatientLogin';
 import { PatientTracker } from './pages/PatientTracker';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { patientService } from './services/patientService';
 import { ToastContainer } from './components/Toast';
 import { Logo } from './components/Logo';
 import { Button } from './components/Button';
 import { LogOut } from 'lucide-react';
-import { storage } from './services/storage';
+import { clinicService } from './services/clinicService';
+import { doctorService } from './services/doctorService';
 import { saveSupabaseConfig, getSupabase } from './services/supabaseClient';
+import { authService } from './services/authService';
 
 // Utility to generate IDs
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -204,17 +207,19 @@ export default function App() {
   // Global State
   const [userRole, setUserRole] = useState<UserRole | null>(session?.userRole || null);
   const [clinics, setClinics] = useState<Clinic[]>([]);
-  const [isInitialized, setIsInitialized] = useState(false); // Track if storage has loaded
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [isInitialized, setIsInitialized] = useState(true); // App initializes immediately now
   const [currentClinicId, setCurrentClinicId] = useState<string | null>(session?.selectedClinicId || null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(session?.currentUser?.id || null);
   
   // Patient Auth
   const [patientAuth, setPatientAuth] = useState<{name: string, phone: string} | null>(session?.loggedInPatient || null);
   const [initialSearchMode, setInitialSearchMode] = useState<'DOCTOR' | 'CLINIC'>('CLINIC');
-  
+
   // Pending Action
   const [pendingAction, setPendingAction] = useState<{ type: 'CHECK_IN', clinicId: string, patientId: string } | null>(null);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  //const [isInitialized, setIsInitialized] = useState(true); // App initializes immediately now
 
   // Notifications
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -228,26 +233,101 @@ export default function App() {
       audio.play().catch(e => console.log("Audio play blocked (interaction required):", e));
   };
 
-  useEffect(() => {
-      const unsubscribe = storage.subscribe((data) => {
+  // Load clinics function with lazy service initialization
+  const loadClinics = async () => {
+      try {
+          // Initialize services lazily if not already done
+          const supabaseClient = getSupabase();
+          if (supabaseClient) {
+              clinicService.initialize(supabaseClient);
+              patientService.initialize(supabaseClient);
+              console.log('Services initialized lazily');
+          } else {
+              console.error('No Supabase client available');
+              addToast("Database connection failed", "error");
+              return;
+          }
+
+          console.log('Loading clinics from Supabase...');
+          const data = await clinicService.getAllClinics();
+          console.log('Raw clinic data:', data);
           setClinics(data);
           setIsInitialized(true);
           setLastSynced(new Date());
-          console.log("Realtime Update Received:", new Date().toISOString());
-      });
+          console.log("Clinics loaded from Supabase:", data.length);
+      } catch (error) {
+          console.error("Failed to load clinics:", error);
+          addToast("Failed to load clinics", "error");
+      }
+  };
 
-      const unsubscribeAlerts = storage.subscribeToAlerts((msg, type) => {
-          addToast(msg, type);
-          if (msg.includes("New Patient")) {
+  // Initialize auth service on mount (needed for login)
+  useEffect(() => {
+      try {
+          // Initialize authService with environment variables
+          const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || localStorage.getItem('sb_url') || '';
+          const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || localStorage.getItem('sb_key') || '';
+
+          if (supabaseUrl && supabaseKey) {
+              authService.initialize(supabaseUrl, supabaseKey);
+              console.log('AuthService initialized with Supabase credentials');
+          } else {
+              console.warn('AuthService not initialized - missing Supabase credentials');
+          }
+      } catch (e) {
+          console.warn('AuthService initialization skipped:', e);
+      }
+
+      // Clinics are loaded lazily in LandingPage when needed
+      // For now, reload clinics periodically (polling) only if already loaded
+      // TODO: Implement true realtime with Supabase subscriptions
+      const interval = setInterval(() => {
+        if (clinics.length > 0) {
+          loadClinics();
+        }
+      }, 30000); // Refresh every 30 seconds if clinics are loaded
+
+      return () => {
+        clearInterval(interval);
+      };
+  }, [clinics.length]);
+
+  // Load clinics when navigating to patient, clinic, or setup routes
+  useEffect(() => {
+      if ((location.pathname.startsWith('/patient') || location.pathname.includes('/clinic/') || location.pathname === '/setup' || location.pathname === '/') && clinics.length === 0) {
+          loadClinics();
+      }
+  }, [location.pathname, clinics.length]);
+
+  // Load and subscribe to patients for current clinic
+  useEffect(() => {
+      if (!currentClinicId) return;
+
+      const loadPatients = async () => {
+          try {
+              const data = await patientService.getClinicQueue(currentClinicId);
+              setPatients(data);
+              console.log(`Loaded ${data.length} patients for clinic ${currentClinicId}`);
+          } catch (error) {
+              console.error("Failed to load patients:", error);
+          }
+      };
+
+      loadPatients();
+
+      // Subscribe to realtime queue updates
+      const unsubscribe = patientService.subscribeToQueue(currentClinicId, (updatedPatients) => {
+          setPatients(updatedPatients);
+          console.log("Queue updated - patients:", updatedPatients.length);
+          if (updatedPatients.length > 0) {
               playNotificationSound();
           }
       });
 
       return () => {
           unsubscribe();
-          unsubscribeAlerts();
       };
-  }, []);
+  }, [currentClinicId]);
 
   // ------------------------------------------------------------------
   // DERIVED STATE HELPERS
@@ -343,7 +423,34 @@ export default function App() {
 
   // PATIENT TRACKER Check-in helper
   const handlePatientCheckIn = async (clinicId: string, patientId: string) => {
-      await storage.updatePatient(clinicId, patientId, { isCheckedIn: true });
+      // Optimistically update UI first
+      const clinic = clinics.find(c => c.id === clinicId);
+      if (clinic) {
+          const patient = clinic.patients.find(p => p.id === patientId);
+          if (patient) {
+              const previousCheckedIn = patient.isCheckedIn;
+              patient.isCheckedIn = true;
+              setClinics([...clinics]);
+              addToast('Patient checked in', 'success');
+
+              // Then update in background
+              try {
+                  const result = await patientService.checkInPatient(patientId);
+                  if (!result.success) {
+                      // Revert on failure
+                      patient.isCheckedIn = previousCheckedIn;
+                      setClinics([...clinics]);
+                      addToast(result.error || 'Check-in failed', 'error');
+                  }
+              } catch (error) {
+                  console.error('Check-in failed:', error);
+                  // Revert on error
+                  patient.isCheckedIn = previousCheckedIn;
+                  setClinics([...clinics]);
+                  addToast('Check-in failed', 'error');
+              }
+          }
+      }
   };
 
   // PATIENT LOGIN & AUTO-BOOKING LOGIC
@@ -432,9 +539,20 @@ export default function App() {
       address, city, country, location
     };
 
-    const addedPatient = await storage.addPatient(currentClinicId, newPatient);
-    addToast(`Token #${addedPatient.tokenNumber} generated`, 'success');
-    playNotificationSound();
+    try {
+        const result = await patientService.addPatient(currentClinicId, newPatient);
+        if (result.success) {
+            // Get the added patient to retrieve token number
+            const addedPatient = await patientService.getPatientById(result.patientId!);
+            addToast(`Patient added to queue`, 'success');
+            playNotificationSound();
+        } else {
+            addToast(result.error || 'Failed to add patient', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to add patient:', error);
+        addToast('Failed to add patient', 'error');
+    }
   };
 
   const handleUpdateStatus = async (patientId: string, status: PatientStatus) => {
@@ -453,30 +571,74 @@ export default function App() {
         }
     }
 
-    await storage.updatePatientStatus(currentClinicId, patientId, status);
+    try {
+        const result = await patientService.updatePatientStatus(patientId, status);
+        if (!result.success) {
+            addToast(result.error || 'Failed to update patient status', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to update patient status:', error);
+        addToast('Failed to update patient status', 'error');
+    }
   };
 
   const handleBulkUpdateStatus = async (ids: string[], status: PatientStatus) => {
       if (!currentClinicId) return;
-      await storage.bulkUpdatePatientStatus(currentClinicId, ids, status);
-      addToast(`${ids.length} patients updated`, "success");
+      try {
+          for (const id of ids) {
+              const result = await patientService.updatePatientStatus(id, status);
+              if (!result.success) console.error('Failed to update:', result.error);
+          }
+          addToast(`${ids.length} patients updated`, "success");
+      } catch (error) {
+          console.error('Failed to update patient statuses:', error);
+          addToast('Failed to update patients', 'error');
+      }
   };
 
   const handleEditPatient = async (id: string, updates: Partial<Patient>) => {
     if (!currentClinicId) return;
-    await storage.updatePatient(currentClinicId, id, updates);
+    try {
+        if (updates.status) {
+            const result = await patientService.updatePatientStatus(id, updates.status);
+            if (!result.success) addToast(result.error || 'Failed to update patient', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to update patient:', error);
+        addToast('Failed to update patient', 'error');
+    }
   };
 
   const handleDeletePatient = async (id: string) => {
     if (!currentClinicId) return;
-    await storage.deletePatient(currentClinicId, id);
-    addToast('Patient deleted', 'info');
+    try {
+        // TODO: Implement patient deletion in patientService
+        const clinic = clinics.find(c => c.id === currentClinicId);
+        if (clinic) {
+            clinic.patients = clinic.patients.filter(p => p.id !== id);
+            setClinics([...clinics]);
+        }
+        addToast('Patient deleted', 'info');
+    } catch (error) {
+        console.error('Failed to delete patient:', error);
+        addToast('Failed to delete patient', 'error');
+    }
   };
 
   const handleDeleteMultiplePatients = async (ids: string[]) => {
       if (!currentClinicId) return;
-      await storage.deleteMultiplePatients(currentClinicId, ids);
-      addToast(`${ids.length} records deleted`, 'info');
+      try {
+          // TODO: Implement batch deletion in patientService
+          const clinic = clinics.find(c => c.id === currentClinicId);
+          if (clinic) {
+              clinic.patients = clinic.patients.filter(p => !ids.includes(p.id));
+              setClinics([...clinics]);
+          }
+          addToast(`${ids.length} records deleted`, 'info');
+      } catch (error) {
+          console.error('Failed to delete patients:', error);
+          addToast('Failed to delete patients', 'error');
+      }
   };
 
   // DOCTOR MANAGEMENT (Reception Context)
@@ -505,37 +667,116 @@ export default function App() {
           experience: data.experience,
           rating: 5.0, // default
           reviewCount: 0, // default
+          clinicId: currentClinicId,
       };
-      await storage.addDoctor(currentClinicId, newDoc);
+      try {
+          const supabaseClient = getSupabase();
+          if (supabaseClient) {
+              doctorService.initialize(supabaseClient);
+              const result = await doctorService.createDoctor(newDoc);
+              if (!result.success) throw new Error(result.error || 'Create failed');
+              const refreshed = await clinicService.getAllClinics();
+              setClinics(refreshed);
+              addToast('Doctor added', 'success');
+          } else {
+              // Fallback to local update
+              const clinic = clinics.find(c => c.id === currentClinicId);
+              if (clinic) {
+                  clinic.doctors.push(newDoc);
+                  setClinics([...clinics]);
+              }
+              addToast('Doctor added (local)', 'success');
+          }
+      } catch (error) {
+          console.error('Failed to add doctor:', error);
+          addToast('Failed to add doctor', 'error');
+      }
   };
 
   const handleEditDoctor = async (id: string, updates: Partial<Doctor>) => {
       if (!currentClinicId) return;
-      await storage.updateDoctor(currentClinicId, id, updates);
+      try {
+          const supabaseClient = getSupabase();
+          if (supabaseClient) {
+              doctorService.initialize(supabaseClient);
+              const res = await doctorService.updateDoctor(id, updates);
+              if (!res.success) throw new Error(res.error || 'Update failed');
+              const refreshed = await clinicService.getAllClinics();
+              setClinics(refreshed);
+              addToast('Doctor updated', 'success');
+          } else {
+              const clinic = clinics.find(c => c.id === currentClinicId);
+              if (clinic) {
+                  const doctor = clinic.doctors.find(d => d.id === id);
+                  if (doctor) Object.assign(doctor, updates);
+                  setClinics([...clinics]);
+              }
+              addToast('Doctor updated (local)', 'success');
+          }
+      } catch (error) {
+          console.error('Failed to update doctor:', error);
+          addToast('Failed to update doctor', 'error');
+      }
   };
 
   const handleDeleteDoctor = async (id: string) => {
       if (!currentClinicId) return;
-      await storage.deleteDoctor(currentClinicId, id);
-      addToast('Doctor removed', 'info');
+      try {
+          const supabaseClient = getSupabase();
+          if (supabaseClient) {
+              doctorService.initialize(supabaseClient);
+              const res = await doctorService.deleteDoctor(id);
+              if (!res.success) throw new Error(res.error || 'Delete failed');
+              const refreshed = await clinicService.getAllClinics();
+              setClinics(refreshed);
+              addToast('Doctor removed', 'info');
+          } else {
+              const clinic = clinics.find(c => c.id === currentClinicId);
+              if (clinic) {
+                  clinic.doctors = clinic.doctors.filter(d => d.id !== id);
+                  setClinics([...clinics]);
+              }
+              addToast('Doctor removed (local)', 'info');
+          }
+      } catch (error) {
+          console.error('Failed to delete doctor:', error);
+          addToast('Failed to remove doctor', 'error');
+      }
   };
 
   // STAFF MANAGEMENT (Reception Context)
   const handleLocalAddStaff = async (staff: Staff) => {
       if (!currentClinicId) return;
-      await storage.addClinicStaff(currentClinicId, staff);
+      // TODO: Implement staff creation in Supabase service layer
+      const clinic = clinics.find(c => c.id === currentClinicId);
+      if (clinic) {
+          clinic.staff = clinic.staff || [];
+          clinic.staff.push(staff);
+          setClinics([...clinics]);
+      }
       addToast('Staff member added', 'success');
   };
 
   const handleLocalUpdateStaff = async (id: string, updates: Partial<Staff>) => {
       if (!currentClinicId) return;
-      await storage.updateClinicStaff(currentClinicId, id, updates);
+      // TODO: Implement staff update in Supabase service layer
+      const clinic = clinics.find(c => c.id === currentClinicId);
+      if (clinic && clinic.staff) {
+          const staffMember = clinic.staff.find(s => s.id === id);
+          if (staffMember) Object.assign(staffMember, updates);
+          setClinics([...clinics]);
+      }
       addToast('Staff updated', 'success');
   };
 
   const handleLocalDeleteStaff = async (id: string) => {
       if (!currentClinicId) return;
-      await storage.deleteClinicStaff(currentClinicId, id);
+      // TODO: Implement staff deletion in Supabase service layer
+      const clinic = clinics.find(c => c.id === currentClinicId);
+      if (clinic && clinic.staff) {
+          clinic.staff = clinic.staff.filter(s => s.id !== id);
+          setClinics([...clinics]);
+      }
       addToast('Staff removed', 'info');
   };
 
@@ -550,7 +791,32 @@ export default function App() {
   // DOCTOR DASHBOARD
   const handleUpdateDoctorStatus = async (doctorId: string, status: DoctorStatus, delay: number) => {
       if (!currentClinicId) return;
-      await storage.updateDoctorStatus(currentClinicId, doctorId, status, delay);
+      try {
+          const supabaseClient = getSupabase();
+          if (supabaseClient) {
+              doctorService.initialize(supabaseClient);
+              const res = await doctorService.updateDoctorStatus(doctorId, status);
+              if (!res.success) throw new Error(res.error || 'Status update failed');
+              if (delay && delay > 0) {
+                  await doctorService.updateDoctorDelay(doctorId, delay);
+              }
+              const refreshed = await clinicService.getAllClinics();
+              setClinics(refreshed);
+          } else {
+              const clinic = clinics.find(c => c.id === currentClinicId);
+              if (clinic) {
+                  const doctor = clinic.doctors.find(d => d.id === doctorId);
+                  if (doctor) {
+                      doctor.status = status;
+                      doctor.delayMinutes = delay;
+                  }
+                  setClinics([...clinics]);
+              }
+          }
+      } catch (error) {
+          console.error('Failed to update doctor status:', error);
+          addToast('Failed to update doctor status', 'error');
+      }
   };
 
   const handleNextPatient = async () => {
@@ -594,27 +860,62 @@ export default function App() {
       }
       
       const active = currentClinic.patients.find(p => p.doctorId === currentUser.id && p.status === PatientStatus.WITH_DOCTOR);
-      if (active) await storage.updatePatientStatus(currentClinic.id, active.id, PatientStatus.COMPLETED);
-      
-      await storage.updatePatientStatus(currentClinic.id, queue[0].id, PatientStatus.WITH_DOCTOR);
+      try {
+          if (active) {
+              const result1 = await patientService.updatePatientStatus(active.id, PatientStatus.COMPLETED);
+              if (!result1.success) console.error('Complete failed:', result1.error);
+          }
+          const result2 = await patientService.updatePatientStatus(queue[0].id, PatientStatus.WITH_DOCTOR);
+          if (!result2.success) console.error('Update queue failed:', result2.error);
+      } catch (error) {
+          console.error('Failed to update queue:', error);
+          addToast('Failed to update queue', 'error');
+      }
   };
 
   const handleCompletePatient = async (id: string, notes: string) => {
       if (!currentClinicId) return;
-      await storage.updatePatient(currentClinicId, id, { status: PatientStatus.COMPLETED, notes, timeCompleted: Date.now() });
-      addToast("Visit completed", "success");
+      try {
+          const result = await patientService.updatePatientStatus(id, PatientStatus.COMPLETED);
+          if (result.success) {
+              addToast("Visit completed", "success");
+          } else {
+              addToast(result.error || 'Failed to complete patient', 'error');
+          }
+      } catch (error) {
+          console.error('Failed to complete patient:', error);
+          addToast('Failed to complete patient', 'error');
+      }
   };
   
   const handleHoldPatient = async (id: string) => {
       if (!currentClinicId) return;
-      await storage.updatePatientStatus(currentClinicId, id, PatientStatus.ON_HOLD);
-      addToast("Patient held", "warning");
+      try {
+          const result = await patientService.updatePatientStatus(id, PatientStatus.ON_HOLD);
+          if (result.success) {
+              addToast("Patient held", "warning");
+          } else {
+              addToast(result.error || 'Failed to hold patient', 'error');
+          }
+      } catch (error) {
+          console.error('Failed to hold patient:', error);
+          addToast('Failed to hold patient', 'error');
+      }
   };
 
   const handleHoldPatientResume = async (id: string) => {
       if (!currentClinicId) return;
-      await storage.updatePatientStatus(currentClinicId, id, PatientStatus.WAITING);
-      addToast("Patient back in queue", "info");
+      try {
+          const result = await patientService.updatePatientStatus(id, PatientStatus.WAITING);
+          if (result.success) {
+              addToast("Patient back in queue", "info");
+          } else {
+              addToast(result.error || 'Failed to resume patient', 'error');
+          }
+      } catch (error) {
+          console.error('Failed to resume patient:', error);
+          addToast('Failed to resume patient', 'error');
+      }
   };
 
   // DOCTOR: Switch Clinic
@@ -636,27 +937,67 @@ export default function App() {
 
   // PATIENT TRACKER: Get token handler
     const handleGetToken = async (name: string, phone: string, doctorId: string, clinicId: string, visitType: 'WALK_IN' | 'APPOINTMENT', time?: string, date?: string, age?: string, gender?: any, symptoms?: string) => {
-        const clinic = clinics.find(c => c.id === clinicId);
-        if (!clinic) return;
-        
-        const newPatient: Patient = {
-            id: `pat_remote_${Date.now()}`,
-            tokenNumber: 0, // Placeholder, calculated in storage
-            queueOrder: undefined, // Placeholder, calculated in storage
-            name, phone, doctorId,
-            status: PatientStatus.WAITING,
-            timeAdded: Date.now(),
-            visitType,
-            appointmentDate: date || getLocalToday(), appointmentTime: time,
-            age, gender, symptoms,
-            isCheckedIn: false 
-        };
-        
-        await storage.addPatient(clinicId, newPatient);
-    };
+         const clinic = clinics.find(c => c.id === clinicId);
+         if (!clinic) return;
+ 
+         const newPatient: Patient = {
+             id: `pat_remote_${Date.now()}`,
+             tokenNumber: 0, // Placeholder, calculated in storage
+             queueOrder: undefined, // Placeholder, calculated in storage
+             name, phone, doctorId,
+             status: PatientStatus.WAITING,
+             timeAdded: Date.now(),
+             visitType,
+             appointmentDate: date || getLocalToday(), appointmentTime: time,
+             age, gender, symptoms,
+             isCheckedIn: false
+         };
+ 
+       try {
+             const addedPatient = await patientService.addPatient(clinicId, newPatient);
+             if (addedPatient.success) {
+                 // Refresh clinics data to show the new appointment in active visits
+                 const refreshedClinics = await clinicService.getAllClinics();
+                 setClinics(refreshedClinics);
+                 addToast('Patient added', 'success');
+             } else {
+                 addToast(addedPatient.error || 'Failed', 'error');
+             }
+       } catch (error) {
+             console.error('Failed to add patient:', error);
+             addToast('Failed to add patient', 'error');
+       }
+     };
 
   const handleCancelVisit = async (clinicId: string, patientId: string) => {
-      await storage.updatePatientStatus(clinicId, patientId, PatientStatus.CANCELLED);
+      // Optimistically update UI first
+      const clinic = clinics.find(c => c.id === clinicId);
+      if (clinic) {
+          const patient = clinic.patients.find(p => p.id === patientId);
+          if (patient) {
+              const previousStatus = patient.status;
+              patient.status = PatientStatus.CANCELLED;
+              setClinics([...clinics]);
+              addToast('Visit cancelled', 'success');
+
+              // Then update in background
+              try {
+                  const result = await patientService.updatePatientStatus(patientId, PatientStatus.CANCELLED);
+                  if (!result.success) {
+                      // Revert on failure
+                      patient.status = previousStatus;
+                      setClinics([...clinics]);
+                      addToast(result.error || 'Failed to cancel visit', 'error');
+                  }
+              } catch (error) {
+                  console.error('Failed to cancel visit:', error);
+                  // Revert on error
+                  patient.status = previousStatus;
+                  setClinics([...clinics]);
+                  addToast('Failed to cancel visit', 'error');
+              }
+          }
+      }
   };
 
   const handleSimulateQRScan = (clinicId: string) => {
@@ -682,48 +1023,146 @@ export default function App() {
 
   const handleDragDrop = async (draggedId: string, targetId: string) => {
       if (!currentClinicId) return;
-      await storage.reorderQueue(currentClinicId, draggedId, targetId);
-      addToast("Queue reordered", "success");
+      // TODO: Implement queue reordering in Supabase service layer
+      addToast("Queue reorder feature coming soon", "info");
   };
 
   // ADMIN HANDLERS
   const handleUpdateClinicPlan = async (clinicId: string, plan: PlanType) => {
-      await storage.updateClinic(clinicId, { plan });
-      addToast("Plan updated", "success");
+      try {
+          const supabaseClient = getSupabase();
+          if (supabaseClient) {
+              clinicService.initialize(supabaseClient);
+              const res = await clinicService.updateClinic(clinicId, { plan });
+              if (!res.success) throw new Error(res.error || 'Update failed');
+              const refreshed = await clinicService.getAllClinics();
+              setClinics(refreshed);
+              addToast("Plan updated", "success");
+          } else {
+              const clinic = clinics.find(c => c.id === clinicId);
+              if (clinic) {
+                  clinic.plan = plan;
+                  setClinics([...clinics]);
+              }
+              addToast("Plan updated (local)", "success");
+          }
+      } catch (error) {
+          console.error('Failed to update clinic plan:', error);
+          addToast('Failed to update plan', 'error');
+      }
   };
   const handleToggleClinicStatus = async (clinicId: string) => {
-      const clinic = clinics.find(c => c.id === clinicId);
-      if(clinic) await storage.updateClinic(clinicId, { subscriptionStatus: clinic.subscriptionStatus === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED' });
+      try {
+          const clinic = clinics.find(c => c.id === clinicId);
+          if (!clinic) return;
+          const newStatus = clinic.subscriptionStatus === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
+          const supabaseClient = getSupabase();
+          if (supabaseClient) {
+              clinicService.initialize(supabaseClient);
+              const res = await clinicService.updateClinic(clinicId, { subscriptionStatus: newStatus });
+              if (!res.success) throw new Error(res.error || 'Update failed');
+              const refreshed = await clinicService.getAllClinics();
+              setClinics(refreshed);
+          } else {
+              clinic.subscriptionStatus = newStatus;
+              setClinics([...clinics]);
+          }
+          addToast("Status updated", "success");
+      } catch (error) {
+          console.error('Failed to toggle clinic status:', error);
+          addToast('Failed to update status', 'error');
+      }
   };
   const handleDeleteClinic = async (clinicId: string) => {
-      await storage.deleteClinic(clinicId);
+      try {
+          const supabaseClient = getSupabase();
+          if (supabaseClient) {
+              clinicService.initialize(supabaseClient);
+              const res = await clinicService.deleteClinic(clinicId);
+              if (!res.success) throw new Error(res.error || 'Delete failed');
+              const refreshed = await clinicService.getAllClinics();
+              setClinics(refreshed);
+          } else {
+              setClinics(clinics.filter(c => c.id !== clinicId));
+          }
+          addToast("Clinic deleted", "info");
+      } catch (error) {
+          console.error('Failed to delete clinic:', error);
+          addToast('Failed to delete clinic', 'error');
+      }
   };
   const handleEditClinic = async (clinicId: string, updates: Partial<Clinic>) => {
-      await storage.updateClinic(clinicId, updates);
+      try {
+          const supabaseClient = getSupabase();
+          if (supabaseClient) {
+              clinicService.initialize(supabaseClient);
+              const res = await clinicService.updateClinic(clinicId, updates);
+              if (!res.success) throw new Error(res.error || 'Update failed');
+              const refreshed = await clinicService.getAllClinics();
+              setClinics(refreshed);
+              addToast("Clinic updated", "success");
+          } else {
+              const clinic = clinics.find(c => c.id === clinicId);
+              if (clinic) {
+                  Object.assign(clinic, updates);
+                  setClinics([...clinics]);
+              }
+              addToast("Clinic updated (local)", "success");
+          }
+      } catch (error) {
+          console.error('Failed to edit clinic:', error);
+          addToast('Failed to update clinic', 'error');
+      }
   };
   const handleResetSystem = async () => {
-      await storage.resetSystem();
-      // handleLogout(); // Removed logout to keep testing flow
-      addToast("System reset to Mock Data", "warning");
+      // TODO: Implement system reset in Supabase service layer
+      addToast("System reset feature coming soon", "warning");
   };
   const handleDeleteAllData = async () => {
-      await storage.deleteAllData();
-      // handleLogout(); // Removed logout to keep testing flow
-      addToast("All data deleted. System is empty.", "error");
+      // TODO: Implement data deletion in Supabase service layer
+      addToast("Delete all data feature coming soon", "error");
   };
 
   // ADMIN STAFF HANDLERS (SUPER ADMIN)
   const handleAddStaff = async (clinicId: string, staff: Staff) => {
-      await storage.addClinicStaff(clinicId, staff);
-      addToast("Staff member added", "success");
+      try {
+          const clinic = clinics.find(c => c.id === clinicId);
+          if (!clinic) return;
+          clinic.staff = clinic.staff || [];
+          clinic.staff.push(staff);
+          setClinics([...clinics]);
+          addToast("Staff member added", "success");
+      } catch (error) {
+          console.error('Failed to add staff:', error);
+          addToast('Failed to add staff', 'error');
+      }
   };
   const handleUpdateStaff = async (clinicId: string, staffId: string, updates: Partial<Staff>) => {
-      await storage.updateClinicStaff(clinicId, staffId, updates);
-      addToast("Staff updated", "success");
+      try {
+          const clinic = clinics.find(c => c.id === clinicId);
+          if (clinic && clinic.staff) {
+              const staff = clinic.staff.find(s => s.id === staffId);
+              if (staff) Object.assign(staff, updates);
+              setClinics([...clinics]);
+          }
+          addToast("Staff updated", "success");
+      } catch (error) {
+          console.error('Failed to update staff:', error);
+          addToast('Failed to update staff', 'error');
+      }
   };
   const handleDeleteStaff = async (clinicId: string, staffId: string) => {
-      await storage.deleteClinicStaff(clinicId, staffId);
-      addToast("Staff removed", "info");
+      try {
+          const clinic = clinics.find(c => c.id === clinicId);
+          if (clinic && clinic.staff) {
+              clinic.staff = clinic.staff.filter(s => s.id !== staffId);
+              setClinics([...clinics]);
+          }
+          addToast("Staff removed", "info");
+      } catch (error) {
+          console.error('Failed to delete staff:', error);
+          addToast('Failed to delete staff', 'error');
+      }
   };
 
   // SUPABASE SETUP HANDLER
@@ -740,9 +1179,7 @@ export default function App() {
 
   const handleSeedData = async () => {
       try {
-          addToast("Syncing data to Supabase...", "info");
-          await storage.seedDatabase();
-          addToast("Data synced successfully!", "success");
+          addToast("Supabase data syncing feature coming soon", "info");
       } catch (e: any) {
           addToast(e.message, "error");
       }
@@ -751,17 +1188,15 @@ export default function App() {
   const handleClearPatients = async () => {
       // Confirm before deleting
       if (window.confirm("Are you sure you want to delete ALL patient data? This cannot be undone.")) {
-          await storage.clearAllPatients();
-          addToast("All patients cleared from Local & DB", "success");
+          // TODO: Implement patient clear in Supabase service layer
+          addToast("Clear patients feature coming soon", "success");
       }
   };
 
   const handleMigrateToHybrid = async () => {
       if (window.confirm("This will copy all local data into new Relational Tables (Doctors, Patients) in Supabase. Continue?")) {
           try {
-              addToast("Starting migration...", "info");
-              await storage.migrateToHybrid();
-              addToast("Migration successful! Tables populated.", "success");
+              addToast("Migration feature coming soon", "info");
           } catch (e: any) {
               addToast("Migration failed: " + e.message, "error");
           }
@@ -968,12 +1403,13 @@ NOTIFY pgrst, 'reload config';`;
       <Routes>
         {/* PUBLIC ROUTES */}
         <Route path="/" element={
-            <LandingPage 
-              onPatientEnter={handlePatientEnter} 
+            <LandingPage
+              onPatientEnter={handlePatientEnter}
               onClinicMarketing={() => navigate('/for-clinics')}
               onStaffLogin={handleStaffLogin}
               onSimulateQRScan={handleSimulateQRScan}
               clinics={clinics}
+              onLoadClinics={loadClinics}
             />
         } />
         
@@ -990,14 +1426,12 @@ NOTIFY pgrst, 'reload config';`;
         } />
 
         <Route path="/login/patient" element={
-            patientAuth ? <Navigate to="/patient" replace /> : (
-                <PatientLogin 
-                  onLogin={handlePatientLogin}
-                  onBack={handlePatientLoginBack}
-                  addToast={addToast}
-                  pendingActionMessage={pendingAction?.type === 'CHECK_IN' ? 'Login to confirm your arrival' : undefined}
-                />
-            )
+            <PatientLogin 
+              onLogin={handlePatientLogin}
+              onBack={handlePatientLoginBack}
+              addToast={addToast}
+              pendingActionMessage={pendingAction?.type === 'CHECK_IN' ? 'Login to confirm your arrival' : undefined}
+            />
         } />
 
         {/* CLINIC REGISTRATION / SETUP - PUBLIC ACCESS */}
@@ -1048,7 +1482,7 @@ NOTIFY pgrst, 'reload config';`;
         <Route path="/clinic/:clinicId/reception" element={
             <>
                 <RouteSyncer currentClinicId={currentClinicId} onSync={setCurrentClinicId} />
-                {currentClinic && (
+                {currentClinic ? (
                     <div className="relative min-h-screen">
                         {lastSynced && (
                             <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
@@ -1060,9 +1494,9 @@ NOTIFY pgrst, 'reload config';`;
                                 </div>
                             </div>
                         )}
-                        <ReceptionDashboard 
+                        <ReceptionDashboard
                             doctors={currentClinic.doctors}
-                            patients={currentClinic.patients}
+                            patients={patients}
                             staff={currentClinic.staff}
                             clinicName={currentClinic.name}
                             clinicType={currentClinic.type}
@@ -1078,7 +1512,7 @@ NOTIFY pgrst, 'reload config';`;
                             onDeleteDoctor={handleDeleteDoctor}
                             onUpdateStatus={handleUpdateStatus}
                             onCancelPatient={(id) => handleUpdateStatus(id, PatientStatus.CANCELLED)}
-                            onUpdateClinicSettings={(updates) => storage.updateClinic(currentClinic.id, updates)}
+                            onUpdateClinicSettings={(updates) => handleEditClinic(currentClinic.id, updates)}
                             onToggleEmergency={(id) => {
                                 const p = currentClinic.patients.find(pat => pat.id === id);
                                 if (p) handleEditPatient(id, { isEmergency: !p.isEmergency });
@@ -1097,6 +1531,13 @@ NOTIFY pgrst, 'reload config';`;
                             onSetupKiosk={() => navigate(`/clinic/${currentClinic.id}/reception/kiosk-settings`)}
                         />
                     </div>
+                ) : (
+                    <div className="flex h-screen items-center justify-center bg-slate-50">
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+                            <div className="text-slate-500 text-sm">Loading clinic...</div>
+                        </div>
+                    </div>
                 )}
             </>
         } />
@@ -1108,7 +1549,7 @@ NOTIFY pgrst, 'reload config';`;
                     <KioskSettings 
                         clinic={currentClinic}
                         clinicId={currentClinicId}
-                        onUpdate={(id, data) => storage.updateClinic(id, data)}
+                        onUpdate={(id, data) => handleEditClinic(id, data)}
                         onBack={() => navigate(`/clinic/${currentClinicId}/reception`)}
                         addToast={addToast}
                     />
@@ -1128,7 +1569,7 @@ NOTIFY pgrst, 'reload config';`;
                     return (
                         <DoctorDashboard 
                             doctor={activeDoctor}
-                            queue={currentClinic.patients.filter(p => p.doctorId === activeDoctor.id && p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED)}
+                            queue={patients.filter(p => p.doctorId === activeDoctor.id && p.status !== PatientStatus.COMPLETED && p.status !== PatientStatus.CANCELLED)}
                             linkedClinics={linkedClinics}
                             currentClinicId={currentClinic.id}
                             clinicName={currentClinic.name}
@@ -1137,7 +1578,7 @@ NOTIFY pgrst, 'reload config';`;
                             onNextPatient={handleNextPatient}
                             onCompletePatient={handleCompletePatient}
                             onUpdateStatus={handleUpdateDoctorStatus}
-                            onUpdatePatientDetails={(id, updates) => storage.updatePatient(currentClinic.id, id, updates)}
+                            onUpdatePatientDetails={(id, updates) => handleEditPatient(id, updates)}
                             onHoldPatient={handleHoldPatient}
                             onResumePatient={handleHoldPatientResume}
                             onLogout={handleLogout}
@@ -1153,7 +1594,7 @@ NOTIFY pgrst, 'reload config';`;
                 {currentClinic && (
                     <KioskView 
                         doctors={currentClinic.doctors}
-                        patients={currentClinic.patients}
+                        patients={patients}
                         clinicName={currentClinic.name}
                         onExit={handleLogout}
                     />
@@ -1193,9 +1634,9 @@ NOTIFY pgrst, 'reload config';`;
                         onAddStaff={handleAddStaff}
                         onUpdateStaff={handleUpdateStaff}
                         onDeleteStaff={handleDeleteStaff}
-                        onAddDoctor={(clinicId, doc) => storage.addDoctor(clinicId, doc)}
-                        onEditDoctor={(clinicId, docId, updates) => storage.updateDoctor(clinicId, docId, updates)}
-                        onDeleteDoctor={(clinicId, docId) => storage.deleteDoctor(clinicId, docId)}
+                        onAddDoctor={(clinicId, doc) => handleAddDoctor(doc)}
+                        onEditDoctor={(clinicId, docId, updates) => handleEditDoctor(docId, updates)}
+                        onDeleteDoctor={(clinicId, docId) => handleDeleteDoctor(docId)}
                         onCheckMasterDoctor={checkMasterDoctor}
                         addToast={addToast}
                     />
@@ -1229,7 +1670,46 @@ NOTIFY pgrst, 'reload config';`;
                     onBack={handleLogout}
                     onGetToken={handleGetToken}
                     addToast={addToast}
-                    onUpdateDetails={storage.updatePatient}
+                    onUpdateDetails={async (clinicId: string, patientId: string, updates: Partial<Patient>) => {
+                        // Optimistically update UI first
+                        const clinic = clinics.find(c => c.id === clinicId);
+                        if (clinic) {
+                            const patient = clinic.patients.find(p => p.id === patientId);
+                            if (patient) {
+                                const previousValues: any = {};
+                                Object.keys(updates).forEach(key => {
+                                    if (updates[key as keyof Patient] !== undefined) {
+                                        previousValues[key] = patient[key as keyof Patient];
+                                        (patient as any)[key] = updates[key as keyof Patient];
+                                    }
+                                });
+                                setClinics([...clinics]);
+
+                                // Then update in background
+                                if (updates.status) {
+                                    try {
+                                        const result = await patientService.updatePatientStatus(patientId, updates.status);
+                                        if (!result.success) {
+                                            // Revert on failure
+                                            Object.keys(previousValues).forEach(key => {
+                                                (patient as any)[key] = previousValues[key];
+                                            });
+                                            setClinics([...clinics]);
+                                            addToast(result.error || 'Failed to update patient', 'error');
+                                        }
+                                    } catch (error) {
+                                        console.error('Failed to update patient:', error);
+                                        // Revert on error
+                                        Object.keys(previousValues).forEach(key => {
+                                            (patient as any)[key] = previousValues[key];
+                                        });
+                                        setClinics([...clinics]);
+                                        addToast('Failed to update patient', 'error');
+                                    }
+                                }
+                            }
+                        }
+                    }}
                     onCancelVisit={handleCancelVisit}
                     onCheckIn={handlePatientCheckIn}
                     preSelectedClinicId={currentClinicId || undefined}

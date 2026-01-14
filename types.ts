@@ -97,6 +97,7 @@ export interface Review {
 }
 
 export interface Doctor {
+  clinicId: any;
   id: string;
   masterId: string; // NEW: Unique ID linking same doctor across clinics
   name: string;
