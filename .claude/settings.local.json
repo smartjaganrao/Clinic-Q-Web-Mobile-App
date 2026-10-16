@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(not exist *)",
+      "Bash(mkdir -p \"D:/Jagan/Projects/Clinic-Q-Web-Mobile-App/.claude\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npx tsc *)",
+      "Bash(npx kill-port *)",
+      "Bash(Start-Sleep -Seconds 1)",
+      "Bash(npm run *)",
+      "Bash(Start-Sleep -Seconds 3)",
+      "Bash(Get-Content \"C:\\\\Users\\\\hp\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--Jagan-Projects-Clinic-Q-Web-Mobile-App\\\\6ed193fd-2bc8-428a-829d-8bf9409d944b\\\\tasks\\\\bxvix2l3c.output\" -Tail 20)",
+      "Bash(sleep 3 && tail -20 \"/tmp/claude/D--Jagan-Projects-Clinic-Q-Web-Mobile-App/6ed193fd-2bc8-428a-829d-8bf9409d944b/tasks/bxvix2l3c.output\" 2>/dev/null || cat \"C:/Users/hp/AppData/Local/Temp/claude/D--Jagan-Projects-Clinic-Q-Web-Mobile-App/6ed193fd-2bc8-428a-829d-8bf9409d944b/tasks/bxvix2l3c.output\" 2>/dev/null | tail -20)",
+      "Bash(powershell -Command \"\\(Get-Content 'D:\\\\Jagan\\\\Projects\\\\Clinic-Q-Web-Mobile-App\\\\SUPABASE_SCHEMA_FIXED.sql'\\).Count\")",
+      "Bash(curl -s http://localhost:3000)"
+    ]
+  }
+}

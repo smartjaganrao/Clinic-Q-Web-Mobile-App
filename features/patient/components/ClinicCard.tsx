@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Clinic, ClinicOperationMode, Doctor } from '../../../types';
-import { MapPin, Calendar, Zap, Star, Clock, ShieldCheck, ChevronRight, Building2, MapPinIcon, HelpCircle, Car } from 'lucide-react';
+import { MapPin, Calendar, Zap, Star, Clock, ShieldCheck, Building2, Navigation } from 'lucide-react';
 import { IndianRupeeIcon } from '../../../components/icons';
 import { Tooltip } from '../../../components/Tooltip';
 
@@ -21,188 +21,313 @@ interface ClinicCardProps {
     onQueue: () => void;
 }
 
-const ActionButton = ({ label, subLabel, icon: Icon, variant, onClick, className = '', tooltip, disabled }: any) => {
-    // If tooltip is present, the wrapper takes flex-1, and button takes w-full.
-    // If no tooltip, button takes flex-1 directly (via base class if not overridden).
-    const base = "flex flex-col items-center justify-center py-2.5 px-2 rounded-2xl border transition-all active:scale-95 shadow-sm";
-    const variants: Record<string, string> = {
-        accent: "bg-teal-600 text-white border-teal-600 hover:bg-teal-700 shadow-teal-100",
-        outline: "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50",
-        primary: "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 shadow-indigo-100",
-        orange: "bg-orange-500 text-white border-orange-600 hover:bg-orange-600 shadow-orange-100"
-    };
-
-    const buttonClass = `${base} ${variants[variant] || variants.outline} ${className} ${!tooltip ? 'flex-1' : 'w-full'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`;
-
-    const button = (
-        <button onClick={(e) => { if (disabled) { e.stopPropagation(); return; } e.stopPropagation(); onClick(); }} className={buttonClass} disabled={disabled}>
-            <div className={`flex items-center gap-1.5 ${subLabel ? 'mb-0.5' : ''}`}>
-                <Icon className="h-4 w-4" />
-                <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
-            </div>
-            {subLabel && <span className="text-[9px] opacity-90 font-medium leading-none">{subLabel}</span>}
-        </button>
-    );
-
-    if (tooltip) {
-        return (
-            <Tooltip text={disabled ? "No doctors available for live token" : tooltip} className="flex-1">
-                {button}
-            </Tooltip>
-        );
-    }
-
-    return button;
-};
-
-export const ClinicCard: React.FC<ClinicCardProps> = ({ 
-    clinic, waitInfo, feeRange, distLabel, travelTime, gmapsLink, relevantDoctors, isHighlighted, isOpen, cardRef, onSelect, onBook, onQueue 
+export const ClinicCard: React.FC<ClinicCardProps> = ({
+    clinic, waitInfo, feeRange, distLabel, travelTime, gmapsLink,
+    relevantDoctors, isHighlighted, isOpen, cardRef, onSelect, onBook, onQueue
 }) => {
     const isDirectWalkInOnly = clinic.operationMode === ClinicOperationMode.DIRECT_WALK_IN;
-    const canQueueOnline = [ClinicOperationMode.ONLINE_WALK_IN, ClinicOperationMode.BOTH_WALK_IN, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
-    const canBook = [ClinicOperationMode.HYBRID_DIRECT_APPT, ClinicOperationMode.HYBRID_FULL].includes(clinic.operationMode);
-    const isQueueDisabled = !relevantDoctors || relevantDoctors.length === 0 || relevantDoctors.every(doc => !doc.isAvailable);
+    const canQueueOnline = [
+        ClinicOperationMode.ONLINE_WALK_IN,
+        ClinicOperationMode.BOTH_WALK_IN,
+        ClinicOperationMode.HYBRID_FULL,
+    ].includes(clinic.operationMode);
+    const canBook = [
+        ClinicOperationMode.HYBRID_DIRECT_APPT,
+        ClinicOperationMode.HYBRID_FULL,
+    ].includes(clinic.operationMode);
+    const isQueueDisabled =
+        !relevantDoctors ||
+        relevantDoctors.length === 0 ||
+        relevantDoctors.every(doc => !doc.isAvailable);
 
     const totalReviews = clinic.doctors.reduce((acc, doc) => acc + (doc.reviewCount || 0), 0);
-    const averageRating = clinic.doctors.length > 0 ? (clinic.doctors.reduce((a, b) => a + (b.rating || 0), 0) / clinic.doctors.length).toFixed(1) : 'N/A';
+    const avgRating =
+        clinic.doctors.length > 0
+            ? (clinic.doctors.reduce((a, b) => a + (b.rating || 0), 0) / clinic.doctors.length).toFixed(1)
+            : '—';
+
+    const waitMins = typeof waitInfo?.raw === 'number'
+        ? waitInfo.raw
+        : parseInt(String(waitInfo?.raw ?? '999')) || 0;
+
+    // Wait time colour
+    const waitColor =
+        isDirectWalkInOnly ? 'text-orange-600'
+        : waitMins < 15    ? 'text-emerald-600'
+        : waitMins < 30    ? 'text-amber-600'
+        :                    'text-rose-600';
+    const waitBg =
+        isDirectWalkInOnly ? 'bg-orange-50 border-orange-100'
+        : waitMins < 15    ? 'bg-emerald-50 border-emerald-100'
+        : waitMins < 30    ? 'bg-amber-50 border-amber-100'
+        :                    'bg-rose-50 border-rose-100';
+
+    const availableDoctors = relevantDoctors.filter(d => d.isAvailable);
 
     return (
-        <div ref={cardRef} className={`bg-white rounded-[1.5rem] border p-0 shadow-sm hover:shadow-xl transition-all duration-500 flex flex-col group relative overflow-visible mb-2 sm:mb-4 ${isHighlighted ? 'border-primary-500 ring-4 ring-primary-500/10 scale-[1.02] z-20' : 'border-slate-200'}`} onClick={onSelect}>
-             
-             <div className="absolute top-3 right-3 z-10">
-                <Tooltip text="View on Google Maps">
-                    <a href={gmapsLink} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="w-8 h-8 bg-white text-blue-600 border border-slate-100 hover:border-blue-200 rounded-lg shadow-sm transition-all flex items-center justify-center active:scale-95">
-                        <MapPin className="h-4 w-4" />
-                    </a>
-                </Tooltip>
+        <div
+            ref={cardRef}
+            className={`bg-white rounded-2xl shadow-sm hover:shadow-xl border transition-all duration-300 overflow-hidden flex flex-col group cursor-pointer relative ${
+                isHighlighted
+                    ? 'border-primary-400 ring-2 ring-primary-100 shadow-md'
+                    : 'border-slate-100 hover:border-slate-200'
+            }`}
+            onClick={onSelect}
+        >
+            {/* ─── Top Badge Row ─────────────────────────────── */}
+            <div className="flex items-center justify-between px-4 pt-3.5 pb-2.5 flex-wrap gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    {isOpen ? (
+                        <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black uppercase px-2.5 py-1 rounded-full shadow-sm tracking-wide">
+                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                            Open Now
+                        </span>
+                    ) : (
+                        <span className="bg-slate-100 text-slate-500 text-[9px] font-black uppercase px-2.5 py-1 rounded-full border border-slate-200 tracking-wide">
+                            Closed
+                        </span>
+                    )}
+                    {canQueueOnline && (
+                        <span className="flex items-center gap-1 bg-primary-600 text-white text-[9px] font-black uppercase px-2.5 py-1 rounded-full shadow-sm tracking-wide">
+                            <Zap className="h-2.5 w-2.5 fill-current" />
+                            Live Queue
+                        </span>
+                    )}
+                    {isDirectWalkInOnly && (
+                        <span className="bg-orange-100 text-orange-700 border border-orange-200 text-[9px] font-black uppercase px-2.5 py-1 rounded-full tracking-wide">
+                            At Clinic Only
+                        </span>
+                    )}
+                </div>
+                {clinic.subscriptionStatus === 'ACTIVE' && (
+                    <span className="flex items-center gap-1 text-primary-600 text-[9px] font-black uppercase tracking-wide shrink-0">
+                        <ShieldCheck className="h-3 w-3 fill-current" />
+                        Verified
+                    </span>
+                )}
             </div>
 
-            <div className="p-3 flex flex-col cursor-pointer">
-                 <div className="flex flex-wrap gap-1.5 mb-2 pr-8">
-                    {isOpen ? 
-                        <span className="bg-emerald-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md shadow-sm">Open</span> : 
-                        <span className="bg-slate-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md shadow-sm">Closed</span>
-                    }
-                    {isDirectWalkInOnly && (
-                         <Tooltip text="Walk in and get token at clinic desk">
-                             <span className="bg-orange-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md shadow-sm flex items-center gap-1 cursor-help">
-                                At Clinic Only <HelpCircle className="h-2 w-2 opacity-50" />
-                             </span>
-                         </Tooltip>
-                    )}
-                    {canQueueOnline && <span className="bg-primary-600 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md shadow-sm flex items-center gap-1"><Zap className="h-3 w-3 fill-current" /> Live Token</span>}
-                    {clinic.subscriptionStatus === "ACTIVE" && (
-                         <span className="bg-primary-50 text-primary-600 border border-primary-100 text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md shadow-sm flex items-center gap-0.5 ml-auto">
-                             <ShieldCheck className="h-2.5 w-2.5 fill-current" /> Verified
-                         </span>
-                     )}
-                 </div>
-
-                 <div className="flex gap-3 mb-3">
-                    <div className="w-16 h-16 bg-slate-100 rounded-xl flex-shrink-0 flex items-center justify-center relative overflow-hidden shadow-inner group-hover:shadow-md transition-all border border-slate-100">
-                        {clinic.imageUrl ? <img src={clinic.imageUrl} alt={clinic.name} className="w-full h-full object-cover" /> : <Building2 className="h-8 w-8 text-slate-300" />}
+            {/* ─── Clinic Identity ───────────────────────────── */}
+            <div className="px-5 pb-4">
+                <div className="flex items-start gap-4 mb-4">
+                    {/* Logo / Image */}
+                    <div className="w-[60px] h-[60px] rounded-xl bg-slate-100 border border-slate-100 overflow-hidden flex-shrink-0 flex items-center justify-center shadow-inner">
+                        {clinic.imageUrl ? (
+                            <img src={clinic.imageUrl} alt={clinic.name} className="w-full h-full object-cover" />
+                        ) : (
+                            <Building2 className="h-7 w-7 text-slate-300" />
+                        )}
                     </div>
-                    <div className="flex-1 min-w-0 flex flex-col justify-center">
-                        <h3 className="font-black text-slate-900 text-sm leading-tight group-hover:text-primary-600 transition-colors mb-1">{clinic.name}</h3>
-                        <div className="flex justify-between items-start gap-2 mb-1.5">
-                            <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold min-w-0 pt-0.5">
-                                <MapPin className="h-2.5 w-2.5 text-slate-400 flex-shrink-0" />
-                                <span className="truncate">{clinic.address}</span>
+
+                    {/* Name + meta */}
+                    <div className="flex-1 min-w-0">
+                        <h3 className="font-black text-slate-900 text-base leading-tight group-hover:text-primary-600 transition-colors line-clamp-2 mb-1.5">
+                            {clinic.name}
+                        </h3>
+                        <p className="text-[11px] text-slate-400 font-medium truncate flex items-center gap-1 mb-2">
+                            <MapPin className="h-2.5 w-2.5 flex-shrink-0 text-slate-300" />
+                            {clinic.address}
+                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {/* Rating chip */}
+                            <div className="flex items-center gap-1 bg-amber-50 border border-amber-100 rounded-md px-1.5 py-0.5">
+                                <Star className="h-2.5 w-2.5 text-amber-400 fill-current" />
+                                <span className="text-[10px] font-black text-amber-700">{avgRating}</span>
+                                <span className="text-[9px] text-amber-500 opacity-80">({totalReviews})</span>
                             </div>
-                            
+                            {/* Distance chip */}
                             {distLabel && (
-                                <div className="text-right shrink-0 flex flex-col items-end">
-                                    <span className="text-blue-600 font-black flex items-center justify-end gap-1 text-[10px] leading-none">
-                                        <MapPin className="h-3 w-3" />{distLabel}
-                                    </span>
+                                <div className="flex items-center gap-1 text-blue-600 text-[9px] font-bold bg-blue-50 border border-blue-100 rounded-md px-1.5 py-0.5">
+                                    <Navigation className="h-2.5 w-2.5" />
+                                    {distLabel}
                                     {travelTime && (
-                                        <span className="text-[9px] text-slate-500 font-bold flex items-center justify-end gap-1 mt-0.5">
-                                            <Car className="h-3 w-3 text-slate-400" />{travelTime.replace('~', '')}
-                                        </span>
+                                        <span className="text-slate-400 font-normal ml-0.5">· {travelTime}</span>
                                     )}
                                 </div>
                             )}
-                        </div>
-
-                         {/* Operating Hours Display */}
-                         {clinic.operatingHours && (
-                            <div className="flex items-center gap-1.5 text-[9px] text-slate-500 font-medium mb-1.5">
-                                <Clock className="h-2.5 w-2.5 text-slate-400 flex-shrink-0" />
-                                <span>{clinic.operatingHours}</span>
-                            </div>
-                         )}
-
-                         <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1 text-amber-500 bg-amber-50 px-1 py-0.5 rounded-md border border-amber-100">
-                                <Star className="h-2.5 w-2.5 fill-current" />
-                                <span className="text-[9px] font-black">{averageRating}</span>
-                            </div>
-                             <span className="text-[9px] text-slate-400 font-bold">
-                                ({totalReviews} reviews)
-                            </span>
-                            <span className="text-[8px] bg-slate-100 text-slate-500 font-black px-1.5 py-0.5 rounded-md uppercase tracking-tight border border-slate-200">
-                                {clinic.type?.replace('_', ' ') || 'General'}
-                            </span>
-                        </div>
-                    </div>
-                 </div>
-
-                 <div className="space-y-3">
-                    <div className="flex flex-wrap gap-1.5 items-center">
-                        <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Doctors:</span>
-                        {relevantDoctors.slice(0, 2).map(doc => (
-                             <span key={doc.id} className="text-[10px] font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100 truncate max-w-[120px] flex items-center gap-1">
-                                Dr. {doc.name.split(' ').pop()}
-                                <span className="text-[8px] text-primary-600 font-black bg-primary-50 px-1 rounded">({doc.experience}y)</span>
-                             </span>
-                        ))}
-                        {relevantDoctors.length > 2 && <span className="text-primary-600 text-[9px] font-black">+{relevantDoctors.length - 2}</span>}
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                         <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border ${waitInfo.bgColor} ${waitInfo.borderColor} shadow-sm`}>
-                            {isDirectWalkInOnly ? (
-                                <MapPinIcon className={`h-3.5 w-3.5 ${waitInfo.textColor}`} />
-                            ) : (
-                                <Clock className={`h-3.5 w-3.5 ${waitInfo.textColor}`} />
+                            {/* Hours */}
+                            {clinic.operatingHours && (
+                                <div className="flex items-center gap-1 text-slate-400 text-[9px] font-medium">
+                                    <Clock className="h-2.5 w-2.5" />
+                                    {clinic.operatingHours}
+                                </div>
                             )}
-                            <span className={`text-[10px] font-black uppercase tracking-tight ${waitInfo.textColor}`}>
-                                {isDirectWalkInOnly ? 'Token at Reception' : `${waitInfo.raw} min wait`}
-                            </span>
-                         </div>
-                         <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
-                             <IndianRupeeIcon className="h-2.5 w-2.5 text-slate-400" />
-                             <span className="text-[10px] font-black text-slate-700">{feeRange}</span>
-                         </div>
+                        </div>
                     </div>
-                 </div>
+                </div>
+
+                {/* ─── Stats Row: Wait · Doctors · Fee ────────── */}
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                    {/* Wait time */}
+                    <div className={`flex flex-col items-center justify-center py-3 rounded-xl border ${waitBg}`}>
+                        <div className={`text-2xl font-black leading-none ${waitColor}`}>
+                            {isDirectWalkInOnly ? '—' : String(waitInfo?.raw ?? '0')}
+                        </div>
+                        <div className="text-[8px] font-bold text-slate-500 uppercase tracking-wide mt-1">
+                            {isDirectWalkInOnly ? 'at clinic' : 'min wait'}
+                        </div>
+                    </div>
+
+                    {/* Doctor count */}
+                    <div className="flex flex-col items-center justify-center py-3 rounded-xl bg-slate-50 border border-slate-100">
+                        <div className="text-2xl font-black text-slate-700 leading-none">
+                            {clinic.doctors.length}
+                        </div>
+                        <div className="text-[8px] font-bold text-slate-500 uppercase tracking-wide mt-1">
+                            doctors
+                        </div>
+                    </div>
+
+                    {/* Consult fee */}
+                    <div className="flex flex-col items-center justify-center py-3 rounded-xl bg-slate-50 border border-slate-100">
+                        <div className="text-[11px] font-black text-slate-700 leading-none flex items-center gap-0.5">
+                            <IndianRupeeIcon className="h-2.5 w-2.5" />
+                            {feeRange}
+                        </div>
+                        <div className="text-[8px] font-bold text-slate-500 uppercase tracking-wide mt-1">
+                            consult fee
+                        </div>
+                    </div>
+                </div>
+
+                {/* ─── Doctor Avatars ───────────────────────────── */}
+                {relevantDoctors.length > 0 && (
+                    <div className="flex items-center gap-2 overflow-hidden">
+                        {/* Stacked avatars */}
+                        <div className="flex items-center">
+                            {relevantDoctors.slice(0, 3).map((doc, idx) => (
+                                <div
+                                    key={doc.id}
+                                    className="relative rounded-full border-2 border-white shadow-sm -ml-2 first:ml-0"
+                                    style={{ zIndex: 3 - idx }}
+                                >
+                                    <div className="w-7 h-7 rounded-full overflow-hidden bg-slate-200 flex items-center justify-center">
+                                        {doc.avatarUrl ? (
+                                            <img
+                                                src={doc.avatarUrl}
+                                                alt={doc.name}
+                                                className="w-full h-full object-cover"
+                                            />
+                                        ) : (
+                                            <span className="text-[10px] font-black text-slate-500">
+                                                {doc.name.charAt(0)}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {doc.isAvailable && (
+                                        <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full border border-white" />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Names + availability status */}
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-bold text-slate-700 truncate leading-tight">
+                                {relevantDoctors
+                                    .slice(0, 2)
+                                    .map(d => `Dr. ${d.name.split(' ').pop()}`)
+                                    .join(', ')}
+                                {relevantDoctors.length > 2 && ` +${relevantDoctors.length - 2}`}
+                            </p>
+                            <p
+                                className={`text-[9px] font-bold mt-0.5 ${
+                                    availableDoctors.length > 0 ? 'text-emerald-600' : 'text-slate-400'
+                                }`}
+                            >
+                                {availableDoctors.length > 0
+                                    ? `${availableDoctors.length} available now`
+                                    : 'No doctors available now'}
+                            </p>
+                        </div>
+
+                        {/* GMaps link */}
+                        <Tooltip text="View on Google Maps">
+                            <a
+                                href={gmapsLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                className="w-7 h-7 bg-blue-50 text-blue-500 hover:bg-blue-100 border border-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors active:scale-95"
+                            >
+                                <MapPin className="h-3.5 w-3.5" />
+                            </a>
+                        </Tooltip>
+                    </div>
+                )}
             </div>
 
-            <div className="bg-slate-50 p-3 flex flex-col sm:flex-row gap-2 mt-auto border-t border-slate-100 rounded-b-[1.5rem]">
-                {canQueueOnline ? (
-                    <>
-                        <ActionButton label="Get Token" subLabel="Join live walk-in queue" icon={Zap} variant="accent" onClick={onQueue} tooltip="Join the live queue remotely" disabled={isQueueDisabled} />
-                        {canBook && <ActionButton label="Book Appointment" icon={Calendar} variant="primary" onClick={onBook} tooltip="Schedule a confirmed slot for later" />}
-                    </>
-                ) : isDirectWalkInOnly ? (
-                    <ActionButton 
-                        label="Visit Clinic" 
-                        subLabel="Token at reception" 
-                        icon={MapPin} 
-                        variant="orange"
-                        onClick={onSelect}
-                        tooltip="This clinic only accepts walk-ins at reception" 
-                    />
-                ) : (
-                     <ActionButton label="Book Appointment" icon={Calendar} variant="primary" onClick={onBook} tooltip="Schedule a confirmed slot for later" />
-                )}
-                
-                {!(canQueueOnline && canBook) && (
-                    <Tooltip text="View details about doctors and facilities" className="flex-1">
-                        <button onClick={(e) => { e.stopPropagation(); onSelect(); }} className="w-full h-full px-3 py-2 text-[10px] font-bold text-slate-400 hover:text-slate-700 uppercase tracking-widest transition-colors rounded-2xl hover:bg-slate-100">
-                            View Details
+            {/* ─── CTA Footer ────────────────────────────────── */}
+            <div
+                className={`mt-auto border-t border-slate-50 p-4 grid gap-3 ${
+                    canQueueOnline && canBook ? 'grid-cols-2' : 'grid-cols-1'
+                }`}
+            >
+                {canQueueOnline && (
+                    <Tooltip
+                        text={
+                            isQueueDisabled
+                                ? 'No doctors available for live token'
+                                : 'Join the live walk-in queue remotely'
+                        }
+                    >
+                        <button
+                            className={`w-full flex items-center justify-center gap-1.5 py-3 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all active:scale-95 shadow-sm ${
+                                isQueueDisabled
+                                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                    : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-100'
+                            }`}
+                            onClick={e => {
+                                e.stopPropagation();
+                                if (!isQueueDisabled) onQueue();
+                            }}
+                            disabled={isQueueDisabled}
+                        >
+                            <Zap className="h-3.5 w-3.5 fill-current" />
+                            Get Token
                         </button>
                     </Tooltip>
+                )}
+
+                {canBook && (
+                    <Tooltip text="Schedule a confirmed appointment slot">
+                        <button
+                            className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl font-black text-[11px] uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white transition-all active:scale-95 shadow-sm shadow-indigo-100"
+                            onClick={e => {
+                                e.stopPropagation();
+                                onBook();
+                            }}
+                        >
+                            <Calendar className="h-3.5 w-3.5" />
+                            Book Appt
+                        </button>
+                    </Tooltip>
+                )}
+
+                {isDirectWalkInOnly && !canBook && !canQueueOnline && (
+                    <button
+                        className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl font-black text-[11px] uppercase tracking-wider bg-orange-500 hover:bg-orange-600 text-white transition-all active:scale-95 shadow-sm shadow-orange-100"
+                        onClick={e => {
+                            e.stopPropagation();
+                            onSelect();
+                        }}
+                    >
+                        <MapPin className="h-3.5 w-3.5" />
+                        Visit Clinic
+                    </button>
+                )}
+
+                {/* Details fallback when only one CTA is visible */}
+                {!(canQueueOnline && canBook) && (canQueueOnline || canBook || isDirectWalkInOnly) && (
+                    <button
+                        onClick={e => {
+                            e.stopPropagation();
+                            onSelect();
+                        }}
+                        className="flex items-center justify-center px-4 py-3 rounded-xl font-bold text-[10px] text-slate-500 hover:text-slate-800 hover:bg-slate-50 border border-slate-100 transition-all uppercase tracking-wide"
+                    >
+                        View Details
+                    </button>
                 )}
             </div>
         </div>

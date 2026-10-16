@@ -66,12 +66,13 @@ export const Filter: React.FC<FilterProps> = ({
     pinnedAddress
 }) => {
     return (
-        <div className="px-4 md:px-8 py-0 shrink-0">
+        <div className="px-4 lg:px-0 py-0 shrink-0">
             {/* Integrated Filters for Desktop and Mobile */}
             {bookingView === 'LIST' && (
                 <>
                     {/* Desktop Filters */}
-                    <div className="hidden lg:flex items-center gap-2 flex-wrap px-1 pt-3">
+                    <div className="hidden lg:flex items-center gap-4 flex-wrap px-4 py-4 border-b border-slate-100">
+                        <span className="text-sm font-bold text-slate-600 uppercase tracking-wide whitespace-nowrap">Filter by:</span>
                         <div className="relative min-w-[140px] h-11 bg-white rounded-2xl border-2 border-slate-100 shadow-sm px-4 flex items-center gap-2 text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer hover:border-primary-400 transition-all">
                             <ArrowUpDown className="h-3.5 w-3.5 text-primary-500" />
                             <select className="absolute inset-0 opacity-0 cursor-pointer" value={sortBy} onChange={(e) => { const val = e.target.value as any; setSortBy(val); }}>
